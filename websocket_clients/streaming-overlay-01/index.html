@@ -1,0 +1,109 @@
+<!DOCTYPE HTML>
+
+<html>
+   <head>
+      <meta charset="UTF-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>WebSocket Client</title>
+      <link rel="stylesheet" media="all" href="bootstrap.min.css">
+      <link rel="stylesheet" media="all" href="main.css">
+
+      <script type = "text/javascript">
+
+         document.addEventListener("DOMContentLoaded", () => {
+
+            // possible alert types: alert-primary, alert-success, alert-info, alert-warning, alert-danger
+            function addMessage(message, type, hide = 0) {
+
+                if ('content' in document.createElement('template')) {
+                    var el = document.querySelector('#sse .transcriptions');
+                    // Instantiate the table with the existing HTML tbody
+                    // and the row with the template
+                    const template = document.querySelector('#transcript-part');
+
+                    // Clone the new row and insert it into the table
+                    const clone = template.content.cloneNode(true);
+                    let transcriptEl = clone.querySelectorAll(".transcript");
+                    transcriptEl[0].classList.add(type);
+                    transcriptEl[0].textContent = message;
+
+                    // prepend (should not require scrolling)
+                    el.firstChild.before(clone);
+
+                    // if hide time is set, delete the message
+                    if (hide > 0) {
+                        setTimeout(() => {
+                            transcriptEl[0].parentNode.removeChild(transcriptEl[0]);
+                        }, hide * 1000);
+                    }
+
+                    // append + scroll to bottom
+                    // el.appendChild(clone);
+                    // const scrollingElement = (document.scrollingElement || document.body);
+                    // scrollingElement.scrollTop = scrollingElement.scrollHeight;
+                } else {
+                    // Find another way to add the rows to the table because
+                    // the HTML template element is not supported.
+                    var el = document.getElementById('sse');
+                    var elemDiv = document.createElement('p');
+                    elemDiv.style.cssText = 'width:100%;z-index:100;background:#fff;color:#000;';
+                    elemDiv.innerText = message;
+                    el.appendChild(elemDiv);
+                }
+
+            }
+
+            function WebSocketStart() {
+               if ("WebSocket" in window) {               
+                  // Let us open a web socket
+                  var ws = new WebSocket("ws://127.0.0.1:5000");
+               
+                  ws.onopen = function() {
+                     // Web Socket is connected.
+                     addMessage("Connected.", "alert-info", 5);
+                  };
+               
+                  ws.onmessage = function (evt) {
+                     var received_msg = evt.data;
+                     console.log(received_msg);
+                     addMessage(received_msg, "alert-primary");
+                  };
+               
+                  ws.onclose = function() {
+                     // websocket is closed.
+                     addMessage("Connection is closed...", "alert-info");
+                  };
+               } else {
+                  // The browser doesn't support WebSocket
+                  alert("WebSocket NOT supported by your Browser!");
+               }
+            }
+
+            WebSocketStart();
+         });
+      </script>
+   </head>
+
+    <template id="transcript-part">
+        <div class="col-sm-12">
+            <div class="transcript alert fade alert-simple alert-dismissible text-left font__family-montserrat font__size-16 font__weight-light brk-library-rendered rendered show">
+                -
+            </div>
+        </div>
+    </template>
+
+   <body>
+      <div id="sse">
+        <section>
+            <!--<div class="square_box box_three"></div>
+            <div class="square_box box_four"></div>-->
+            <div class="container mt-5">
+                <div class="row transcriptions">
+                    
+                </div>
+            </div>
+        </section>
+      </div>
+   </body>
+</html>

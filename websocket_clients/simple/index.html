@@ -1,0 +1,56 @@
+<!DOCTYPE HTML>
+
+<html>
+   <head>
+      <meta charset="UTF-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>WebSocket Client</title>
+
+      <script type = "text/javascript">
+
+         document.addEventListener("DOMContentLoaded", () => {
+            function addMessage(message) {
+               var elemDiv = document.createElement('p');
+               elemDiv.style.cssText = 'width:100%;z-index:100;background:#fff;color:#000;';
+               elemDiv.innerText = message;
+               el.appendChild(elemDiv);
+            }
+
+            function WebSocketStart() {
+               if ("WebSocket" in window) {               
+                  // Let us open a web socket
+                  var ws = new WebSocket("ws://127.0.0.1:5000");
+               
+                  ws.onopen = function() {
+                     // Web Socket is connected.
+                     addMessage("Connected.");
+                  };
+               
+                  ws.onmessage = function (evt) {
+                     var received_msg = evt.data;
+                     console.log(received_msg);
+                     addMessage(received_msg);
+                  };
+               
+                  ws.onclose = function() {
+                     // websocket is closed.
+                     addMessage("Connection is closed...");
+                  };
+               } else {
+                  // The browser doesn't support WebSocket
+                  alert("WebSocket NOT supported by your Browser!");
+               }
+            }
+
+            var el = document.getElementById('sse');
+            WebSocketStart();
+         });
+      </script>
+   </head>
+
+   <body>
+      <div id="sse">
+      </div>
+   </body>
+</html>
