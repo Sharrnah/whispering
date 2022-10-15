@@ -7,8 +7,20 @@ body
 
 .transcript
 {
+    overflow: hidden;
+    position: relative;
     font-size: 25pt;
+    line-height: 30pt;
     font-weight: 400;
+    animation: appear-animation 1s cubic-bezier(0.16, 1, 0.3, 1) 0s 1 forwards;
+}
+
+.transcript sup
+{
+  position: absolute;
+  top: 7px;
+  left: 2px;
+  font-size: 0.45em;
 }
 
 .alert>.start-icon {
@@ -219,5 +231,17 @@ body
   25%,
   75% {
     opacity: 0;
+  }
+}
+
+
+@keyframes appear-animation {
+  0% {
+    width: 5%;
+    opacity: 0;
+  }
+  100% {
+    width: 100%;
+    opacity: 1;
   }
 }

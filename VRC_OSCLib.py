@@ -25,6 +25,9 @@ def Control_Push(Button = "example" , IP = '127.0.0.1' ,PORT = 9000):
 def Control_Joystick(data = 0.0 ,axis = "example" , IP = '127.0.0.1' ,PORT = 9000):
     Float(data ,"/input/" + axis ,IP ,PORT)
 
+def RemoveNonASCII(data):
+    new_val = data.encode("ascii", "ignore")
+    return new_val.decode()
 
 # Button
 def Buttons(address = "/input/example", IP = '127.0.0.1' ,PORT = 9000):
@@ -101,7 +104,7 @@ def Chat(data = "example", send = True, address = "/chatbox/input", IP = '127.0.
     # OSC Bild
     client = udp_client.UDPClient(IP, PORT)
     msg = OscMessageBuilder(address=address)
-    msg.add_arg(data)
+    msg.add_arg(RemoveNonASCII(data))
     msg.add_arg(send)
     m = msg.build()
 

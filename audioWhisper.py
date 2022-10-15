@@ -1,4 +1,5 @@
 import io
+import json
 from pydub import AudioSegment
 import speech_recognition as sr
 import whisper
@@ -31,14 +32,15 @@ blacklist = list((map(lambda x: x.lower(), blacklist)))
 @click.option("--task", default="transcribe", help="task for the model whether to only transcribe the audio or translate the audio to english", type=click.Choice(["transcribe", "translate"]))
 @click.option("--model", default="small", help="Model to use", type=click.Choice(["tiny","base", "small","medium","large"]))
 @click.option("--english", default=False, help="Whether to use English model",is_flag=True, type=bool)
+@click.option("--condition_on_previous_text", default=False, help="Feed it the previous result to keep it consistent across recognition windows, but makes it more prone to getting stuck in a failure loop",is_flag=True, type=bool)
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True,type=bool)
 @click.option("--energy", default=300, help="Energy level for mic to detect", type=int)
 @click.option("--dynamic_energy", default=False,is_flag=True, help="Flag to enable dynamic engergy", type=bool)
 @click.option("--pause", default=0.8, help="Pause time before entry ends", type=float)
 @click.option("--phrase_time_limit", default=None, help="phrase time limit before entry ends to break up long recognitions.", type=float)
 @click.option("--osc_ip", default="0", help="IP to send OSC message to. Set to '0' to disable", type=str)
-@click.option("--websocket_ip", default="0", help="IP to send websocket message to. Set to '0' to disable", type=str)
-def main(devices, device_index, sample_rate, task, model, english,verbose, energy, pause,dynamic_energy, phrase_time_limit, osc_ip, websocket_ip):
+@click.option("--websocket_ip", default="0", help="IP where Websocket Server listens on. Set to '0' to disable", type=str)
+def main(devices, device_index, sample_rate, task, model, english, condition_on_previous_text, verbose, energy, pause,dynamic_energy, phrase_time_limit, osc_ip, websocket_ip):
 
     if str2bool(devices) == True:
         index = 0
@@ -72,9 +74,9 @@ def main(devices, device_index, sample_rate, task, model, english,verbose, energ
             audio_clip.export(save_path, format="wav")
 
             if english:
-                result = audio_model.transcribe(save_path, task=task, language='english')
+                result = audio_model.transcribe(save_path, task=task, language='english', condition_on_previous_text=condition_on_previous_text)
             else:
-                result = audio_model.transcribe(save_path, task=task)
+                result = audio_model.transcribe(save_path, task=task, condition_on_previous_text=condition_on_previous_text)
 
             predicted_text = result.get('text').strip()
 
@@ -88,7 +90,7 @@ def main(devices, device_index, sample_rate, task, model, english,verbose, energ
                     VRC_OSCLib.Chat(predicted_text, True, "/chatbox/input", IP = osc_ip, PORT = 9000)
                 # Send to Websocket
                 if websocket_ip != "0":
-                    websocket.BroadcastMessage(predicted_text)
+                    websocket.BroadcastMessage(json.dumps(result))
 
 def str2bool(string):
     str2val = {"true": True, "false": False}

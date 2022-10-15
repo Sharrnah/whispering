@@ -8,19 +8,20 @@
       <title>WebSocket Client</title>
 
       <script type = "text/javascript">
+         var websocketServer = "ws://127.0.0.1:5000"
 
          document.addEventListener("DOMContentLoaded", () => {
             function addMessage(message) {
                var elemDiv = document.createElement('p');
                elemDiv.style.cssText = 'width:100%;z-index:100;background:#fff;color:#000;';
-               elemDiv.innerText = message;
+               elemDiv.innerHTML = message;
                el.appendChild(elemDiv);
             }
 
             function WebSocketStart() {
                if ("WebSocket" in window) {               
                   // Let us open a web socket
-                  var ws = new WebSocket("ws://127.0.0.1:5000");
+                  var ws = new WebSocket(websocketServer);
                
                   ws.onopen = function() {
                      // Web Socket is connected.
@@ -28,9 +29,9 @@
                   };
                
                   ws.onmessage = function (evt) {
-                     var received_msg = evt.data;
+                     var received_msg = JSON.parse(evt.data);
                      console.log(received_msg);
-                     addMessage(received_msg);
+                     addMessage("<sup>["+received_msg.language+"]</sup> " + received_msg.text);
                   };
                
                   ws.onclose = function() {

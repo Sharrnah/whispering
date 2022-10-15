@@ -10,6 +10,7 @@
       <link rel="stylesheet" media="all" href="main.css">
 
       <script type = "text/javascript">
+         var websocketServer = "ws://127.0.0.1:5000"
 
          document.addEventListener("DOMContentLoaded", () => {
 
@@ -26,7 +27,8 @@
                     const clone = template.content.cloneNode(true);
                     let transcriptEl = clone.querySelectorAll(".transcript");
                     transcriptEl[0].classList.add(type);
-                    transcriptEl[0].textContent = message;
+                    //transcriptEl[0].textContent = message;
+                    transcriptEl[0].innerHTML = message;
 
                     // prepend (should not require scrolling)
                     el.firstChild.before(clone);
@@ -57,17 +59,17 @@
             function WebSocketStart() {
                if ("WebSocket" in window) {               
                   // Let us open a web socket
-                  var ws = new WebSocket("ws://127.0.0.1:5000");
+                  var ws = new WebSocket(websocketServer);
                
                   ws.onopen = function() {
                      // Web Socket is connected.
-                     addMessage("Connected.", "alert-info", 5);
+                     addMessage("Connected.", "alert-info");
                   };
                
                   ws.onmessage = function (evt) {
-                     var received_msg = evt.data;
+                     var received_msg = JSON.parse(evt.data);
                      console.log(received_msg);
-                     addMessage(received_msg, "alert-primary");
+                     addMessage("<sup>["+received_msg.language+"]</sup> " + received_msg.text, "alert-primary");
                   };
                
                   ws.onclose = function() {
