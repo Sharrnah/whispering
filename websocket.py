@@ -32,7 +32,7 @@ async def server_program(ip, port):
         await asyncio.Future()  # run forever
 
 def StartWebsocketServer(ip, port):
-    SocketServerThread("127.0.0.1", 5000)
+    SocketServerThread(ip, port)
 
 
 class SocketServerThread(object):

@@ -38,6 +38,7 @@ It allows connecting to OSC (so far hardcoded to VRChat URL) and Websockets (For
 |`--devices`                     | False           | Print all available devices.                                                                                                              |
 |`--device_index`                | -1              | Choose the output device to listen to and transcribe the audio from this device. '-1' = autoselect by default.                            |
 |`--sample_rate`                 | 44100           | Sample rate of the audio recording.                                                                                                       |
+|`--ai_device`                   | None            | defines on which device the AI is loaded. can be `cuda` or `cpu`. autoselect by default                                                   |
 |`--task`                        | transcribe      | Choose between to `transcribe` or to `translate` the audio to English.                                                                    |
 |`--model`                       | small           | Select model list. can be `tiny, base, small, medium, large`. where large models are not for english only.                                |
 |`--english`                     | False           | Use english only model.                                                                                                                   |
