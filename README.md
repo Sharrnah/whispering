@@ -23,6 +23,7 @@ It allows connecting to OSC (so far hardcoded to VRChat URL) and Websockets (For
 2. [**Install and add ffmpeg to your PATH**](https://www.thewindowsclub.com/how-to-install-ffmpeg-on-windows-10#:~:text=Click%20New%20and%20type%20the,Click%20OK%20to%20apply%20changes.)
 3. [**Install CUDA to your system**](https://developer.nvidia.com/cuda-downloads)
 4. [**Install Python (Version 3.10) to your system**](https://www.python.org/downloads/windows/)
+5. [**Install Git to your system**](https://git-scm.com/download/win)
 
 ## Setup
 1. Git clone or download this repository
