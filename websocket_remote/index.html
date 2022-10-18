@@ -136,11 +136,16 @@
                         var trg_lang_el = document.querySelector('#settings #trg_lang');
                         var txt_ascii_el = document.querySelector('#settings #txt_ascii');
                         var txt_translate_el = document.querySelector('#settings #txt_translate');
-
+                        
                         src_lang_el.value = received_msg.data.src_lang;
                         trg_lang_el.value = received_msg.data.trg_lang;
                         txt_ascii_el.checked = received_msg.data.txt_ascii;
                         txt_translate_el.checked = received_msg.data.txt_translate;
+
+                        // load whisper settings
+                        var whisper_task_el = document.querySelector('#settings #whisper_task');
+
+                        whisper_task_el.value = received_msg.data.whisper_task;
                      }
                      
                   };
@@ -174,6 +179,12 @@
       <div id="settings" class="hidden">
         <section>
             <div class="container mt-5">
+               WhisperAI Task:
+               <select name="whisper_task" id="whisper_task">
+                  <option value="transcribe">transcribe</option>
+                  <option value="translate">translate (to en)</option>
+               </select>
+               <hr />
                <label for="txt_translate">Enable Text Translate:</label> <input type="checkbox" id="txt_translate" name="txt_translate" value="1" />&nbsp;&nbsp;&nbsp;&nbsp;
                <label for="txt_ascii" title="transliterate hiragana, katakana and kanji (Japanese text) into rōmaji">Convert to romaji:</label> <input type="checkbox" id="txt_ascii" name="txt_ascii" value="1" />
                <br />

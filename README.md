@@ -60,6 +60,7 @@ It allows connecting to OSC (for VRChat for example) and Websockets (For Streami
 |`--osc_port`                    | 9000            | Port to send OSC message to. ('9000' as default for VRChat)                                                                               |
 |`--osc_address`                 | /chatbox/input  | The Address the OSC messages are send to. ('/chatbox/input' as default for VRChat)                                                        |
 |`--websocket_ip`                | 0               | IP where Websocket Server listens on. Set to '0' to disable.                                                                              |
+|`--websocket_port`              | 5000            | Port where Websocket Server listens on.                                                                                                   |
 |`--verbose`                     | False           | Whether to print verbose output.                                                                                                          |
 
 ## Usage with 3rd Party Applications

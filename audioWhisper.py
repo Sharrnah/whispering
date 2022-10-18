@@ -44,8 +44,9 @@ blacklist = list((map(lambda x: x.lower(), blacklist)))
 @click.option("--osc_port", default=9000, help="Port to send OSC message to. ('9000' as default for VRChat)", type=int)
 @click.option("--osc_address", default="/chatbox/input", help="The Address the OSC messages are send to. ('/chatbox/input' as default for VRChat)", type=str)
 @click.option("--websocket_ip", default="0", help="IP where Websocket Server listens on. Set to '0' to disable", type=str)
+@click.option("--websocket_port", default=5000, help="Port where Websocket Server listens on. ('5000' as default)", type=int)
 @click.option("--ai_device", default=None, help="The Device the AI is loaded on. can be 'cuda' or 'cpu'. default does autodetect", type=click.Choice(["cuda", "cpu"]))
-def main(devices, device_index, sample_rate, task, model, english, condition_on_previous_text, verbose, energy, pause,dynamic_energy, phrase_time_limit, osc_ip, osc_port, osc_address, websocket_ip, ai_device):
+def main(devices, device_index, sample_rate, task, model, english, condition_on_previous_text, verbose, energy, pause,dynamic_energy, phrase_time_limit, osc_ip, osc_port, osc_address, websocket_ip, websocket_port, ai_device):
     # set initial settings
     settings.SetOption("whisper_task", task)
 
@@ -57,7 +58,7 @@ def main(devices, device_index, sample_rate, task, model, english, condition_on_
         return
 
     if websocket_ip != "0":
-        websocket.StartWebsocketServer(websocket_ip, 5000)
+        websocket.StartWebsocketServer(websocket_ip, websocket_port)
 
     #there are no english models for large
     if model != "large" and english:
