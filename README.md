@@ -2,7 +2,7 @@
 This application listens to any audio stream on your machine and prints out the transcription or translation of the audio.
 Based on OpenAI's [Whisper](https://github.com/openai/whisper) project.
 
-It allows connecting to OSC (so far hardcoded to VRChat URL) and Websockets (For Streaming Overlays for example)
+It allows connecting to OSC (for VRChat for example) and Websockets (For Streaming Overlays and Remote Controlling some settings using the websocket_remote)
 
 <img src=screenshots/vrchat.png width=400><img src=screenshots/streaming-overlay.png width=400>
 
@@ -33,6 +33,14 @@ It allows connecting to OSC (so far hardcoded to VRChat URL) and Websockets (For
 ## Usage
 1. run `python audioWhisper.py`. By default it tries to find your default Mic. Otherwise you need to add `--device_index *` to the run command where the `*` is the device index found at step 3. Find more command-line flags in the following table.
 
+2. If websocket option is enabled, you can control the whisper task (translate or transcript) as well as textual translation options while the AI is running.
+   
+   <img src=screenshots/remote_control.png width=600>
+   
+   For this: open the `websocket_remote/` folder and start the index.html there.
+   
+   (If you have the AI running on a secondary PC, change the IP in the line `var websocketServer = "ws://127.0.0.1:5000"` inside the HTML.)
+
 ## Command-line flags
 |      --flags                   |  Default Value  |      Description                                                                                                                          |
 |:------------------------------:|:---------------:|:-----------------------------------------------------------------------------------------------------------------------------------------:|
@@ -49,6 +57,8 @@ It allows connecting to OSC (so far hardcoded to VRChat URL) and Websockets (For
 |`--pause`                       | 0.8             | Pause time before entry ends.                                                                                                             |
 |`--phrase_time_limit`           | None            | Phrase time limit (in seconds) before entry ends to break up long recognition tasks.                                                      |
 |`--osc_ip`                      | 0               | IP to send OSC messages to. Set to '0' to disable. (For VRChat this should mostly be 127.0.0.1)                                           |
+|`--osc_port`                    | 9000            | Port to send OSC message to. ('9000' as default for VRChat)                                                                               |
+|`--osc_address`                 | /chatbox/input  | The Address the OSC messages are send to. ('/chatbox/input' as default for VRChat)                                                        |
 |`--websocket_ip`                | 0               | IP where Websocket Server listens on. Set to '0' to disable.                                                                              |
 |`--verbose`                     | False           | Whether to print verbose output.                                                                                                          |
 

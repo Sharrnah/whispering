@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List
 import argostranslate.package
 import argostranslate.translate
 import argostranslate.settings
@@ -15,12 +14,6 @@ argostranslate.settings.package_dirs = [argostranslate.settings.package_data_dir
 argostranslate.settings.local_package_index = argostranslate.settings.cache_dir / "index.json"
 #argostranslate.settings.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-TRANSLATE_SETTINGS = {
-    "txt_translate": False,
-    "src_lang": "en",
-    "trg_lang": "fr",
-    "txt_ascii": False
-}
 
 LANGUAGES = list()
 
@@ -74,9 +67,3 @@ def TranslateLanguage(text, from_code, to_code, to_romaji = False):
         translationText = ' '.join(fullConvertedText)
     
     return translationText
-
-def SetOption(setting, value):
-    TRANSLATE_SETTINGS[setting] = value
-
-def GetOption(setting):
-    return TRANSLATE_SETTINGS[setting]
