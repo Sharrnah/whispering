@@ -33,7 +33,14 @@
                      
                      if (typeof received_msg.text != 'undefined') {
                         console.log(received_msg);
-                        addMessage("<sup>["+received_msg.language+"]</sup> " + received_msg.text);
+
+                        message_text = received_msg.text;
+                        // use argos translate text result if received
+                        if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation != '') {
+                           message_text = received_msg.txt_translation;
+                        }
+
+                        addMessage("<sup>["+received_msg.language+"]</sup> " + message_text);
                      }
                   };
                

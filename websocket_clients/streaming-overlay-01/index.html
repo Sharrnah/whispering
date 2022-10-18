@@ -72,7 +72,14 @@
                      // receiving a transcitption message
                      if (typeof received_msg.text != 'undefined') {
                         console.log(received_msg);
-                        addMessage("<sup class=\"mainsup\">["+received_msg.language+"]</sup> " + received_msg.text, "alert-primary");
+
+                        message_text = received_msg.text;
+                        // use argos translate text result if received
+                        if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation != '') {
+                           message_text = received_msg.txt_translation;
+                        }
+
+                        addMessage("<sup class=\"mainsup\">["+received_msg.language+"]</sup> " + message_text, "alert-primary");
                      }
                   };
                
