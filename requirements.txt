@@ -12,3 +12,6 @@ git+https://github.com/openai/whisper.git
 torch
 python-osc
 websockets
+argostranslate
+unidecode
+pykakasi

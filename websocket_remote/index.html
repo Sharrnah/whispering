@@ -5,7 +5,7 @@
       <meta charset="UTF-8">
       <meta http-equiv="X-UA-Compatible" content="IE=edge">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>WebSocket Client</title>
+      <title>WebSocket Remote Client</title>
       <link rel="stylesheet" media="all" href="bootstrap.min.css">
       <link rel="stylesheet" media="all" href="main.css">
 
@@ -13,7 +13,6 @@
          var websocketServer = "ws://127.0.0.1:5000"
 
          document.addEventListener("DOMContentLoaded", () => {
-
             // possible alert types: alert-primary, alert-success, alert-info, alert-warning, alert-danger
             function addMessage(message, type, hide = 0) {
 
@@ -53,38 +52,102 @@
                     elemDiv.innerText = message;
                     el.appendChild(elemDiv);
                 }
-
             }
 
             function WebSocketStart() {
                if ("WebSocket" in window) {               
                   // Let us open a web socket
                   var ws = new ReconnectingWebSocket(websocketServer, null, {reconnectInterval: 5000});
+
+                  function addWSSettingEvent(elementSelector, eventListener) {
+                     elements = document.querySelectorAll(elementSelector)
+                     elements.forEach(element => {
+                        element.addEventListener(eventListener, changeSettings);
+                     });
+                  }
+                  addWSSettingEvent("#settings input", "input");
+                  addWSSettingEvent("#settings select", "change");
+                  addWSSettingEvent("#settings button", "click");
+                  function changeSettings(e) {
+                     let name = e.currentTarget.name;
+                     let value = undefined;
+                     switch (e.currentTarget.type) {
+                        case 'checkbox':
+                              value = e.currentTarget.checked;
+                           break;
+                        case 'select-one':
+                              value = e.currentTarget.value;
+                           break;
+                        case 'submit':
+                              value = true;
+                           break;
+                        default:
+                           break;
+                     }
+                     console.log({name: name, type: e.currentTarget.type, value: value});
+
+                     let sendData = {name: name, value: value};
+                     ws.send(JSON.stringify(sendData));
+                  }
+
                
                   ws.onopen = function() {
+                     document.querySelector("#settings").classList.remove('hidden');
                      // Web Socket is connected.
                      addMessage("Connected.", "alert-info", 3);
                   };
                
                   ws.onmessage = function (evt) {
                      var received_msg = JSON.parse(evt.data);
-                     
+
                      // receiving a transcitption message
                      if (typeof received_msg.text != 'undefined') {
                         console.log(received_msg);
-
-                        message_text = received_msg.text;
-                        // use argos translate text result if received
-                        if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation != '') {
-                           message_text = received_msg.txt_translation;
+                        txt_translation_html = "";
+                        if (typeof received_msg.txt_translation != 'undefined') {
+                           txt_translation_html = "<br /><small><sup>[" + received_msg.txt_translation_target + "]</sup> " + received_msg.txt_translation + "</small>"
                         }
-
-                        addMessage("<sup class=\"mainsup\">["+received_msg.language+"]</sup> " + message_text, "alert-primary");
+                        addMessage("<sup class=\"mainsup\">["+received_msg.language+"]</sup> " + received_msg.text + txt_translation_html, "alert-primary");
                      }
+                     
+                     // receiving other messages
+                     if (typeof received_msg.type != 'undefined' && received_msg.type == "installed_languages") {
+                        // list all available langauges
+                        var src_lang_el = document.querySelector('#settings #src_lang');
+                        var trg_lang_el = document.querySelector('#settings #trg_lang');
+
+                        src_lang_el.replaceChildren("")
+                        trg_lang_el.replaceChildren("")
+                        
+                        for(var i = 0; i < received_msg.data.length; i++) {
+                           var opt = received_msg.data[i];
+
+                           var el = document.createElement("option");
+                           el.textContent = "[" + opt.code + "] " + opt.name;
+                           el.value = opt.code;
+
+                           src_lang_el.appendChild(el);
+                           trg_lang_el.appendChild(el.cloneNode(true));
+                        }
+                     }
+                     if (typeof received_msg.type != 'undefined' && received_msg.type == "translate_settings") {
+                        // load text translation settings
+                        var src_lang_el = document.querySelector('#settings #src_lang');
+                        var trg_lang_el = document.querySelector('#settings #trg_lang');
+                        var txt_ascii_el = document.querySelector('#settings #txt_ascii');
+                        var txt_translate_el = document.querySelector('#settings #txt_translate');
+
+                        src_lang_el.value = received_msg.data.src_lang;
+                        trg_lang_el.value = received_msg.data.trg_lang;
+                        txt_ascii_el.checked = received_msg.data.txt_ascii;
+                        txt_translate_el.checked = received_msg.data.txt_translate;
+                     }
+                     
                   };
                
                   ws.onclose = function() {
                      // websocket is closed.
+                     document.querySelector("#settings").classList.add('hidden');
                      addMessage("Connection is closed... retrying", "alert-info", 10);
                   };
                } else {
@@ -108,6 +171,23 @@
     </template>
 
    <body>
+      <div id="settings" class="hidden">
+        <section>
+            <div class="container mt-5">
+               <label for="txt_translate">Enable Text Translate:</label> <input type="checkbox" id="txt_translate" name="txt_translate" value="1" />&nbsp;&nbsp;&nbsp;&nbsp;
+               <label for="txt_ascii" title="transliterate hiragana, katakana and kanji (Japanese text) into rōmaji">Convert to romaji:</label> <input type="checkbox" id="txt_ascii" name="txt_ascii" value="1" />
+               <br />
+               Source Language:
+               <select name="src_lang" id="src_lang"></select>
+               <strong>==></strong>
+               Target Language:
+               <select name="trg_lang" id="trg_lang"></select>
+               &nbsp;&nbsp;&nbsp;&nbsp;
+               <button name="dl_langs" value="1">Download Languages</button>
+            </div>
+         </section>
+      </div>
+
       <div id="sse">
         <section>
             <!--<div class="square_box box_three"></div>

@@ -1,13 +1,30 @@
 import threading
 import asyncio
 import websockets
+import json
+import texttranslate
+import settings
 
 WS_CLIENTS = set()
 
 async def handler(websocket):
     print('Websocket: Client connected.')
+
+    # send all available text translation languages
+    availableLanguages = texttranslate.GetInstalledLanguageNames()
+    await send(websocket, json.dumps({"type": "installed_languages", "data": availableLanguages}))
+
+    # send all current text translation settings
+    await send(websocket, json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))
+
     WS_CLIENTS.add(websocket)
     try:
+        async for message in websocket:
+            print("Setting: ", message)
+            msgObj = json.loads(message)
+            settings.SetOption(msgObj["name"], msgObj["value"])
+            if msgObj["name"] == "dl_langs":
+                texttranslate.InstallLanguages()
         await websocket.wait_closed()
     finally:
         WS_CLIENTS.remove(websocket)
