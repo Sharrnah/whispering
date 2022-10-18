@@ -3,6 +3,9 @@ import argostranslate.package
 import argostranslate.translate
 import argostranslate.settings
 import pykakasi
+import os
+import json
+import websocket
 #import torch
 
 argostranslate.settings.home_dir = Path(Path.cwd() / ".cache" / "argos-translate")
@@ -14,6 +17,10 @@ argostranslate.settings.package_dirs = [argostranslate.settings.package_data_dir
 argostranslate.settings.local_package_index = argostranslate.settings.cache_dir / "index.json"
 #argostranslate.settings.device = "cuda" if torch.cuda.is_available() else "cpu"
 
+os.makedirs(argostranslate.settings.data_dir, exist_ok=True)
+os.makedirs(argostranslate.settings.package_data_dir, exist_ok=True)
+os.makedirs(argostranslate.settings.cache_dir, exist_ok=True)
+os.makedirs(argostranslate.settings.downloads_dir, exist_ok=True)
 
 LANGUAGES = list()
 
@@ -25,7 +32,8 @@ def InstallLanguages():
         print("Downloading translation: " + translationPackage.get_description())
         argostranslate.package.install_from_path(translationPackage.download())
     
-    print("Download of " + str(list.count(available_packages)) + " translations finished.")
+    print("Download of translations finished.")
+    websocket.BroadcastMessage(json.dumps({"type": "installed_languages", "data": GetInstalledLanguageNames()}))
 
 def LoadLanguages():
     LANGUAGES = argostranslate.translate.get_installed_languages()

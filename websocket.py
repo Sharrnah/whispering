@@ -41,7 +41,16 @@ async def broadcast(message):
         asyncio.create_task(send(websocket, message))
 
 def BroadcastMessage(message):
-    asyncio.run(broadcast(message))
+    # detect if a loop is running and run on existing loop or asyncio.run
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # 'RuntimeError: There is no current event loop...'
+        loop = None
+
+    if loop and loop.is_running():
+        loop.create_task(broadcast(message))
+    else:
+        asyncio.run(broadcast(message))
 
 async def server_program(ip, port):
     async with websockets.serve(handler, ip, port):
