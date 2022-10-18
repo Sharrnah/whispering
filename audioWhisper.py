@@ -8,6 +8,7 @@ import os
 import click
 import VRC_OSCLib
 import websocket
+import texttranslate
 
 
 temp_dir = tempfile.mkdtemp()
@@ -86,6 +87,16 @@ def main(devices, device_index, sample_rate, task, model, english, condition_on_
                     print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": " + predicted_text)
                 else:
                     print(result)
+                
+                do_txt_translate = texttranslate.GetOption("txt_translate")
+                if do_txt_translate:
+                    from_lang = texttranslate.GetOption("src_lang")
+                    to_lang = texttranslate.GetOption("trg_lang")
+                    to_romaji = texttranslate.GetOption("txt_ascii")
+                    predicted_text = texttranslate.TranslateLanguage(predicted_text, from_lang, to_lang, to_romaji)
+                    result["txt_translation"] = predicted_text
+                    result["txt_translation_target"] = to_lang
+
                 # Send to VRChat
                 if osc_ip != "0":
                     VRC_OSCLib.Chat(predicted_text, True, "/chatbox/input", IP = osc_ip, PORT = 9000)

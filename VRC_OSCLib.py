@@ -9,6 +9,7 @@
 import time
 from pythonosc import udp_client
 from pythonosc.osc_message_builder import OscMessageBuilder
+from unidecode import unidecode
 
 def AV3_SetInt(data = 0 , Parameter = "example" , IP = '127.0.0.1' ,PORT = 9000):
     Int(data,"/avatar/parameters/" + Parameter ,IP ,PORT)
@@ -104,7 +105,8 @@ def Chat(data = "example", send = True, address = "/chatbox/input", IP = '127.0.
     # OSC Bild
     client = udp_client.UDPClient(IP, PORT)
     msg = OscMessageBuilder(address=address)
-    msg.add_arg(RemoveNonASCII(data))
+    #msg.add_arg(RemoveNonASCII(data))
+    msg.add_arg(unidecode(data))
     msg.add_arg(send)
     m = msg.build()
 

@@ -5,11 +5,16 @@ body
   overflow-x: hidden;
 }
 
+.hidden
+{
+  display: none;
+}
+
 .transcript
 {
     overflow: hidden;
     position: relative;
-    font-size: 25pt;
+    font-size: 22pt;
     line-height: 30pt;
     font-weight: 400;
     animation: appear-animation 1s cubic-bezier(0.16, 1, 0.3, 1) 0s 1 forwards;
@@ -136,7 +141,7 @@ body
     background-color: rgba(1, 204, 220, 0.95);
     box-shadow: 0px 0px 2px #03fff5;
     /*color: #03d0ff;*/
-    color: #00161b;
+    color: #006a81;
     /*text-shadow: 2px 1px #00040a;*/
   transition:0.5s;
   cursor:pointer;
@@ -149,7 +154,7 @@ body
 
 .alertprimary
 {
-    font-size: 18px;
+      font-size: 18px;
     color: #03d0ff;
     text-shadow: none;
 }
