@@ -2,15 +2,36 @@
 
 <html>
    <head>
+      <!-- See more infos on https://github.com/Sharrnah/whispering -->
+      
       <meta charset="UTF-8">
       <meta http-equiv="X-UA-Compatible" content="IE=edge">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>WebSocket Client</title>
+      <title>Whispering WebSocket Client</title>
+      <link rel="icon" href="app-icon.png" type="image/x-icon">
       <link rel="stylesheet" media="all" href="bootstrap.min.css">
       <link rel="stylesheet" media="all" href="main.css">
 
       <script type = "text/javascript">
          var websocketServer = "ws://127.0.0.1:5000"
+         
+         // url argument handling
+         function getParameter(name) {
+            let urlString = window.location.href;
+            let paramString = urlString.split('?')[1];
+            let queryString = new URLSearchParams(paramString);
+            for(let pair of queryString.entries()) {
+               if (name == pair[0]) {
+                  return pair[1];
+               }
+            }
+            return undefined;
+         }
+
+         ws_server = getParameter("ws_server");
+         if (typeof ws_server != 'undefined') {
+            websocketServer = ws_server;
+         }
 
          document.addEventListener("DOMContentLoaded", () => {
 

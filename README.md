@@ -1,10 +1,12 @@
 # Whispering to OSC and Websocket
+<img src=images/app-icon.png width=70 style=float:left;margin-right:1rem;>
 This application listens to any audio stream on your machine and prints out the transcription or translation of the audio.
+
 Based on OpenAI's [Whisper](https://github.com/openai/whisper) project.
 
 It allows connecting to OSC (for VRChat for example) and Websockets (For Streaming Overlays and Remote Controlling some settings using the websocket_remote)
 
-<img src=screenshots/vrchat.png width=400><img src=screenshots/streaming-overlay.png width=400>
+<img src=images/vrchat.png width=400><img src=images/streaming-overlay.png width=400>
 
 ## Content:
 - [Prerequisites](#prerequisites)
@@ -35,11 +37,11 @@ It allows connecting to OSC (for VRChat for example) and Websockets (For Streami
 
 2. If websocket option is enabled, you can control the whisper task (translate or transcript) as well as textual translation options while the AI is running.
    
-   <img src=screenshots/remote_control.png width=600>
+   <img src=images/remote_control.png width=600>
    
    For this: open the `websocket_remote/` folder and start the index.html there.
    
-   (If you have the AI running on a secondary PC, change the IP in the line `var websocketServer = "ws://127.0.0.1:5000"` inside the HTML.)
+   _If you have the AI running on a secondary PC, open the HTML file with the IP as parameter like this: `index.html?ws_server=ws://127.0.0.1:5000`_
 
 ## Command-line flags
 |      --flags                   |  Default Value  |      Description                                                                                                                          |
@@ -61,6 +63,7 @@ It allows connecting to OSC (for VRChat for example) and Websockets (For Streami
 |`--osc_address`                 | /chatbox/input  | The Address the OSC messages are send to. ('/chatbox/input' as default for VRChat)                                                        |
 |`--websocket_ip`                | 0               | IP where Websocket Server listens on. Set to '0' to disable.                                                                              |
 |`--websocket_port`              | 5000            | Port where Websocket Server listens on.                                                                                                   |
+|`--open_browser`                | False           | Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)                                          |
 |`--verbose`                     | False           | Whether to print verbose output.                                                                                                          |
 
 ## Usage with 3rd Party Applications
@@ -102,7 +105,7 @@ It allows connecting to OSC (for VRChat for example) and Websockets (For Streami
     
     Run the AI on the secondary PC, start the Websocket-Server with `--websocket_ip 0.0.0.0` to have it listen on all its IP's.
     
-    Change the IP in the websocket-client to the one from the **Secondary** PC. (change the line: `var websocketServer = "ws://127.0.0.1:5000"` in the index.html of the example websocket_clients directory.)
+    Change the IP of the websocket-client to use to the one from the **Secondary** PC. (Open the html file with parameter: `index.html?ws_server=ws://127.0.0.1:5000` to use secondarys PC IP-Address.)
 
     For OSC, give it the IP of your **Primary** PC using the `--websocket_ip 127.0.0.1` argument and change the `127.0.0.1` to its IP.
 

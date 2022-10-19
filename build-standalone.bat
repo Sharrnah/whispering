@@ -10,3 +10,4 @@ pyinstaller audioWhisper.py -y ^
             --copy-metadata tokenizers ^
             --collect-data whisper ^
             --collect-data pykakasi
+            --icon=app-icon.ico

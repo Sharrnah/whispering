@@ -2,19 +2,41 @@
 
 <html>
    <head>
+      
+      <!-- See more infos on https://github.com/Sharrnah/whispering -->
+
       <meta charset="UTF-8">
       <meta http-equiv="X-UA-Compatible" content="IE=edge">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>WebSocket Remote Client</title>
+      <title>Whispering WebSocket Remote Control Client</title>
+      <link rel="icon" href="app-icon.png" type="image/x-icon">
       <link rel="stylesheet" media="all" href="bootstrap.min.css">
       <link rel="stylesheet" media="all" href="main.css">
 
       <script type = "text/javascript">
          var websocketServer = "ws://127.0.0.1:5000"
 
+         // url argument handling
+         function getParameter(name) {
+            let urlString = window.location.href;
+            let paramString = urlString.split('?')[1];
+            let queryString = new URLSearchParams(paramString);
+            for(let pair of queryString.entries()) {
+               if (name == pair[0]) {
+                  return pair[1];
+               }
+            }
+            return undefined;
+         }
+
+         ws_server = getParameter("ws_server");
+         if (typeof ws_server != 'undefined') {
+            websocketServer = ws_server;
+         }
+
          document.addEventListener("DOMContentLoaded", () => {
             // possible alert types: alert-primary, alert-success, alert-info, alert-warning, alert-danger
-            function addMessage(message, type, hide = 0) {
+            function addMessage(message, type, hide = 0, clickEvent = undefined) {
 
                 if ('content' in document.createElement('template')) {
                     var el = document.querySelector('#sse .transcriptions');
@@ -37,6 +59,12 @@
                         setTimeout(() => {
                             transcriptEl[0].parentNode.removeChild(transcriptEl[0]);
                         }, hide * 1000);
+                    }
+
+                    console.log(clickEvent)
+                    // add click event
+                    if (typeof clickEvent != 'undefined') {
+                     transcriptEl[0].addEventListener("click", clickEvent)
                     }
 
                     // append + scroll to bottom
@@ -86,13 +114,32 @@
                      }
                      console.log({name: name, type: e.currentTarget.type, value: value});
 
-                     let sendData = {name: name, value: value};
+                     let sendData = {type: "setting_change", name: name, value: value};
+                     ws.send(JSON.stringify(sendData));
+                  }
+
+                  document.querySelector("button#translate_do").addEventListener("click", sendTranslateTask);
+                  function sendTranslateTask() {
+                     var src_lang = document.querySelector('#settings #src_lang').value;
+                     var trg_lang = document.querySelector('#settings #trg_lang').value;
+                     var translate_text = document.querySelector('#translate_textarea').value;
+                     
+                     let sendData = {type: "translate_req", text: translate_text, from_lang: src_lang, to_lang: trg_lang};
+                     ws.send(JSON.stringify(sendData));
+                  }
+
+                  document.querySelector("button#transl_result_textarea_sendosc").addEventListener("click", sendOSCTask);
+                  function sendOSCTask() {
+                     var translated_text = document.querySelector('#transl_result_textarea').value;
+                     
+                     let sendData = {type: "send_osc", text: translated_text};
                      ws.send(JSON.stringify(sendData));
                   }
 
                
                   ws.onopen = function() {
                      document.querySelector("#settings").classList.remove('hidden');
+                     document.querySelector("#manual_translate").classList.remove('hidden');
                      // Web Socket is connected.
                      addMessage("Connected.", "alert-info", 3);
                   };
@@ -105,9 +152,17 @@
                         console.log(received_msg);
                         txt_translation_html = "";
                         if (typeof received_msg.txt_translation != 'undefined') {
-                           txt_translation_html = "<br /><small><sup>[" + received_msg.txt_translation_target + "]</sup> " + received_msg.txt_translation + "</small>"
+                           txt_translation_html = "<br /><small><sup>[" + received_msg.txt_translation_target + "]</sup> " + received_msg.txt_translation + "</small>";
                         }
-                        addMessage("<sup class=\"mainsup\">["+received_msg.language+"]</sup> " + received_msg.text + txt_translation_html, "alert-primary");
+                        clickEvent = function(){
+                           document.querySelector('#translate_textarea').value = received_msg.text;
+                           if (typeof received_msg.txt_translation != 'undefined') {
+                              document.querySelector('#transl_result_textarea').value = received_msg.txt_translation;
+                           } else {
+                              document.querySelector('#transl_result_textarea').value = received_msg.text;
+                           }
+                        };
+                        addMessage("<sup class=\"mainsup\">["+received_msg.language+"]</sup> " + received_msg.text + txt_translation_html, "alert-primary", 0, clickEvent);
                      }
                      
                      // receiving other messages
@@ -146,6 +201,14 @@
                         var whisper_task_el = document.querySelector('#settings #whisper_task');
 
                         whisper_task_el.value = received_msg.data.whisper_task;
+
+                        var osc_ip = received_msg.data.osc_ip;
+                        if (osc_ip == 0) {
+                           document.querySelector('button#transl_result_textarea_sendosc').disabled = true;
+                        }
+                     }
+                     if (typeof received_msg.type != 'undefined' && received_msg.type == "translate_result") {
+                        document.querySelector('#transl_result_textarea').value = received_msg.translate_result;
                      }
                      
                   };
@@ -153,6 +216,7 @@
                   ws.onclose = function() {
                      // websocket is closed.
                      document.querySelector("#settings").classList.add('hidden');
+                     document.querySelector("#manual_translate").classList.add('hidden');
                      addMessage("Connection is closed... retrying", "alert-info", 10);
                   };
                } else {
@@ -179,22 +243,63 @@
       <div id="settings" class="hidden">
         <section>
             <div class="container mt-5">
-               WhisperAI Task:
-               <select name="whisper_task" id="whisper_task">
-                  <option value="transcribe">transcribe</option>
-                  <option value="translate">translate (to en)</option>
-               </select>
-               <hr />
-               <label for="txt_translate">Enable Text Translate:</label> <input type="checkbox" id="txt_translate" name="txt_translate" value="1" />&nbsp;&nbsp;&nbsp;&nbsp;
-               <label for="txt_ascii" title="transliterate hiragana, katakana and kanji (Japanese text) into rōmaji">Convert to romaji:</label> <input type="checkbox" id="txt_ascii" name="txt_ascii" value="1" />
-               <br />
-               Source Language:
-               <select name="src_lang" id="src_lang"></select>
-               <strong>==></strong>
-               Target Language:
-               <select name="trg_lang" id="trg_lang"></select>
-               &nbsp;&nbsp;&nbsp;&nbsp;
-               <button name="dl_langs" value="1">Download Languages</button>
+               <div class="row no-gutters">
+                  <div class="col">
+                     WhisperAI Task:
+                     <select name="whisper_task" id="whisper_task">
+                        <option value="transcribe">transcribe</option>
+                        <option value="translate">translate (to en)</option>
+                     </select>
+                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                     <button name="dl_langs" value="1">Download Text Transl. Languages</button>
+                     <hr />
+                  </div>
+               </div>
+               
+               <div class="row no-gutters">
+                  <div class="col">
+                     <label for="txt_translate">Enable Text Translate:</label> <input type="checkbox" id="txt_translate" name="txt_translate" value="1" />&nbsp;&nbsp;&nbsp;&nbsp;
+                     <label for="txt_ascii" title="transliterate hiragana, katakana and kanji (Japanese text) into rōmaji">Convert to romaji:</label> <input type="checkbox" id="txt_ascii" name="txt_ascii" value="1" />
+                     <br />
+                  </div>
+               </div>
+               
+               <div class="row no-gutters mt-2">
+                  <div class="col-4">
+                     Source Language:
+                     <select name="src_lang" id="src_lang"></select>
+                  </div>
+                  <div class="col">
+                     <div style="text-align:center;"><strong>==></strong></div>
+                  </div>
+                  <div class="col-5">
+                     Target Language:
+                     <select name="trg_lang" id="trg_lang"></select>
+                  </div>
+               </div>
+            </div>
+         </section>
+      </div>
+      <div id="manual_translate" class="hidden">
+        <section>
+            <div class="container mt-4">
+               Translate:
+               <div id="text_translate_form" class="container lt-2" style="padding: 0;">
+                  <div class="row no-gutters">
+                     <div class="col-5">
+                        <textarea style="width:100%;" name="translate_textarea" id="translate_textarea"></textarea>
+                     </div>
+                     <div class="col-1">
+                        <button name="translate_do" id="translate_do" value="1" style="width: 100%;">translate</button>
+                     </div>
+                     <div class="col-5">
+                        <textarea style="width:100%;" name="transl_result_textarea" id="transl_result_textarea"></textarea>
+                     </div>
+                     <div class="col-1">
+                        <button name="transl_result_textarea_sendosc" id="transl_result_textarea_sendosc" value="1" style="width: 100%; height: 100%;">send OSC</button>
+                     </div>
+                  </div>
+               </div>
             </div>
          </section>
       </div>

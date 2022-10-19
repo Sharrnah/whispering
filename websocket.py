@@ -4,8 +4,26 @@ import websockets
 import json
 import texttranslate
 import settings
+import VRC_OSCLib
 
 WS_CLIENTS = set()
+
+def websocketMessageHandler(msgObj):
+    if msgObj["type"] == "setting_change":
+        settings.SetOption(msgObj["name"], msgObj["value"])
+        if msgObj["name"] == "dl_langs":
+            texttranslate.InstallLanguages()
+    
+    if msgObj["type"] == "translate_req":
+        translate_result = texttranslate.TranslateLanguage(msgObj["text"], msgObj["from_lang"], msgObj["to_lang"])
+        BroadcastMessage(json.dumps({"type": "translate_result", "translate_result": translate_result}))
+
+    if msgObj["type"] == "send_osc":
+        osc_address = settings.GetOption("osc_address")
+        osc_ip = settings.GetOption("osc_ip")
+        osc_port = settings.GetOption("osc_port")
+        if osc_ip != "0":
+            VRC_OSCLib.Chat(msgObj["text"], True, osc_address, IP = osc_ip, PORT = osc_port)
 
 async def handler(websocket):
     print('Websocket: Client connected.')
@@ -20,12 +38,13 @@ async def handler(websocket):
     WS_CLIENTS.add(websocket)
     try:
         async for message in websocket:
-            print("Setting: ", message)
             msgObj = json.loads(message)
-            settings.SetOption(msgObj["name"], msgObj["value"])
-            if msgObj["name"] == "dl_langs":
-                texttranslate.InstallLanguages()
+            print(msgObj)
+            websocketMessageHandler(msgObj)
+        
         await websocket.wait_closed()
+    except websockets.ConnectionClosedError as error:
+        print('Websocket: Client connection failed.', error)
     finally:
         WS_CLIENTS.remove(websocket)
         print('Websocket: Client disconnected.')
