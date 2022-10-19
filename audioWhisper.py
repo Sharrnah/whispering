@@ -55,6 +55,8 @@ def main(devices, device_index, sample_rate, task, model, english, condition_on_
     settings.SetOption("osc_port", osc_port)
     settings.SetOption("osc_address", osc_address)
 
+    print("Whispering Tiger is starting...")
+
     if str2bool(devices) == True:
         index = 0
         for device in sr.Microphone.list_microphone_names():

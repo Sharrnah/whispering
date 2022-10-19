@@ -1,5 +1,5 @@
-# Whispering to OSC and Websocket
-<img src=images/app-icon.png width=70 style=float:left;margin-right:1rem;>
+# <img src=images/app-icon.png width=90> Whispering Tiger (Live Translate/Transcribe)
+
 This application listens to any audio stream on your machine and prints out the transcription or translation of the audio.
 
 Based on OpenAI's [Whisper](https://github.com/openai/whisper) project.
