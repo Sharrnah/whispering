@@ -27,13 +27,14 @@ Go to the [GitHub Releases Page](https://github.com/Sharrnah/whispering/releases
 
 _(because of the 2 GB Limit, no direct release files on GitHub)_
 
-- Extract the File
+- [Install CUDA for GPU Acceleration](https://developer.nvidia.com/cuda-downloads) (recommended)
+- Extract the Files on a Drive with enough free Space.
+  - _(After download of medium Whisper Model + Argos Translations, it can take up to 20 GB)_
 - Run only using the *.bat files. Edit or copy an existing `start-*.bat` file and edit the parameters in any text editor for your own command-line flags.
 
 ## Usage
 1. run `audioWhisper\audioWhisper.exe --devices true` (or `get-device-list.bat`) and get the Index of the audio device. (the number in `[*]` at the end)
 2. run `audioWhisper\audioWhisper.exe`. By default, it tries to find your default Microphone. Otherwise, you need to add `--device_index *` to the run command where the `*` is the device index found at step 3. Find more command-line flags in the following table.
-
 3. If websocket option is enabled, you can control the whisper task (translate or transcript) as well as textual translation options while the AI is running.
    
    <img src=images/remote_control.png width=600>
@@ -88,3 +89,4 @@ A thanks goes to
 - OpenAI https://github.com/openai/whisper
 - Awexander https://github.com/Awexander/audioWhisper
 - Blake https://github.com/mallorbc/whisper_mic
+- Argos Translate https://github.com/argosopentech/argos-translate
