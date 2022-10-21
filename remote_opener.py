@@ -2,13 +2,14 @@ import tempfile
 import os
 import webbrowser
 
+
 def openBrowser(open_url):
     temp_dir = tempfile.mkdtemp()
     save_path = os.path.join(temp_dir, "remote_temp.html")
 
     # to open/create a new html file in the write mode
     f = open(save_path, 'w')
-    
+
     # the html code which will go in the file GFG.html
     html_template = """<html>
     <head>
@@ -23,11 +24,11 @@ def openBrowser(open_url):
     </body>
     </html>
     """
-    
+
     # writing the code into the file
     f.write(html_template)
-    
+
     # close the file
     f.close()
-    
+
     webbrowser.open('file://' + save_path, new=1)

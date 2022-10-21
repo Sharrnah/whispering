@@ -61,6 +61,7 @@ _(because of the 2 GB Limit, no direct release files on GitHub)_
 |           `--osc_ip`           |       0        |                     IP to send OSC messages to. Set to '0' to disable. (For VRChat this should mostly be 127.0.0.1)                      |
 |          `--osc_port`          |      9000      |                                       Port to send OSC message to. ('9000' as default for VRChat)                                        |
 |        `--osc_address`         | /chatbox/input |                            The Address the OSC messages are send to. ('/chatbox/input' as default for VRChat)                            |
+|     `--osc_convert_ascii`      |      True      |     Convert Text to ASCII compatible when sending over OSC. (Can be set to 'False' as soon as VRChat supports non-ASCII characters)      |
 |        `--websocket_ip`        |       0        |                                       IP where Websocket Server listens on. Set to '0' to disable.                                       |
 |       `--websocket_port`       |      5000      |                                                 Port where Websocket Server listens on.                                                  |
 |        `--open_browser`        |     False      |                     Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)                     |
@@ -82,6 +83,14 @@ _(because of the 2 GB Limit, no direct release files on GitHub)_
    > `audioWhisper\audioWhisper.exe --model medium --task translate --device_index 4 --energy 300 --phrase_time_limit 15 --websocket_ip 127.0.0.1`
 2. Find a streaming overlay website in the `websocket_clients` folder. (So far only `streaming-overlay-01` is optimized as overlay with transparent background.)
 3. Add the HTML file to your streaming application.
+
+### Desktop+ (Currently only new-ui Beta with embedded Browser)
+1. Run the Application listening on your Audio-Device with the VRChat Sound.
+2. Add the Overlay in the [Desktop+ Beta](https://github.com/elvissteinjr/DesktopPlus/tree/new-ui) with the embedded Browser with (`index.html?no_scroll=1&auto_hide_message=25`)
+3. Set the Browser to allow Transparency.
+4. Attach the Browser to your VR-Headset.
+
+voilà, you have live translated subtitles of other people speaking which automatically disappear after 25 seconds.
 
 
 ### _Sources_

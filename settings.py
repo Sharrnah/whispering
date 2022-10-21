@@ -9,8 +9,10 @@ TRANSLATE_SETTINGS = {
     "whisper_task": "transcribe"
 }
 
+
 def SetOption(setting, value):
     TRANSLATE_SETTINGS[setting] = value
+
 
 def GetOption(setting):
     return TRANSLATE_SETTINGS[setting]

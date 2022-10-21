@@ -8,12 +8,13 @@ import VRC_OSCLib
 
 WS_CLIENTS = set()
 
+
 def websocketMessageHandler(msgObj):
     if msgObj["type"] == "setting_change":
         settings.SetOption(msgObj["name"], msgObj["value"])
         if msgObj["name"] == "dl_langs":
             texttranslate.InstallLanguages()
-    
+
     if msgObj["type"] == "translate_req":
         translate_result = texttranslate.TranslateLanguage(msgObj["text"], msgObj["from_lang"], msgObj["to_lang"])
         BroadcastMessage(json.dumps({"type": "translate_result", "translate_result": translate_result}))
@@ -23,7 +24,8 @@ def websocketMessageHandler(msgObj):
         osc_ip = settings.GetOption("osc_ip")
         osc_port = settings.GetOption("osc_port")
         if osc_ip != "0":
-            VRC_OSCLib.Chat(msgObj["text"], True, osc_address, IP = osc_ip, PORT = osc_port)
+            VRC_OSCLib.Chat(msgObj["text"], True, osc_address, IP=osc_ip, PORT=osc_port)
+
 
 async def handler(websocket):
     print('Websocket: Client connected.')
@@ -41,7 +43,7 @@ async def handler(websocket):
             msgObj = json.loads(message)
             print(msgObj)
             websocketMessageHandler(msgObj)
-        
+
         await websocket.wait_closed()
     except websockets.ConnectionClosedError as error:
         print('Websocket: Client connection failed.', error)
@@ -49,15 +51,18 @@ async def handler(websocket):
         WS_CLIENTS.remove(websocket)
         print('Websocket: Client disconnected.')
 
+
 async def send(websocket, message):
     try:
         await websocket.send(message)
     except websockets.ConnectionClosed:
         pass
 
+
 async def broadcast(message):
     for websocket in WS_CLIENTS:
         asyncio.create_task(send(websocket, message))
+
 
 def BroadcastMessage(message):
     # detect if a loop is running and run on existing loop or asyncio.run
@@ -71,10 +76,12 @@ def BroadcastMessage(message):
     else:
         asyncio.run(broadcast(message))
 
+
 async def server_program(ip, port):
     async with websockets.serve(handler, ip, port):
         print('Websocket: Server started.')
         await asyncio.Future()  # run forever
+
 
 def StartWebsocketServer(ip, port):
     SocketServerThread(ip, port)
@@ -82,15 +89,16 @@ def StartWebsocketServer(ip, port):
 
 class SocketServerThread(object):
     """ Threading example class
-    The run() method will be started and it will run in the background
+    The run() method will be started, and it will run in the background
     until the application exits.
     """
 
     def __init__(self, ip, port):
         thread = threading.Thread(target=self.run, args=(ip, port,))
-        thread.daemon = True                            # Daemonize thread
-        thread.start()                                  # Start the execution
+        thread.daemon = True  # Daemonize thread
+        thread.start()  # Start the execution
 
-    def run(self, ip, port):
+    @staticmethod
+    def run(ip, port):
         while True:
             asyncio.run(server_program(ip, port))

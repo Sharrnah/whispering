@@ -194,7 +194,7 @@
                   document.querySelector("#settings").classList.remove('hidden');
                   document.querySelector("#manual_translate").classList.remove('hidden');
                   // Web Socket is connected.
-                  addMessage("Connected.", "alert-info", 3);
+                  addMessage("Connected.", "alert-info", 10);
                };
 
                ws.onmessage = function (evt) {
@@ -310,8 +310,6 @@
                      <option value="transcribe">transcribe</option>
                      <option value="translate">translate (to en)</option>
                   </select>
-                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-                  <button name="dl_langs" value="1">Download Text Transl. Languages</button>
                   <hr />
                </div>
             </div>
@@ -319,15 +317,17 @@
             <div class="row no-gutters">
                <div class="col">
                   <label for="txt_translate">Enable Live Text Translate:</label> <input type="checkbox" id="txt_translate"
-                     name="txt_translate" value="1" />&nbsp;&nbsp;&nbsp;&nbsp;
+                     name="txt_translate" value="1" />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
                   <label for="txt_ascii"
                      title="transliterate hiragana, katakana and kanji (Japanese text) into rōmaji">Convert to
                      romaji:</label> <input type="checkbox" id="txt_ascii" name="txt_ascii" value="1" />
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  <button name="dl_langs" value="1" title="Download all available text translation languages (can take a while)">Download Text transl. Languages</button>
                   <br />
                </div>
             </div>
 
-            <div class="row no-gutters mt-2">
+            <div class="row no-gutters mt-3">
                <div class="col-4">
                   Source Language:
                   <select name="src_lang" id="src_lang"></select>
