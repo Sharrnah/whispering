@@ -16,6 +16,7 @@ It allows connecting to OSC (for VRChat for example) and Websockets (For Streami
 - [Usage with 3rd Party Applications](#usage-with-3rd-party-applications)
   - [VRChat](#vrchat)
   - [Live Streaming Applications (OBS, vMix, XSplit ...)](#live-streaming-applications-obs-vmix-xsplit-)
+  - [Desktop+](#desktop-currently-only-new-ui-beta-with-embedded-browser)
 - [Working with the Code](documentation/working-with-code.md)
 - [FAQ](documentation/faq.md)
 - [Sources](#sources)
