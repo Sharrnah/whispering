@@ -25,3 +25,21 @@
     For OSC, give it the IP of your **Primary** PC using the `--websocket_ip 127.0.0.1` argument and change the `127.0.0.1` to its IP.
 
     Stream the Audio to the **Secondary PC** using for example https://vb-audio.com/Voicemeeter/vban.htm
+
+- **Problem**: _On startup, i get the following error:_
+
+  _`RuntimeError: CUDA error: out of memory`_
+
+  **Answers**: This means that your GPU does not have enough memory to run the AI.
+  - Try to use a smaller model like `small` or `tiny` using `--model small` or `--model tiny`.
+
+  - If you happen to have a secondary PC with an GPU, you can outsource the workload to it. (see previous answer for more information).
+
+- **Problem**: _On startup, i get the following error:_
+  
+  _`OSError: [Errno -9999] Unanticipated host error`_
+
+  **Answer**: This can mean that your PC is blocking access to your selected Audio device.
+  
+  Or That you just have the wrong Audio Device selected.
+  Sometimes you can find the Name of your Audio Device multiple times in the List.
