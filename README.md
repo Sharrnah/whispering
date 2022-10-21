@@ -67,19 +67,19 @@ _(because of the 2 GB Limit, no direct release files on GitHub)_
 
 ## Usage with 3rd Party Applications
 ### VRChat
-- run the script with `--osc_ip 127.0.0.1` parameter. This way it automatically writes the recognized text into the in-game chatbox.
+- run the script with `--osc_ip 127.0.0.1` parameter. This way it automatically writes the recognized text into the in-game chat-box.
   
   example:
 
-  > `audioWhisper\audioWhisper.exe --model medium --task transcribe --energy 300 --osc_ip 127.0.0.1 --phrase_time_limit 8`
+  > `audioWhisper\audioWhisper.exe --model medium --task transcribe --energy 300 --osc_ip 127.0.0.1 --phrase_time_limit 9`
 
 ### Live Streaming Applications (OBS, vMix, XSplit ...)
-1. run the script with `--websocket_ip 127.0.0.1` parameter (127.0.0.1 if you are running everything on the same machine), and preferably also set a `--phrase_time_limit` if you expect not many pauses that could be recognized by the configured `--energy` and `--pause` values.
+1. run the script with `--websocket_ip 127.0.0.1` parameter (127.0.0.1 if you are running everything on the same machine), and set a `--phrase_time_limit` if you expect not many pauses that could be recognized by the configured `--energy` and `--pause` values.
 
    example:
 
-   > `audioWhisper\audioWhisper.exe --model medium --task translate --device_index 4 --energy 300 --phrase_time_limit 8 --websocket_ip 127.0.0.1`
-2. Find a streaming overlay website in the `websocket_clients` folder. (So far only `streaming-overlay-01` is optimized.)
+   > `audioWhisper\audioWhisper.exe --model medium --task translate --device_index 4 --energy 300 --phrase_time_limit 15 --websocket_ip 127.0.0.1`
+2. Find a streaming overlay website in the `websocket_clients` folder. (So far only `streaming-overlay-01` is optimized as overlay with transparent background.)
 3. Add the HTML file to your streaming application.
 
 
