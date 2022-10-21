@@ -33,10 +33,28 @@
             websocketServer = ws_server;
          }
 
+         auto_hide_message = getParameter("auto_hide_message");
+         if (typeof auto_hide_message != 'undefined') {
+            auto_hide_msg_time = auto_hide_message;
+            var hideTimeouts = [];
+         } else {
+            auto_hide_msg_time = 0;
+         }
+         auto_rm_message = getParameter("auto_rm_message");
+         if (typeof auto_rm_message != 'undefined') {
+            auto_remove_msg_time = auto_rm_message;
+         } else {
+            auto_remove_msg_time = 0;
+         }
+         no_scroll = getParameter("no_scroll");
+
          document.addEventListener("DOMContentLoaded", () => {
+            if (typeof no_scroll != 'undefined') {
+               document.querySelector('body').classList.add("noscroll");
+            }
 
             // possible alert types: alert-primary, alert-success, alert-info, alert-warning, alert-danger
-            function addMessage(message, type, hide = 0) {
+            function addMessage(message, type, deleteTime = 0, hideTime = 0) {
 
                 if ('content' in document.createElement('template')) {
                     var el = document.querySelector('#sse .transcriptions');
@@ -51,15 +69,26 @@
                     //transcriptEl[0].textContent = message;
                     transcriptEl[0].innerHTML = message;
 
+                     // if deleteTime is set, delete the message
+                     if (deleteTime > 0) {
+                        setTimeout(() => {
+                           transcriptEl[0].parentNode.removeChild(transcriptEl[0]);
+                        }, deleteTime * 1000);
+                     }
+                     // if hideTime is set, hide the message
+                     if (hideTime > 0) {
+                        showAllTranscriptions();
+
+                        // hide message after hideTime
+                        hideTimeouts.push(
+                           setTimeout(() => {
+                              transcriptEl[0].classList.add("hide-transcript");
+                           }, hideTime * 1000)
+                        );
+                     }
+
                     // prepend (should not require scrolling)
                     el.firstChild.before(clone);
-
-                    // if hide time is set, delete the message
-                    if (hide > 0) {
-                        setTimeout(() => {
-                            transcriptEl[0].parentNode.removeChild(transcriptEl[0]);
-                        }, hide * 1000);
-                    }
 
                     // append + scroll to bottom
                     // el.appendChild(clone);
@@ -74,7 +103,28 @@
                     elemDiv.innerText = message;
                     el.appendChild(elemDiv);
                 }
+            }
 
+            if (auto_hide_msg_time > 0) {
+               function showAllTranscriptions() {
+                  clearAllTimeouts(hideTimeouts);
+                  // first reshow all messages when a new message appears.
+                  var transcriptElements = document.querySelectorAll('#sse .transcriptions .transcript');
+                  transcriptElements.forEach((transcriptElement) => {
+                     transcriptElement.classList.remove("hide-transcript");
+                     hideTimeouts.push(
+                        setTimeout(() => {
+                           transcriptElement.classList.add("hide-transcript");
+                        }, auto_hide_msg_time * 1000)
+                     );
+                  });
+               }
+               function clearAllTimeouts(timeoutList) {
+                  for (var i = 0; i < timeoutList.length; i++) {
+                     clearTimeout(timeoutList[i]);
+                  }
+               }
+               document.querySelector('#sse').addEventListener("click", showAllTranscriptions);
             }
 
             function WebSocketStart() {
@@ -100,7 +150,12 @@
                            message_text = received_msg.txt_translation;
                         }
 
-                        addMessage("<sup class=\"mainsup\">["+received_msg.language+"]</sup> " + message_text, "alert-primary");
+                        addMessage(
+                           "<sup class=\"mainsup\">["+received_msg.language+"]</sup> " + message_text,
+                           "alert-primary",
+                           auto_remove_msg_time,
+                           auto_hide_msg_time
+                        );
                      }
                   };
                
