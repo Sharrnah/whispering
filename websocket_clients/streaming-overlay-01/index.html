@@ -27,6 +27,11 @@
             }
             return undefined;
          }
+         function clearAllTimeouts(timeoutList) {
+             for (var i = 0; i < timeoutList.length; i++) {
+                clearTimeout(timeoutList[i]);
+             }
+         }
 
          ws_server = getParameter("ws_server");
          if (typeof ws_server != 'undefined') {
@@ -53,11 +58,29 @@
             show_transl_results = "auto";
          }
 
+         // no_loader argument. If set to "true", the loader is not shown
+         no_loader = typeof getParameter("no_loader") != 'undefined';
+
          no_scroll = getParameter("no_scroll");
 
          document.addEventListener("DOMContentLoaded", () => {
             if (typeof no_scroll != 'undefined') {
                document.querySelector('body').classList.add("noscroll");
+            }
+
+            // loader animation
+            var loaderTimeouts = [];
+            function showLoader(hideTime = 10) {
+               document.querySelector('#loader').classList.remove("hidden");
+               loaderTimeouts.push(
+                  setTimeout(() => {
+                     document.querySelector('#loader').classList.add("hidden");
+                  }, hideTime * 1000)
+               );
+            }
+            function hideLoader() {
+               clearAllTimeouts(loaderTimeouts);
+               document.querySelector('#loader').classList.add("hidden");
             }
 
             // possible alert types: alert-primary, alert-success, alert-info, alert-warning, alert-danger
@@ -126,11 +149,6 @@
                      );
                   });
                }
-               function clearAllTimeouts(timeoutList) {
-                  for (var i = 0; i < timeoutList.length; i++) {
-                     clearTimeout(timeoutList[i]);
-                  }
-               }
                document.querySelector('#sse').addEventListener("click", showAllTranscriptions);
             }
 
@@ -171,12 +189,19 @@
                             break;
                         }
 
+                        hideLoader();
                         addMessage(
                            messageHtml,
                            "alert-primary",
                            auto_remove_msg_time,
                            auto_hide_msg_time
                         );
+                     }
+
+                     // receiving other messages
+                     if (!no_loader && typeof received_msg.type != 'undefined' && received_msg.type === "processing_start") {
+                        // show loader for 10 seconds
+                        showLoader(10);
                      }
                   };
                
@@ -204,17 +229,36 @@
         </div>
     </template>
 
-   <body>
-      <div id="sse">
-        <section>
-            <!--<div class="square_box box_three"></div>
-            <div class="square_box box_four"></div>-->
-            <div class="container mt-5">
-                <div class="row transcriptions">
-                    
+    <body>
+        <div id="loader" class="hidden">
+            <section>
+                <div class="container mt-2">
+                    <div class="row center">
+                        <div class="wave"></div>
+                        <div class="wave"></div>
+                        <div class="wave"></div>
+                        <div class="wave"></div>
+                        <div class="wave"></div>
+                        <div class="wave"></div>
+                        <div class="wave"></div>
+                        <div class="wave"></div>
+                        <div class="wave"></div>
+                        <div class="wave"></div>
+                    </div>
                 </div>
-            </div>
-        </section>
-      </div>
-   </body>
+            </section>
+        </div>
+
+        <div id="sse">
+            <section>
+                <!--<div class="square_box box_three"></div>
+                <div class="square_box box_four"></div>-->
+                <div class="container mt-3">
+                    <div class="row transcriptions">
+
+                    </div>
+                </div>
+            </section>
+        </div>
+    </body>
 </html>

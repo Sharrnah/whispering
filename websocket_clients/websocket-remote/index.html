@@ -23,11 +23,17 @@
          let paramString = urlString.split('?')[1];
          let queryString = new URLSearchParams(paramString);
          for (let pair of queryString.entries()) {
-            if (name == pair[0]) {
+            if (name === pair[0]) {
                return pair[1];
             }
          }
          return undefined;
+      }
+
+      function clearAllTimeouts(timeoutList) {
+         for (var i = 0; i < timeoutList.length; i++) {
+            clearTimeout(timeoutList[i]);
+         }
       }
 
       ws_server = getParameter("ws_server");
@@ -55,11 +61,30 @@
          show_transl_results = "both";
       }
 
+      // no_loader argument. If set to "true", the loader is not shown
+      no_loader = typeof getParameter("no_loader") != 'undefined';
+
+
       no_scroll = getParameter("no_scroll");
 
       document.addEventListener("DOMContentLoaded", () => {
          if (typeof no_scroll != 'undefined') {
             document.querySelector('body').classList.add("noscroll");
+         }
+
+         // loader animation
+         var loaderTimeouts = [];
+         function showLoader(hideTime = 10) {
+            document.querySelector('#loader').classList.remove("hidden");
+            loaderTimeouts.push(
+               setTimeout(() => {
+                  document.querySelector('#loader').classList.add("hidden");
+               }, hideTime * 1000)
+            );
+         }
+         function hideLoader() {
+            clearAllTimeouts(loaderTimeouts);
+            document.querySelector('#loader').classList.add("hidden");
          }
 
          // possible alert types: alert-primary, alert-success, alert-info, alert-warning, alert-danger
@@ -133,11 +158,6 @@
                      }, auto_hide_msg_time * 1000)
                   );
                });
-            }
-            function clearAllTimeouts(timeoutList) {
-               for (var i = 0; i < timeoutList.length; i++) {
-                  clearTimeout(timeoutList[i]);
-               }
             }
             document.querySelector('#sse').addEventListener("click", showAllTranscriptions);
          }
@@ -213,7 +233,7 @@
 
                      message_text = received_msg.text;
                      txt_translation_html = "";
-                     if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation != '') {
+                     if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation !== '') {
                         message_text = received_msg.txt_translation;
 
                         txt_translation_html = "<br /><small><sup>[" + received_msg.txt_translation_target + "]</sup> " + received_msg.txt_translation + "</small>";
@@ -239,6 +259,7 @@
                          break;
                      }
 
+                     hideLoader();
                      addMessage(
                         messageHtml,
                         "alert-primary",
@@ -249,7 +270,7 @@
                   }
 
                   // receiving other messages
-                  if (typeof received_msg.type != 'undefined' && received_msg.type == "installed_languages") {
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "installed_languages") {
                      // list all available langauges
                      var src_lang_el = document.querySelector('#settings #src_lang');
                      var trg_lang_el = document.querySelector('#settings #trg_lang');
@@ -268,7 +289,7 @@
                         trg_lang_el.appendChild(el.cloneNode(true));
                      }
                   }
-                  if (typeof received_msg.type != 'undefined' && received_msg.type == "translate_settings") {
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "translate_settings") {
                      // load text translation settings
                      var src_lang_el = document.querySelector('#settings #src_lang');
                      var trg_lang_el = document.querySelector('#settings #trg_lang');
@@ -286,12 +307,16 @@
                      whisper_task_el.value = received_msg.data.whisper_task;
 
                      var osc_ip = received_msg.data.osc_ip;
-                     if (osc_ip == 0) {
+                     if (osc_ip === 0) {
                         document.querySelector('button#transl_result_textarea_sendosc').disabled = true;
                      }
                   }
-                  if (typeof received_msg.type != 'undefined' && received_msg.type == "translate_result") {
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "translate_result") {
                      document.querySelector('#transl_result_textarea').value = received_msg.translate_result;
+                  }
+                  if (!no_loader && typeof received_msg.type != 'undefined' && received_msg.type === "processing_start") {
+                     // show loader for 10 seconds
+                     showLoader(10);
                   }
 
                };
@@ -369,7 +394,7 @@
    </div>
    <div id="manual_translate" class="hidden">
       <section>
-         <div class="container mt-4">
+         <div class="container mt-3">
             Translate:
             <div id="text_translate_form" class="container lt-2" style="padding: 0;">
                <div class="row no-gutters">
@@ -392,11 +417,33 @@
       </section>
    </div>
 
+   <div><section><div class="container mt-3">
+      <hr />
+   </div></section></div>
+
+   <div id="loader" class="hidden">
+      <section>
+         <div class="container mt-3">
+            <div class="row center">
+              <div class="wave"></div>
+              <div class="wave"></div>
+              <div class="wave"></div>
+              <div class="wave"></div>
+              <div class="wave"></div>
+              <div class="wave"></div>
+              <div class="wave"></div>
+              <div class="wave"></div>
+              <div class="wave"></div>
+              <div class="wave"></div>
+            </div>
+         </div>
+      </section>
+   </div>
    <div id="sse">
       <section>
          <!--<div class="square_box box_three"></div>
             <div class="square_box box_four"></div>-->
-         <div class="container mt-5">
+         <div class="container mt-2">
             <div class="row transcriptions">
 
             </div>

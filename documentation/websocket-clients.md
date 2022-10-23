@@ -11,7 +11,7 @@ You have build a nice Client and would like to share?, let me know so i can add 
 
   Is the simplest implementation.
   
-  Mostly intended to show how to use it without much around it, to make it easier to build your own Overlay.
+  Mostly intended to show how to use it without much additional logic around it, to make it easier to build your own Overlay.
 
   _Supports only the `ws_server` [URL argument](#all-possible-configuration-url-arguments)._
 
@@ -39,13 +39,14 @@ _(first option is added with a `?`, all following with a `&`)_
 
 ## All possible Configuration URL arguments
 
-|       Arguments       |                     Default Value                     |                                                                                                                    Description                                                                                                                     |
-|:---------------------:|:-----------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-|      `ws_server`      |                  ws://127.0.0.1:5000                  |                                                                                                Sets the Websocket Server IP and Port to connect to.                                                                                                |
-|      `no_scroll`      |                         None                          |                                                                                                           Removes the Scrollbar if set.                                                                                                            |
-|  `auto_hide_message`  |                           0                           |                                          Sets the Seconds after which Transcriptions are hidden, but not removed. (Can be shown again by clicking in the lower part where the Boxes appear) 0 = Disabled                                           |
-|   `auto_rm_message`   |                           0                           |                                                                  Sets the Seconds after which Transcriptions are removed. (makes it impossible to access them again) 0 = Disabled                                                                  |
-| `show_transl_results` | websocket-remote=`both`<br/>streaming-overlay=`auto`  | Sets what is shown as translation / transcription result. Can be:<br/>`both` = shows both whisper and text translations<br/>`whisper_only` = shows only Whisper results<br/>`auto` = shows text translation if available, otherwise Whisper result |
+|       Arguments       |                    Default Value                     |                                                                                                                      Description                                                                                                                      |
+|:---------------------:|:----------------------------------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+|      `ws_server`      |                 ws://127.0.0.1:5000                  |                                                                                                 Sets the Websocket Server IP and Port to connect to.                                                                                                  |
+|      `no_scroll`      |                         None                         |                                                                                                             Removes the Scrollbar if set.                                                                                                             |
+|      `no_loader`      |                        False                         |                                                                                                        Disables the audio processing indicator                                                                                                        |
+|  `auto_hide_message`  |                          0                           |                                            Sets the Seconds after which Transcriptions are hidden, but not removed. (Can be shown again by clicking in the lower part where the Boxes appear) 0 = Disabled                                            |
+|   `auto_rm_message`   |                          0                           |                                                                   Sets the Seconds after which Transcriptions are removed. (makes it impossible to access them again) 0 = Disabled                                                                    |
+| `show_transl_results` | websocket-remote=`both`<hr/>streaming-overlay=`auto` | Sets what is shown as translation / transcription result. Can be:<br/>`both` = shows both whisper and text translations.<br/>`whisper_only` = shows only Whisper results.<br/>`auto` = shows text translation if available, otherwise Whisper result. |
 
 
 ## Other Use-Cases

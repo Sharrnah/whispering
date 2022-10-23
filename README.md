@@ -91,7 +91,7 @@ _(because of the 2 GB Limit, no direct release files on GitHub)_
 3. Set the Browser to allow Transparency.
 4. Attach the Browser to your VR-Headset.
 
-voilà, you have live translated subtitles of other people speaking (or videos playing) in VR which automatically disappear after 25 seconds.
+Voilà, you have live translated subtitles in VR of other people speaking (or videos playing) which automatically disappear after 25 seconds.
 
 <img src=images/vr_subtitles.gif>
 
