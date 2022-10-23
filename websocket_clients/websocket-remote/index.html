@@ -48,6 +48,13 @@
       } else {
          auto_remove_msg_time = 0;
       }
+
+      // show translation results. Can be "both" (default), "whisper_only" or "auto"
+      show_transl_results = getParameter("show_transl_results");
+      if (typeof show_transl_results == 'undefined') {
+         show_transl_results = "both";
+      }
+
       no_scroll = getParameter("no_scroll");
 
       document.addEventListener("DOMContentLoaded", () => {
@@ -203,8 +210,12 @@
                   // receiving a transcitption message
                   if (typeof received_msg.text != 'undefined') {
                      console.log(received_msg);
+
+                     message_text = received_msg.text;
                      txt_translation_html = "";
-                     if (typeof received_msg.txt_translation != 'undefined') {
+                     if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation != '') {
+                        message_text = received_msg.txt_translation;
+
                         txt_translation_html = "<br /><small><sup>[" + received_msg.txt_translation_target + "]</sup> " + received_msg.txt_translation + "</small>";
                      }
                      clickEvent = function () {
@@ -215,8 +226,21 @@
                            document.querySelector('#transl_result_textarea').value = received_msg.text;
                         }
                      };
+
+                     switch (show_transl_results) {
+                         case 'both':
+                             messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text + txt_translation_html;
+                         break;
+                         case 'whisper_only':
+                             messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text;
+                         break;
+                         case 'auto':
+                             messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + message_text;
+                         break;
+                     }
+
                      addMessage(
-                        "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text + txt_translation_html,
+                        messageHtml,
                         "alert-primary",
                         auto_remove_msg_time,
                         auto_hide_msg_time,

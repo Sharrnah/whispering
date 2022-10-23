@@ -12,6 +12,8 @@ WS_CLIENTS = set()
 def websocketMessageHandler(msgObj):
     if msgObj["type"] == "setting_change":
         settings.SetOption(msgObj["name"], msgObj["value"])
+        BroadcastMessage(json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))  # broadcast updated settings to all clients
+
         if msgObj["name"] == "dl_langs":
             texttranslate.InstallLanguages()
 
