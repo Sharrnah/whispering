@@ -37,7 +37,7 @@ from whisper import available_models, audio as whisper_audio
 def main(devices, device_index, sample_rate, task, model, english, condition_on_previous_text, verbose, energy, pause, dynamic_energy, phrase_time_limit, osc_ip, osc_port,
          osc_address, osc_convert_ascii, websocket_ip, websocket_port, ai_device, open_browser):
     # set initial settings
-    settings.SetOption("task", task)
+    settings.SetOption("whisper_task", task)
     settings.SetOption("condition_on_previous_text", condition_on_previous_text)
     settings.SetOption("model", model)
     settings.SetOption("english", english)

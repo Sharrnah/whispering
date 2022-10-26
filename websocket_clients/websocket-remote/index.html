@@ -162,6 +162,25 @@
             document.querySelector('#sse').addEventListener("click", showAllTranscriptions);
          }
 
+         document.querySelector('#lang_swap').addEventListener("click", swapLanguages);
+         function swapLanguages(e) {
+            let src_lang = document.querySelector('#settings #src_lang');
+            let src_lang_value = src_lang.value;
+            let trg_lang = document.querySelector('#settings #trg_lang');
+            let trg_lang_value = trg_lang.value;
+            let translate_text = document.querySelector('#translate_textarea');
+            let translate_text_value = translate_text.value;
+            let transl_result = document.querySelector('#transl_result_textarea');
+            let transl_result_value = transl_result.value;
+
+            src_lang.value = trg_lang_value;
+            trg_lang.value = src_lang_value;
+            translate_text.value = transl_result_value;
+            transl_result.value = translate_text_value;
+            src_lang.dispatchEvent(new Event("change"));
+            trg_lang.dispatchEvent(new Event("change"));
+         }
+
          function WebSocketStart() {
             if ("WebSocket" in window) {
                // Let us open a web socket
@@ -303,8 +322,10 @@
 
                      // load whisper settings
                      var whisper_task_el = document.querySelector('#settings #whisper_task');
+                     var whisper_condition_on_previous_text_el = document.querySelector('#settings #condition_on_previous_text');
 
                      whisper_task_el.value = received_msg.data.whisper_task;
+                     whisper_condition_on_previous_text_el.value = received_msg.data.condition_on_previous_text;
 
                      var osc_ip = received_msg.data.osc_ip;
                      if (osc_ip === 0) {
@@ -359,7 +380,9 @@
                   <select name="whisper_task" id="whisper_task">
                      <option value="transcribe">transcribe</option>
                      <option value="translate">translate (to en)</option>
-                  </select>
+                  </select>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  <label for="condition_on_previous_text">condition on previous text:</label> <input type="checkbox" id="condition_on_previous_text"
+                     name="condition_on_previous_text" value="1" />
                   <hr />
                </div>
             </div>
@@ -383,7 +406,7 @@
                   <select name="src_lang" id="src_lang"></select>
                </div>
                <div class="col">
-                  <div style="text-align:center;"><strong>==></strong></div>
+                  <div style="text-align:center;"><button name="lang_swap" id="lang_swap" value="1" title="swap languages"><strong><==></strong></button></div>
                </div>
                <div class="col-5">
                   Target Language:

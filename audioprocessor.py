@@ -79,7 +79,6 @@ def whisper_worker():
     whisper_model = settings.GetOption("model")
     whisper_english = settings.GetOption("english")
     whisper_ai_device = settings.GetOption("ai_device")
-    whisper_condition_on_previous_text = settings.GetOption("condition_on_previous_text")
     audio_model = load_whisper(whisper_model, whisper_english, whisper_ai_device)
 
     print("Say something!")
@@ -87,7 +86,8 @@ def whisper_worker():
     while True:
         audio_sample = convert_audio(q.get())
 
-        whisper_task = settings.GetOption("task")
+        whisper_task = settings.GetOption("whisper_task")
+        whisper_condition_on_previous_text = settings.GetOption("condition_on_previous_text")
 
         if whisper_english:
             result = audio_model.transcribe(audio_sample, task=whisper_task, language='english',
