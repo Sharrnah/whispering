@@ -49,10 +49,10 @@ _(because of the 2 GB Limit, no direct release files on GitHub)_
 |:------------------------------:|:--------------:|:----------------------------------------------------------------------------------------------------------------------------------------:|
 |          `--devices`           |     False      |                                                       Print all available devices.                                                       |
 |        `--device_index`        |       -1       |             Choose the output device to listen to and transcribe the audio from this device. '-1' = auto-select by default.              |
-|        `--sample_rate`         |     44100      |                                                   Sample rate of the audio recording.                                                    |
+|        `--sample_rate`         |     16000      |                                                   Sample rate of the audio recording.                                                    |
 |         `--ai_device`          |      None      |                         defines on which device the AI is loaded. can be `cuda` or `cpu`. auto-select by default                         |
 |            `--task`            |   transcribe   |                                  Choose between to `transcribe` or to `translate` the audio to English.                                  |
-|           `--model`            |     small      |                Select model list. can be `tiny, base, small, medium, large`. where large models are not for english only.                |
+|           `--model`            |     small      |           Select model list. can be `tiny, base, small, medium, large`. where large models are not available for english only.           |
 |          `--english`           |     False      |                                                         Use english only model.                                                          |
 | `--condition_on_previous_text` |     False      | Feed it the previous result to keep it consistent across recognition windows, but makes it more prone to getting stuck in a failure loop |
 |           `--energy`           |      300       |                                                     Energy level for mic to detect.                                                      |
