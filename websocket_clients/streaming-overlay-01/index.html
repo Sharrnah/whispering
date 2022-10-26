@@ -70,17 +70,17 @@
 
             // loader animation
             var loaderTimeouts = [];
-            function showLoader(hideTime = 10) {
+            function showLoader(hideTime = 5) {
                document.querySelector('#loader').classList.remove("hidden");
                loaderTimeouts.push(
                   setTimeout(() => {
-                     document.querySelector('#loader').classList.add("hidden");
+                     hideLoader();
                   }, hideTime * 1000)
                );
             }
             function hideLoader() {
-               clearAllTimeouts(loaderTimeouts);
                document.querySelector('#loader').classList.add("hidden");
+               clearAllTimeouts(loaderTimeouts);
             }
 
             // possible alert types: alert-primary, alert-success, alert-info, alert-warning, alert-danger
@@ -200,8 +200,9 @@
 
                      // receiving other messages
                      if (!no_loader && typeof received_msg.type != 'undefined' && received_msg.type === "processing_start") {
-                        // show loader for 10 seconds
-                        showLoader(10);
+                         clearAllTimeouts(loaderTimeouts);
+                         // show loader for 5 seconds
+                         showLoader(5);
                      }
                   };
                
