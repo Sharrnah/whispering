@@ -1,5 +1,5 @@
 # Websocket Clients
-All Interactions with the Application besides the Speech recognition and OCR is done using Websockets.
+All Interactions with the Application besides the Speech recognition and OSC is done using Websockets.
 
 Currently, all Websocket Clients are provided as HTML files. They should run on every relatively modern Browser that supports Websockets. (see [support table on caniuse.com](https://caniuse.com/websockets))
 
