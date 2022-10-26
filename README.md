@@ -93,7 +93,7 @@ _(because of the 2 GB Limit, no direct release files on GitHub)_
 
 Voilà, you have live translated subtitles in VR of other people speaking (or videos playing) which automatically disappear after 25 seconds.
 
-<img src=images/vr_subtitles.gif width=500> <img src=images/vrchat_live_subtitles.gif width=500>
+<img src=images/vr_subtitles.gif width=410> <img src=images/vrchat_live_subtitles.gif width=410>
 
 ### _Sources_
 A thanks goes to
