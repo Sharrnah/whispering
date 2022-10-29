@@ -1,12 +1,7 @@
-# This example uses M2M-100 models converted to the CTranslate2 format.
-# Download CTranslate2 models:
-# • M2M-100 418M-parameter model: https://bit.ly/33fM1AO
-# • M2M-100 1.2B-parameter model: https://bit.ly/3GYiaed
-
-
 import ctranslate2
 import sentencepiece as spm
 import os
+import downloader
 from pathlib import Path
 
 LANGUAGES = {
@@ -112,8 +107,16 @@ LANGUAGES = {
     "Zulu": "zu"
 }
 
+# Download CTranslate2 models:
+# • M2M-100 418M-parameter model: https://bit.ly/33fM1AO
+# • M2M-100 1.2B-parameter model: https://bit.ly/3GYiaed
+MODEL_LINKS = {
+    "small": "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/M2M100_ctranslate2%2Fm2m100_ct2_418m.zip",
+    "large": "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/M2M100_ctranslate2%2Fm2m100_ct2_12b.zip"
+}
+
 # [Modify] Set the device and beam size
-device = "cpu"  # "cpu" or "cuda" for GPU, auto = automatic
+device = "auto"  # "cpu" or "cuda" for GPU, auto = automatic
 beam_size = 5
 
 # [Modify] Set paths to the CTranslate2 and SentencePiece models
@@ -121,7 +124,7 @@ ct_model_path = Path(Path.cwd() / ".cache" / "m2m100_ct2")
 os.makedirs(ct_model_path, exist_ok=True)
 
 # default small model path. (should be loaded using load_model function)
-model_path = Path(ct_model_path / "m2m100_ct2_418m")
+model_path = Path(ct_model_path / "m2m100_418m")
 
 model = spm.SentencePieceProcessor()
 
@@ -134,19 +137,27 @@ def load_model(size="small"):
     global model_path
     match size:
         case "small":
-            model_file = "m2m100_ct2_418m"
+            model_file = "m2m100_418m"
 
         case "large":
-            model_file = "m2m100_ct2_1.2b"
+            model_file = "m2m100_12b"
 
         case _:
-            model_file = "m2m100_ct2_418m"
+            model_file = "m2m100_418m"
 
     model_path = Path(ct_model_path / model_file)
-
-    # Load the source SentecePiece model
     sp_model_path = Path(ct_model_path / model_file / "sentencepiece.model")
+
+    if not sp_model_path.exists():
+        print(f"Downloading {size} text translation model...")
+        downloader.download_extract(MODEL_LINKS[size], str(ct_model_path.resolve()))
+
     model.load(str(sp_model_path.resolve()))
+
+
+def set_device(option):
+    global device
+    device = option
 
 
 def translate_language(text, from_code, to_code):

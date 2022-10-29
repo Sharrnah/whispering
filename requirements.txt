@@ -19,3 +19,4 @@ ctranslate2
 fairseq
 sentencepiece
 protobuf
+progressbar2

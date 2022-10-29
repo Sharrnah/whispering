@@ -47,3 +47,7 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False):
         translation_text = convert_to_romaji(translation_text)
 
     return translation_text.strip()
+
+
+def SetDevice(option):
+    texttranslateM2M100_CTranslate2.set_device(option)

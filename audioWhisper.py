@@ -36,10 +36,11 @@ from whisper import available_models, audio as whisper_audio
 @click.option("--ai_device", default=None, help="The Device the AI is loaded on. can be 'cuda' or 'cpu'. default does autodetect", type=click.Choice(["cuda", "cpu"]))
 @click.option("--txt_translator", default="M2M100", help="The Model the AI is loading for text translations. can be 'M2M100', 'ARGOS' or 'None'. default is M2M100", type=click.Choice(["M2M100", "ARGOS"]))
 @click.option("--m2m100_size", default="small", help="The Model size if M2M100 text translator is used. can be 'small' or 'large'. default is small. (has no effect with ARGOS)", type=click.Choice(["small", "large"]))
+@click.option("--m2m100_device", default="auto", help="The device used for M2M100 translation. (has no effect with ARGOS)", type=click.Choice(["auto", "cuda", "cpu"]))
 @click.option("--open_browser", default=False, help="Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)", is_flag=True, type=bool)
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 def main(devices, device_index, sample_rate, task, model, language, condition_on_previous_text, energy, pause, dynamic_energy, phrase_time_limit, osc_ip, osc_port,
-         osc_address, osc_convert_ascii, websocket_ip, websocket_port, ai_device, txt_translator, m2m100_size, open_browser, verbose):
+         osc_address, osc_convert_ascii, websocket_ip, websocket_port, ai_device, txt_translator, m2m100_size, m2m100_device, open_browser, verbose):
 
     if str2bool(devices):
         audio = pyaudio.PyAudio()
@@ -91,6 +92,9 @@ def main(devices, device_index, sample_rate, task, model, language, condition_on
 
     settings.SetOption("txt_translator", txt_translator)
     settings.SetOption("m2m100_size", m2m100_size)
+
+    texttranslate.SetDevice(m2m100_device)
+
 
     if websocket_ip != "0":
         websocket.StartWebsocketServer(websocket_ip, websocket_port)
