@@ -19,7 +19,7 @@
             let paramString = urlString.split('?')[1];
             let queryString = new URLSearchParams(paramString);
             for(let pair of queryString.entries()) {
-               if (name == pair[0]) {
+               if (name === pair[0]) {
                   return pair[1];
                }
             }
@@ -55,10 +55,10 @@
                      if (typeof received_msg.text != 'undefined') {
                         console.log(received_msg);
 
-                        message_text = received_msg.text;
+                        message_text = received_msg.text.trim();
                         // use argos translate text result if received
-                        if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation != '') {
-                           message_text = received_msg.txt_translation;
+                        if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation.trim() !== '') {
+                           message_text = received_msg.txt_translation.trim();
                         }
 
                         addMessage("<sup>["+received_msg.language+"]</sup> " + message_text);

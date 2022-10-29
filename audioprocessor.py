@@ -8,6 +8,7 @@ import websocket
 import json
 import numpy as np
 from pydub import AudioSegment
+from whisper.tokenizer import LANGUAGES, TO_LANGUAGE_CODE
 import io
 
 # some regular mistakenly recognized words/sentences on mostly silence audio, which are ignored in processing
@@ -25,6 +26,23 @@ blacklist = list((map(lambda x: x.lower(), blacklist)))
 q = queue.Queue()
 
 
+def whisper_get_languages_list_keys():
+    return sorted(LANGUAGES.keys())
+
+
+def whisper_get_languages_list():
+    return sorted(LANGUAGES.keys()) + sorted([k.title() for k in TO_LANGUAGE_CODE.keys()])
+
+
+def whisper_get_languages():
+    languages = {
+        "": "Auto",
+        **LANGUAGES
+    }
+
+    return tuple([{"code": code, "name": language} for code, language in languages.items()])
+
+
 def whisper_result_handling(result):
     verbose = settings.GetOption("verbose")
     osc_ip = settings.GetOption("osc_ip")
@@ -40,6 +58,7 @@ def whisper_result_handling(result):
         else:
             print(result)
 
+        # translate using text translator if enabled
         do_txt_translate = settings.GetOption("txt_translate")
         if do_txt_translate:
             from_lang = settings.GetOption("src_lang")
@@ -49,7 +68,7 @@ def whisper_result_handling(result):
             result["txt_translation"] = predicted_text
             result["txt_translation_target"] = to_lang
 
-        # Send to VRChat
+        # Send over OSC
         if osc_ip != "0":
             VRC_OSCLib.Chat(predicted_text, True, osc_address, IP=osc_ip, PORT=osc_port,
                             convert_ascii=settings.GetOption("osc_convert_ascii"))
@@ -58,12 +77,8 @@ def whisper_result_handling(result):
             websocket.BroadcastMessage(json.dumps(result))
 
 
-def load_whisper(model, english, ai_device):
-    # there are no english models for large
-    if model != "large" and english:
-        model = model + ".en"
-    audio_model = whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
-    return audio_model
+def load_whisper(model, ai_device):
+    return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
 
 
 def convert_audio(audio_bytes: bytes):
@@ -71,15 +86,16 @@ def convert_audio(audio_bytes: bytes):
     audio_clip = AudioSegment.from_file(audio_data)
 
     audio_clip = audio_clip.set_frame_rate(whisper.audio.SAMPLE_RATE)
+    #audio_clip = audio_clip.set_channels(1)
 
     return np.frombuffer(audio_clip.get_array_of_samples(), np.int16).flatten().astype(np.float32) / 32768.0
 
 
 def whisper_worker():
     whisper_model = settings.GetOption("model")
-    whisper_english = settings.GetOption("english")
+
     whisper_ai_device = settings.GetOption("ai_device")
-    audio_model = load_whisper(whisper_model, whisper_english, whisper_ai_device)
+    audio_model = load_whisper(whisper_model, whisper_ai_device)
 
     print("Say something!")
 
@@ -87,14 +103,13 @@ def whisper_worker():
         audio_sample = convert_audio(q.get())
 
         whisper_task = settings.GetOption("whisper_task")
+
+        whisper_language = settings.GetOption("current_language")
+
         whisper_condition_on_previous_text = settings.GetOption("condition_on_previous_text")
 
-        if whisper_english:
-            result = audio_model.transcribe(audio_sample, task=whisper_task, language='english',
-                                            condition_on_previous_text=whisper_condition_on_previous_text)
-        else:
-            result = audio_model.transcribe(audio_sample, task=whisper_task,
-                                            condition_on_previous_text=whisper_condition_on_previous_text)
+        result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
+                                        condition_on_previous_text=whisper_condition_on_previous_text)
 
         whisper_result_handling(result)
         q.task_done()

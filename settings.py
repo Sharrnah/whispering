@@ -4,6 +4,7 @@ TRANSLATE_SETTINGS = {
     "src_lang": "en",
     "trg_lang": "fr",
     "txt_ascii": False,
+    "txt_translator": "M2M100",  # can be "M2M100" or "ARGOS"
 
     # whisper settings
     "whisper_task": "transcribe"

@@ -203,7 +203,8 @@
                         value = e.currentTarget.checked;
                         break;
                      case 'select-one':
-                        value = e.currentTarget.value;
+                        //value = e.currentTarget.value;
+                        value = e.currentTarget.value === "" ? null : e.currentTarget.value;
                         break;
                      case 'submit':
                         value = true;
@@ -246,11 +247,11 @@
                ws.onmessage = function (evt) {
                   var received_msg = JSON.parse(evt.data);
 
-                  // receiving a transcitption message
+                  // receiving a transcription message
                   if (typeof received_msg.text != 'undefined') {
                      console.log(received_msg);
 
-                     message_text = received_msg.text;
+                     message_text = received_msg.text.trim();
                      txt_translation_html = "";
                      if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation !== '') {
                         message_text = received_msg.txt_translation;
@@ -258,20 +259,20 @@
                         txt_translation_html = "<br /><small><sup>[" + received_msg.txt_translation_target + "]</sup> " + received_msg.txt_translation + "</small>";
                      }
                      clickEvent = function () {
-                        document.querySelector('#translate_textarea').value = received_msg.text;
+                        document.querySelector('#translate_textarea').value = received_msg.text.trim();
                         if (typeof received_msg.txt_translation != 'undefined') {
-                           document.querySelector('#transl_result_textarea').value = received_msg.txt_translation;
+                           document.querySelector('#transl_result_textarea').value = received_msg.txt_translation.trim();
                         } else {
-                           document.querySelector('#transl_result_textarea').value = received_msg.text;
+                           document.querySelector('#transl_result_textarea').value = received_msg.text.trim();
                         }
                      };
 
                      switch (show_transl_results) {
                          case 'both':
-                             messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text + txt_translation_html;
+                             messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text.trim() + txt_translation_html;
                          break;
                          case 'whisper_only':
-                             messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text;
+                             messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text.trim();
                          break;
                          case 'auto':
                              messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + message_text;
@@ -289,6 +290,22 @@
                   }
 
                   // receiving other messages
+                  // if (typeof received_msg.type != 'undefined' && received_msg.type === "whisper_languages") {
+                  //    // list all available langauges
+                  //    var whisper_lang_el = document.querySelector('#settings #current_language');
+                  //
+                  //    whisper_lang_el.replaceChildren("");
+                  //
+                  //    for (var i = 0; i < received_msg.data.length; i++) {
+                  //       var opt = received_msg.data[i];
+                  //
+                  //       var el = document.createElement("option");
+                  //       el.textContent = "[" + opt.code + "] " + opt.name;
+                  //       el.value = opt.code;
+                  //
+                  //       whisper_lang_el.appendChild(el);
+                  //    }
+                  // }
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "installed_languages") {
                      // list all available langauges
                      var src_lang_el = document.querySelector('#settings #src_lang');
@@ -309,23 +326,48 @@
                      }
                   }
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "translate_settings") {
-                     // load text translation settings
-                     var src_lang_el = document.querySelector('#settings #src_lang');
-                     var trg_lang_el = document.querySelector('#settings #trg_lang');
-                     var txt_ascii_el = document.querySelector('#settings #txt_ascii');
-                     var txt_translate_el = document.querySelector('#settings #txt_translate');
 
-                     src_lang_el.value = received_msg.data.src_lang;
-                     trg_lang_el.value = received_msg.data.trg_lang;
-                     txt_ascii_el.checked = received_msg.data.txt_ascii;
-                     txt_translate_el.checked = received_msg.data.txt_translate;
+                     for (let settingKey in received_msg.data)
+                     {
+                        let settingValue = received_msg.data[settingKey]
 
-                     // load whisper settings
-                     var whisper_task_el = document.querySelector('#settings #whisper_task');
-                     var whisper_condition_on_previous_text_el = document.querySelector('#settings #condition_on_previous_text');
+                        let setting_el = document.querySelector('#settings #' + settingKey);
 
-                     whisper_task_el.value = received_msg.data.whisper_task;
-                     whisper_condition_on_previous_text_el.value = received_msg.data.condition_on_previous_text;
+                        if (setting_el !== null) {
+                           switch (setting_el.type) {
+                              case 'checkbox':
+                                 setting_el.checked = settingValue;
+                                 break;
+                              case 'select-one':
+                                 setting_el.value = settingValue;
+                                 break;
+                              default:
+                                 break;
+                           }
+                        }
+
+                        // populate whisper languages
+                        if (settingKey === 'whisper_languages') {
+                           var whisper_lang_el = document.querySelector('#settings #current_language');
+
+                           whisper_lang_el.replaceChildren("");
+                           for (var i = 0; i < settingValue.length; i++) {
+                              var opt = settingValue[i];
+
+                              var el = document.createElement("option");
+
+                              el.textContent = "[" + opt.code + "] " + opt.name;
+                              if (opt.code === '') {
+                                 el.textContent = opt.name;
+                              }
+
+                              el.value = opt.code;
+
+                              whisper_lang_el.appendChild(el);
+                           }
+                           whisper_lang_el.value = received_msg.data.current_language === null ? "" : received_msg.data.current_language;
+                        }
+                     }
 
                      var osc_ip = received_msg.data.osc_ip;
                      if (osc_ip === 0) {
@@ -382,7 +424,10 @@
                      <option value="translate">translate (to en)</option>
                   </select>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
                   <label for="condition_on_previous_text">condition on previous text:</label> <input type="checkbox" id="condition_on_previous_text"
-                     name="condition_on_previous_text" value="1" />
+                     name="condition_on_previous_text" value="1" />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  <label for="current_language">speaker language:</label> <select name="current_language" id="current_language">
+                        <option value="">Auto</option>
+                  </select>
                   <hr />
                </div>
             </div>
@@ -394,8 +439,6 @@
                   <label for="txt_ascii"
                      title="transliterate hiragana, katakana and kanji (Japanese text) into rōmaji">Convert to
                      romaji:</label> <input type="checkbox" id="txt_ascii" name="txt_ascii" value="1" />
-                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-                  <button name="dl_langs" value="1" title="Download all available text translation languages (can take a while)">Download Text transl. Languages</button>
                   <br />
                </div>
             </div>

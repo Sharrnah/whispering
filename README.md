@@ -53,7 +53,7 @@ _(because of the 2 GB Limit, no direct release files on GitHub)_
 |         `--ai_device`          |      None      |                         defines on which device the AI is loaded. can be `cuda` or `cpu`. auto-select by default                         |
 |            `--task`            |   transcribe   |                                  Choose between to `transcribe` or to `translate` the audio to English.                                  |
 |           `--model`            |     small      |           Select model list. can be `tiny, base, small, medium, large`. where large models are not available for english only.           |
-|          `--english`           |     False      |                                                         Use english only model.                                                          |
+|          `--language`          |      None      |                                 language spoken in the audio, specify None to perform language detection                                 |
 | `--condition_on_previous_text` |     False      | Feed it the previous result to keep it consistent across recognition windows, but makes it more prone to getting stuck in a failure loop |
 |           `--energy`           |      300       |                                                     Energy level for mic to detect.                                                      |
 |       `--dynamic_energy`       |     False      |                                                          Enable dynamic energy.                                                          |
@@ -65,6 +65,8 @@ _(because of the 2 GB Limit, no direct release files on GitHub)_
 |     `--osc_convert_ascii`      |      True      |     Convert Text to ASCII compatible when sending over OSC. (Can be set to 'False' as soon as VRChat supports non-ASCII characters)      |
 |        `--websocket_ip`        |       0        |                                       IP where Websocket Server listens on. Set to '0' to disable.                                       |
 |       `--websocket_port`       |      5000      |                                                 Port where Websocket Server listens on.                                                  |
+|       `--txt_translator`       |     M2M100     |                          The Model the AI is loading for text translations. can be 'M2M100', 'ARGOS' or 'None'.                          |
+|        `--m2m100_size`         |     small      |         The Model size if M2M100 text translator is used. can be 'small' or 'large'. (has no effect with --txt_translator ARGOS)         |
 |        `--open_browser`        |     False      |                     Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)                     |
 |          `--verbose`           |     False      |                                                     Whether to print verbose output.                                                     |
 

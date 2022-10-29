@@ -21,7 +21,7 @@
             let paramString = urlString.split('?')[1];
             let queryString = new URLSearchParams(paramString);
             for(let pair of queryString.entries()) {
-               if (name == pair[0]) {
+               if (name === pair[0]) {
                   return pair[1];
                }
             }
@@ -169,20 +169,20 @@
                      if (typeof received_msg.text != 'undefined') {
                         console.log(received_msg);
 
-                        message_text = received_msg.text;
+                        message_text = received_msg.text.trim();
                         // use argos translate text result if received
-                        if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation != '') {
-                           message_text = received_msg.txt_translation;
+                        if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation.trim() !== '') {
+                           message_text = received_msg.txt_translation.trim();
 
-                           txt_translation_html = "<br /><small><sup>[" + received_msg.txt_translation_target + "]</sup> " + received_msg.txt_translation + "</small>";
+                           txt_translation_html = "<br /><small><sup>[" + received_msg.txt_translation_target + "]</sup> " + received_msg.txt_translation.trim() + "</small>";
                         }
 
                         switch (show_transl_results) {
                             case 'both':
-                                messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text + txt_translation_html;
+                                messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text.trim() + txt_translation_html;
                             break;
                             case 'whisper_only':
-                                messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text;
+                                messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text.trim();
                             break;
                             case 'auto':
                                 messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + message_text;
