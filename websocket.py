@@ -3,6 +3,7 @@ import asyncio
 import websockets
 import json
 import texttranslate
+import imagetranslate
 import settings
 import VRC_OSCLib
 
@@ -21,6 +22,12 @@ def websocketMessageHandler(msgObj):
         translate_result = texttranslate.TranslateLanguage(msgObj["text"], msgObj["from_lang"], msgObj["to_lang"])
         BroadcastMessage(json.dumps({"type": "translate_result", "translate_result": translate_result}))
 
+    if msgObj["type"] == "ocr_req":
+        window_name = settings.GetOption("ocr_window_name")
+        ocr_result = imagetranslate.run_image_processing(window_name, [msgObj["ocr_lang"]])
+        translate_result = (texttranslate.TranslateLanguage(" -- ".join(ocr_result), msgObj["from_lang"], msgObj["to_lang"]))
+        BroadcastMessage(json.dumps({"type": "translate_result", "original_text": "\n".join(ocr_result), "translate_result": "\n".join(translate_result.split(" -- "))}))
+
     if msgObj["type"] == "send_osc":
         osc_address = settings.GetOption("osc_address")
         osc_ip = settings.GetOption("osc_ip")
@@ -33,11 +40,15 @@ async def handler(websocket):
     print('Websocket: Client connected.')
 
     # send all available text translation languages
-    availableLanguages = texttranslate.GetInstalledLanguageNames()
-    await send(websocket, json.dumps({"type": "installed_languages", "data": availableLanguages}))
+    available_languages = texttranslate.GetInstalledLanguageNames()
+    await send(websocket, json.dumps({"type": "installed_languages", "data": available_languages}))
 
     # send all current text translation settings
     await send(websocket, json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))
+
+    # send all available image recognition languages
+    available_languages = imagetranslate.get_installed_language_names()
+    await send(websocket, json.dumps({"type": "available_img_languages", "data": available_languages}))
 
     WS_CLIENTS.add(websocket)
     try:

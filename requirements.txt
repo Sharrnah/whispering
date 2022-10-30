@@ -4,7 +4,7 @@ more-itertools
 transformers>=4.19.0
 ffmpeg-python==0.2.0
 click>=8.1.3
-PyAudioWPatch
+PyAudioWPatch>=0.2.12.5
 SpeechRecognition
 pydub>=0.25.1
 git+https://github.com/openai/whisper.git
@@ -15,8 +15,12 @@ websockets>=10.4
 argostranslate>=1.7.0
 unidecode>=1.3.6
 pykakasi>=2.2.1
-ctranslate2
+ctranslate2>=2.17.0
 fairseq
-sentencepiece
+sentencepiece>=0.1.96
 protobuf
 progressbar2
+
+pywin32
+easyocr
+mss
