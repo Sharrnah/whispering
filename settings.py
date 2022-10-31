@@ -6,6 +6,9 @@ TRANSLATE_SETTINGS = {
     "txt_ascii": False,
     "txt_translator": "M2M100",  # can be "M2M100" or "ARGOS"
 
+    # ocr settings
+    "ocr_lang": "en",
+
     # whisper settings
     "whisper_task": "transcribe"
 }

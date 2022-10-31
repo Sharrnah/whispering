@@ -171,7 +171,7 @@ def translate_language(text, from_code, to_code):
 
     # Translate the source sentences
     translator = ctranslate2.Translator(str(model_path.resolve()), device=device)
-    translations = translator.translate_batch(source_sents_subworded, batch_type="tokens", max_batch_size=2024, beam_size=beam_size, target_prefix=target_prefix)
+    translations = translator.translate_batch(source_sents_subworded, batch_type="tokens", max_batch_size=2024, beam_size=beam_size, target_prefix=target_prefix, normalize_scores=True, max_input_length=2048)
     translations = [translation[0]['tokens'] for translation in translations]
 
     # Desubword the target sentences

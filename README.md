@@ -68,6 +68,7 @@ _(because of the 2 GB Limit, no direct release files on GitHub)_
 |       `--txt_translator`       |     M2M100     |                          The Model the AI is loading for text translations. can be 'M2M100', 'ARGOS' or 'None'.                          |
 |        `--m2m100_size`         |     small      |         The Model size if M2M100 text translator is used. can be 'small' or 'large'. (has no effect with --txt_translator ARGOS)         |
 |       `--m2m100_device`        |      auto      |            The device used for M2M100 translation. can be 'auto', 'cuda' or 'cpu' (has no effect with --txt_translator ARGOS)            |
+|      `--ocr_window_name`       |     VRChat     |                                           Window name of the application for OCR translations.                                           |
 |        `--open_browser`        |     False      |                     Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)                     |
 |          `--verbose`           |     False      |                                                     Whether to print verbose output.                                                     |
 

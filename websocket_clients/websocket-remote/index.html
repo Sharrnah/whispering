@@ -17,6 +17,17 @@
    <script type="text/javascript">
       var websocketServer = "ws://127.0.0.1:5000"
 
+      var settings = null;
+
+      HTMLSelectElement.prototype.contains = function( value ) {
+          for (var i = 0, l = this.options.length; i < l; i++) {
+              if (this.options[i].value == value) {
+                  return true;
+              }
+          }
+          return false;
+      }
+
       // url argument handling
       function getParameter(name) {
          let urlString = window.location.href;
@@ -181,6 +192,27 @@
             trg_lang.dispatchEvent(new Event("change"));
          }
 
+         document.querySelector('#ocr_lang').addEventListener("change", syncOcrTxtLanguages);
+         function syncOcrTxtLanguages(e) {
+            let ocr_lang = document.querySelector('#settings #ocr_lang');
+            let src_lang = document.querySelector('#settings #src_lang');
+
+            let src_target_lang_code = ocr_lang.value;
+
+            // sync special language codes
+            switch (src_target_lang_code) {
+               case "ch_sim":
+               case "ch_tra":
+                  src_target_lang_code = "zh";
+                  break;
+            }
+
+            if (src_lang.contains(src_target_lang_code)) {
+               src_lang.value = src_target_lang_code;
+               src_lang.dispatchEvent(new Event("change"));
+            }
+         }
+
          function WebSocketStart() {
             if ("WebSocket" in window) {
                // Let us open a web socket
@@ -218,6 +250,7 @@
                   ws.send(JSON.stringify(sendData));
                }
 
+               // send text translation request
                document.querySelector("button#translate_do").addEventListener("click", sendTranslateTask);
                function sendTranslateTask() {
                   var src_lang = document.querySelector('#settings #src_lang').value;
@@ -225,6 +258,29 @@
                   var translate_text = document.querySelector('#translate_textarea').value;
 
                   let sendData = { type: "translate_req", text: translate_text, from_lang: src_lang, to_lang: trg_lang };
+                  ws.send(JSON.stringify(sendData));
+               }
+
+               // send OCR translation request
+               document.querySelector("button#ocr_transl_do").addEventListener("click", sendOCRTranslateTask);
+               function sendOCRTranslateTask() {
+                  var ocr_lang = document.querySelector('#settings #ocr_lang').value;
+                  var src_lang = document.querySelector('#settings #src_lang').value;
+                  var trg_lang = document.querySelector('#settings #trg_lang').value;
+
+                  let sendData = { type: "ocr_req", ocr_lang: ocr_lang, from_lang: src_lang, to_lang: trg_lang };
+                  ws.send(JSON.stringify(sendData));
+               }
+
+               // send window list request
+               document.querySelector('select#ocr_window_name').addEventListener("mousedown", showOpenWindows);
+               document.querySelector('select#ocr_window_name').addEventListener("touchend", showOpenWindows);
+               document.querySelector('select#ocr_window_name').addEventListener("keydown", showOpenWindows);
+               function showOpenWindows(e) {
+                  if (e.type === "keydown" && e.keyCode !== 32) {
+                     return;
+                  }
+                  let sendData = { type: "get_windows_list" };
                   ws.send(JSON.stringify(sendData));
                }
 
@@ -325,7 +381,24 @@
                         trg_lang_el.appendChild(el.cloneNode(true));
                      }
                   }
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "available_img_languages") {
+                     // list all available langauges
+                     var img_lang_el = document.querySelector('#settings #ocr_lang');
+
+                     img_lang_el.replaceChildren("");
+
+                     for (var i = 0; i < received_msg.data.length; i++) {
+                        var opt = received_msg.data[i];
+
+                        var el = document.createElement("option");
+                        el.textContent = "[" + opt.code + "] " + opt.name;
+                        el.value = opt.code;
+
+                        img_lang_el.appendChild(el);
+                     }
+                  }
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "translate_settings") {
+                     settings = received_msg.data;
 
                      for (let settingKey in received_msg.data)
                      {
@@ -367,6 +440,18 @@
                            }
                            whisper_lang_el.value = received_msg.data.current_language === null ? "" : received_msg.data.current_language;
                         }
+
+                        // populate ocr window name with default value
+                        if (settingKey === 'ocr_window_name') {
+                           let ocr_window_el = document.querySelector('select#ocr_window_name');
+                           if (!ocr_window_el.contains(settingValue)) {
+                              let el = document.createElement("option");
+                              el.textContent = settingValue;
+                              el.value = settingValue;
+                              ocr_window_el.appendChild(el);
+                           }
+                           ocr_window_el.value = settingValue;
+                        }
                      }
 
                      var osc_ip = received_msg.data.osc_ip;
@@ -376,7 +461,36 @@
                   }
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "translate_result") {
                      document.querySelector('#transl_result_textarea').value = received_msg.translate_result;
+                     if (typeof received_msg.original_text != 'undefined') {
+                        document.querySelector('#translate_textarea').value = received_msg.original_text;
+                     }
                   }
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "windows_list") {
+                     var ocr_window_el = document.querySelector('select#ocr_window_name');
+                     var ocr_current_window = ocr_window_el.value;
+                     ocr_window_el.replaceChildren("");
+
+                     for (var i = 0; i < received_msg.data.length; i++) {
+                        var opt = received_msg.data[i];
+
+                        var el = document.createElement("option");
+
+                        //el.textContent = "[" + opt.hwnd + "] " + opt.title;
+                        el.textContent = opt.title;
+                        el.value = opt.title;
+
+                        ocr_window_el.appendChild(el);
+                     }
+                     if (!ocr_window_el.contains(ocr_current_window)) {
+                        let el = document.createElement("option");
+                        el.textContent = ocr_current_window;
+                        el.value = ocr_current_window;
+                        ocr_window_el.appendChild(el);
+                     }
+                     ocr_window_el.value = ocr_current_window;
+                  }
+
+                  // activate loading animation on processing_start message
                   if (!no_loader && typeof received_msg.type != 'undefined' && received_msg.type === "processing_start") {
                      clearAllTimeouts(loaderTimeouts);
                      // show loader for 5 seconds
@@ -446,14 +560,18 @@
             <div class="row no-gutters mt-3">
                <div class="col-4">
                   Source Language:
-                  <select name="src_lang" id="src_lang"></select>
+                  <select name="src_lang" id="src_lang"></select><br />
+                  OCR Language:&nbsp;&nbsp;&nbsp;&nbsp;
+                  <select name="ocr_lang" id="ocr_lang"></select>
                </div>
                <div class="col">
                   <div style="text-align:center;"><button name="lang_swap" id="lang_swap" value="1" title="swap languages"><strong><==></strong></button></div>
                </div>
                <div class="col-5">
                   Target Language:
-                  <select name="trg_lang" id="trg_lang"></select>
+                  <select name="trg_lang" id="trg_lang"></select><br />
+                  OCR Window:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  <select name="ocr_window_name" id="ocr_window_name" style="max-width: 250px;"></select>
                </div>
             </div>
          </div>
@@ -470,6 +588,7 @@
                   </div>
                   <div class="col-1">
                      <button name="translate_do" id="translate_do" value="1" style="width: 100%;">translate</button>
+                     <div style="text-align:center;"><button name="ocr_transl_do" id="ocr_transl_do" value="1" title="OCR translation">OCR transl.</button></div>
                   </div>
                   <div class="col-5">
                      <textarea style="width:100%;" name="transl_result_textarea" id="transl_result_textarea"></textarea>
