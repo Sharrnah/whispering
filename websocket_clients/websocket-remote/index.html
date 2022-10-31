@@ -17,6 +17,15 @@
    <script type="text/javascript">
       var websocketServer = "ws://127.0.0.1:5000"
 
+      HTMLSelectElement.prototype.contains = function( value ) {
+          for (var i = 0, l = this.options.length; i < l; i++) {
+              if (this.options[i].value == value) {
+                  return true;
+              }
+          }
+          return false;
+      }
+
       // url argument handling
       function getParameter(name) {
          let urlString = window.location.href;
@@ -179,6 +188,27 @@
             transl_result.value = translate_text_value;
             src_lang.dispatchEvent(new Event("change"));
             trg_lang.dispatchEvent(new Event("change"));
+         }
+
+         document.querySelector('#ocr_lang').addEventListener("change", syncOcrTxtLanguages);
+         function syncOcrTxtLanguages(e) {
+            let ocr_lang = document.querySelector('#settings #ocr_lang');
+            let src_lang = document.querySelector('#settings #src_lang');
+
+            let src_target_lang_code = ocr_lang.value;
+
+            // sync special language codes
+            switch (src_target_lang_code) {
+               case "ch_sim":
+               case "ch_tra":
+                  src_target_lang_code = "zh";
+                  break;
+            }
+
+            if (src_lang.contains(src_target_lang_code)) {
+               src_lang.value = src_target_lang_code;
+               src_lang.dispatchEvent(new Event("change"));
+            }
          }
 
          function WebSocketStart() {
@@ -478,7 +508,7 @@
                <div class="col-4">
                   Source Language:
                   <select name="src_lang" id="src_lang"></select><br />
-                  Image Language:&nbsp;
+                  OCR Language:&nbsp;&nbsp;&nbsp;&nbsp;
                   <select name="ocr_lang" id="ocr_lang"></select>
                </div>
                <div class="col">
