@@ -4,6 +4,7 @@ import websockets
 import json
 import texttranslate
 import imagetranslate
+from windowcapture import WindowCapture
 import settings
 import VRC_OSCLib
 
@@ -24,6 +25,10 @@ def websocketMessageHandler(msgObj):
         ocr_result = imagetranslate.run_image_processing(window_name, ['en', msgObj["ocr_lang"]])
         translate_result = (texttranslate.TranslateLanguage(" -- ".join(ocr_result), msgObj["from_lang"], msgObj["to_lang"]))
         BroadcastMessage(json.dumps({"type": "translate_result", "original_text": "\n".join(ocr_result), "translate_result": "\n".join(translate_result.split(" -- "))}))
+
+    if msgObj["type"] == "get_windows_list":
+        windows_list = WindowCapture.list_window_names()
+        BroadcastMessage(json.dumps({"type": "windows_list", "data": windows_list}))
 
     if msgObj["type"] == "send_osc":
         osc_address = settings.GetOption("osc_address")

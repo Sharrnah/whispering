@@ -1,6 +1,7 @@
 import numpy as np
 import win32gui, win32ui, win32con, win32com.client
 import mss.tools
+import time
 
 
 class WindowCapture:
@@ -30,6 +31,7 @@ class WindowCapture:
                     self.bring_to_top()
                     self.set_act_win()
                     self.set_as_foreground_window()
+                    time.sleep(0.2)
                 except Exception as e:
                     print('Failed to focus window: {}'.format(window_name))
 
@@ -125,12 +127,17 @@ class WindowCapture:
     # https://stackoverflow.com/questions/55547940/how-to-get-a-list-of-the-name-of-every-open-window
     @staticmethod
     def list_window_names():
+        window_list = []
+
         # noinspection PyPep8Naming
         def winEnumHandler(hwnd, ctx):
             if win32gui.IsWindowVisible(hwnd):
-                print(hex(hwnd), win32gui.GetWindowText(hwnd))
+                if win32gui.GetWindowText(hwnd).strip() != '':
+                    window_list.append({"hwnd": hex(hwnd), "title": win32gui.GetWindowText(hwnd)})
+                # print(hex(hwnd), win32gui.GetWindowText(hwnd))
 
         win32gui.EnumWindows(winEnumHandler, None)
+        return window_list
 
     # translate a pixel position on a screenshot image to a pixel position on the screen.
     # pos = (x, y)

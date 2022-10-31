@@ -1,5 +1,6 @@
 import json
-import speech_recognition_patch as sr
+#import speech_recognition_patch as sr  # this is a patched version of speech_recognition. (disabled for now because of freeze issues)
+import speech_recognition as sr
 import audioprocessor
 import os
 import click

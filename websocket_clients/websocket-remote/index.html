@@ -17,6 +17,8 @@
    <script type="text/javascript">
       var websocketServer = "ws://127.0.0.1:5000"
 
+      var settings = null;
+
       HTMLSelectElement.prototype.contains = function( value ) {
           for (var i = 0, l = this.options.length; i < l; i++) {
               if (this.options[i].value == value) {
@@ -270,6 +272,18 @@
                   ws.send(JSON.stringify(sendData));
                }
 
+               // send window list request
+               document.querySelector('select#ocr_window_name').addEventListener("mousedown", showOpenWindows);
+               document.querySelector('select#ocr_window_name').addEventListener("touchend", showOpenWindows);
+               document.querySelector('select#ocr_window_name').addEventListener("keydown", showOpenWindows);
+               function showOpenWindows(e) {
+                  if (e.type === "keydown" && e.keyCode !== 32) {
+                     return;
+                  }
+                  let sendData = { type: "get_windows_list" };
+                  ws.send(JSON.stringify(sendData));
+               }
+
                document.querySelector("button#transl_result_textarea_sendosc").addEventListener("click", sendOSCTask);
                function sendOSCTask() {
                   var translated_text = document.querySelector('#transl_result_textarea').value;
@@ -384,6 +398,7 @@
                      }
                   }
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "translate_settings") {
+                     settings = received_msg.data;
 
                      for (let settingKey in received_msg.data)
                      {
@@ -425,6 +440,18 @@
                            }
                            whisper_lang_el.value = received_msg.data.current_language === null ? "" : received_msg.data.current_language;
                         }
+
+                        // populate ocr window name with default value
+                        if (settingKey === 'ocr_window_name') {
+                           let ocr_window_el = document.querySelector('select#ocr_window_name');
+                           if (!ocr_window_el.contains(settingValue)) {
+                              let el = document.createElement("option");
+                              el.textContent = settingValue;
+                              el.value = settingValue;
+                              ocr_window_el.appendChild(el);
+                           }
+                           ocr_window_el.value = settingValue;
+                        }
                      }
 
                      var osc_ip = received_msg.data.osc_ip;
@@ -438,6 +465,32 @@
                         document.querySelector('#translate_textarea').value = received_msg.original_text;
                      }
                   }
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "windows_list") {
+                     var ocr_window_el = document.querySelector('select#ocr_window_name');
+                     var ocr_current_window = ocr_window_el.value;
+                     ocr_window_el.replaceChildren("");
+
+                     for (var i = 0; i < received_msg.data.length; i++) {
+                        var opt = received_msg.data[i];
+
+                        var el = document.createElement("option");
+
+                        //el.textContent = "[" + opt.hwnd + "] " + opt.title;
+                        el.textContent = opt.title;
+                        el.value = opt.title;
+
+                        ocr_window_el.appendChild(el);
+                     }
+                     if (!ocr_window_el.contains(ocr_current_window)) {
+                        let el = document.createElement("option");
+                        el.textContent = ocr_current_window;
+                        el.value = ocr_current_window;
+                        ocr_window_el.appendChild(el);
+                     }
+                     ocr_window_el.value = ocr_current_window;
+                  }
+
+                  // activate loading animation on processing_start message
                   if (!no_loader && typeof received_msg.type != 'undefined' && received_msg.type === "processing_start") {
                      clearAllTimeouts(loaderTimeouts);
                      // show loader for 5 seconds
@@ -516,7 +569,9 @@
                </div>
                <div class="col-5">
                   Target Language:
-                  <select name="trg_lang" id="trg_lang"></select>
+                  <select name="trg_lang" id="trg_lang"></select><br />
+                  OCR Window:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  <select name="ocr_window_name" id="ocr_window_name" style="max-width: 250px;"></select>
                </div>
             </div>
          </div>

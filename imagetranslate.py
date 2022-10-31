@@ -98,7 +98,7 @@ LANGUAGE_CODES = {
     "Vietnamese": "vi"
 }
 
-reader = None
+reader: easyocr.Reader = None  # type: ignore
 
 
 def init_reader(languages):
