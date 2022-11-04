@@ -2,16 +2,20 @@ import threading
 import asyncio
 import websockets
 import json
+
 import texttranslate
 import imagetranslate
 from windowcapture import WindowCapture
 import settings
 import VRC_OSCLib
+import flanLanguageModel
+
 
 WS_CLIENTS = set()
 
 
 def websocketMessageHandler(msgObj):
+
     if msgObj["type"] == "setting_change":
         settings.SetOption(msgObj["name"], msgObj["value"])
         BroadcastMessage(json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))  # broadcast updated settings to all clients
@@ -25,6 +29,11 @@ def websocketMessageHandler(msgObj):
         ocr_result = imagetranslate.run_image_processing(window_name, ['en', msgObj["ocr_lang"]])
         translate_result = (texttranslate.TranslateLanguage(" -- ".join(ocr_result), msgObj["from_lang"], msgObj["to_lang"]))
         BroadcastMessage(json.dumps({"type": "translate_result", "original_text": "\n".join(ocr_result), "translate_result": "\n".join(translate_result.split(" -- "))}))
+
+    if msgObj["type"] == "flan_req":
+        if flanLanguageModel.init():
+            flan_result = flanLanguageModel.flan.encode(msgObj["text"])
+            BroadcastMessage(json.dumps({"type": "flan_result", "flan_result": flan_result}))
 
     if msgObj["type"] == "get_windows_list":
         windows_list = WindowCapture.list_window_names()

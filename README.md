@@ -62,14 +62,16 @@ _(because of the 2 GB Limit, no direct release files on GitHub)_
 |           `--osc_ip`           |       0        |                     IP to send OSC messages to. Set to '0' to disable. (For VRChat this should mostly be 127.0.0.1)                      |
 |          `--osc_port`          |      9000      |                                       Port to send OSC message to. ('9000' as default for VRChat)                                        |
 |        `--osc_address`         | /chatbox/input |                            The Address the OSC messages are send to. ('/chatbox/input' as default for VRChat)                            |
-|     `--osc_convert_ascii`      |      True      |     Convert Text to ASCII compatible when sending over OSC. (Can be set to 'False' as soon as VRChat supports non-ASCII characters)      |
+|     `--osc_convert_ascii`      |     False      |                                         Convert Text to ASCII compatible when sending over OSC.                                          |
 |        `--websocket_ip`        |       0        |                                       IP where Websocket Server listens on. Set to '0' to disable.                                       |
 |       `--websocket_port`       |      5000      |                                                 Port where Websocket Server listens on.                                                  |
 |       `--txt_translator`       |     M2M100     |                          The Model the AI is loading for text translations. can be 'M2M100', 'ARGOS' or 'None'.                          |
 |        `--m2m100_size`         |     small      |         The Model size if M2M100 text translator is used. can be 'small' or 'large'. (has no effect with --txt_translator ARGOS)         |
 |       `--m2m100_device`        |      auto      |            The device used for M2M100 translation. can be 'auto', 'cuda' or 'cpu' (has no effect with --txt_translator ARGOS)            |
 |      `--ocr_window_name`       |     VRChat     |                                           Window name of the application for OCR translations.                                           |
+|        `--flan_enabled`        |     False      |                               Enable FLAN-T5 A.I. (General A.I. which can be used for Question Answering.)                               |
 |        `--open_browser`        |     False      |                     Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)                     |
+|           `--config`           |      None      |    Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]    |
 |          `--verbose`           |     False      |                                                     Whether to print verbose output.                                                     |
 
 ## Usage with 3rd Party Applications

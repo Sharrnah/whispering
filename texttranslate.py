@@ -1,7 +1,7 @@
 import settings
 import pykakasi
 import texttranslateARGOS
-#import texttranslateM2M100
+# import texttranslateM2M100
 import texttranslateM2M100_CTranslate2
 
 
