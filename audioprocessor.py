@@ -67,8 +67,9 @@ def whisper_result_handling(result):
             from_lang = settings.GetOption("src_lang")
             to_lang = settings.GetOption("trg_lang")
             to_romaji = settings.GetOption("txt_ascii")
-            predicted_text = texttranslate.TranslateLanguage(predicted_text, from_lang, to_lang, to_romaji)
+            predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, from_lang, to_lang, to_romaji)
             result["txt_translation"] = predicted_text
+            result["txt_translation_source"] = txt_from_lang
             result["txt_translation_target"] = to_lang
 
         # replace predicted_text with FLAN response
@@ -83,6 +84,10 @@ def whisper_result_handling(result):
                 prompted_text, prompt_change = flanLanguageModel.flan.whisper_result_prompter(predicted_text)
                 if prompt_change:
                     predicted_text = flanLanguageModel.flan.encode(prompted_text)
+
+                    # translate from auto-detected language to speaker language
+                    if settings.GetOption("flan_translate_to_speaker_language"):
+                        predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, "auto", result['language'], False, True)
                     result['flan_answer'] = predicted_text
                     print("FLAN question: " + prompted_text)
                     print("FLAN result: " + predicted_text)
@@ -91,7 +96,7 @@ def whisper_result_handling(result):
             else:
                 print("flan general processing")
                 predicted_text = flanLanguageModel.flan.encode(predicted_text)
-                result['text'] = predicted_text
+                result['flan_answer'] = predicted_text
                 print("FLAN result: " + predicted_text)
                 send_message(flan_osc_prefix + predicted_text, result)
 

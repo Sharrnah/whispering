@@ -36,9 +36,9 @@ from whisper import available_models, audio as whisper_audio
 @click.option("--websocket_ip", default="0", help="IP where Websocket Server listens on. Set to '0' to disable", type=str)
 @click.option("--websocket_port", default=5000, help="Port where Websocket Server listens on. ('5000' as default)", type=int)
 @click.option("--ai_device", default=None, help="The Device the AI is loaded on. can be 'cuda' or 'cpu'. default does autodetect", type=click.Choice(["cuda", "cpu"]))
-@click.option("--txt_translator", default="M2M100", help="The Model the AI is loading for text translations. can be 'M2M100', 'ARGOS' or 'None'. default is M2M100", type=click.Choice(["M2M100", "ARGOS"]))
-@click.option("--m2m100_size", default="small", help="The Model size if M2M100 text translator is used. can be 'small' or 'large'. default is small. (has no effect with ARGOS)", type=click.Choice(["small", "large"]))
-@click.option("--m2m100_device", default="auto", help="The device used for M2M100 translation. (has no effect with ARGOS)", type=click.Choice(["auto", "cuda", "cpu"]))
+@click.option("--txt_translator", default="NLLB200", help="The Model the AI is loading for text translations. can be 'NLLB200', 'M2M100', 'ARGOS' or 'None'. default is M2M100", type=click.Choice(["NLLB200", "M2M100", "ARGOS"]))
+@click.option("--txt_translator_size", default="small", help="The Model size if M2M100 or NLLB200 text translator is used. can be 'small', 'medium' or 'large' for NLLB200 or 'small' or 'large' for M2M100. default is small. (has no effect with ARGOS)", type=click.Choice(["small", "medium", "large"]))
+@click.option("--txt_translator_device", default="auto", help="The device used for M2M100 translation. (has no effect with ARGOS or NLLB200)", type=click.Choice(["auto", "cuda", "cpu"]))
 @click.option("--ocr_window_name", default="VRChat", help="Window name of the application for OCR translations. (Default: 'VRChat')", type=str)
 @click.option("--flan_enabled", default=False, help="Enable FLAN-T5 A.I. (General A.I. which can be used for Question Answering.)", type=bool)
 @click.option("--open_browser", default=False, help="Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)", is_flag=True, type=bool)
@@ -46,7 +46,7 @@ from whisper import available_models, audio as whisper_audio
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 @click.pass_context
 def main(ctx, devices, device_index, sample_rate, task, model, language, condition_on_previous_text, energy, dynamic_energy, pause, phrase_time_limit, osc_ip, osc_port,
-         osc_address, osc_convert_ascii, websocket_ip, websocket_port, ai_device, txt_translator, m2m100_size, m2m100_device, ocr_window_name, flan_enabled, open_browser, config, verbose):
+         osc_address, osc_convert_ascii, websocket_ip, websocket_port, ai_device, txt_translator, txt_translator_size, txt_translator_device, ocr_window_name, flan_enabled, open_browser, config, verbose):
 
     # Load settings from file
     if config is not None:
@@ -103,8 +103,8 @@ def main(ctx, devices, device_index, sample_rate, task, model, language, conditi
     settings.IsArgumentSetting(ctx, "websocket_port") and settings.SetOption("websocket_port", websocket_port)
 
     settings.IsArgumentSetting(ctx, "txt_translator") and settings.SetOption("txt_translator", txt_translator)
-    settings.IsArgumentSetting(ctx, "m2m100_size") and settings.SetOption("m2m100_size", m2m100_size)
-    texttranslate.SetDevice(m2m100_device)
+    settings.IsArgumentSetting(ctx, "txt_translator_size") and settings.SetOption("txt_translator_size", txt_translator_size)
+    texttranslate.SetDevice(txt_translator_device)
 
     settings.IsArgumentSetting(ctx, "ocr_window_name") and settings.SetOption("ocr_window_name", ocr_window_name)
 

@@ -4,6 +4,22 @@ body {
   overflow-x: hidden;
 }
 
+body select {
+  max-width: 13rem;
+}
+body textarea {
+  min-height: 5rem;
+}
+
+body.bottom-align {
+  position: absolute;
+  bottom: 0;
+  margin-left: auto;
+  margin-right: auto;
+  left: 0;
+  right: 0;
+}
+
 body.noscroll {
   overflow-y: hidden;
 }

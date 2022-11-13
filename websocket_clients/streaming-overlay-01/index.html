@@ -63,11 +63,18 @@
          // no_loader argument. If set to "true", the loader is not shown
          no_loader = typeof getParameter("no_loader") != 'undefined';
 
+         // disable scrolling
          no_scroll = getParameter("no_scroll");
+
+         // align to bottom of page (has no scrolling)
+         bottom_align = getParameter("bottom_align");
 
          document.addEventListener("DOMContentLoaded", () => {
             if (typeof no_scroll != 'undefined') {
                document.querySelector('body').classList.add("noscroll");
+            }
+            if (typeof bottom_align != 'undefined') {
+               document.querySelector('body').classList.add("bottom-align");
             }
 
             // loader animation

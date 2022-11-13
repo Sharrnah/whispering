@@ -45,6 +45,19 @@
          return undefined;
       }
 
+      function getTextFromSelectOptionValue(elem, value) {
+         let result = undefined;
+         Object.values(elem.options).every(option => {
+            if (option.value === value) {
+               result = option.text;
+               return false;
+            }
+            // continue iterating
+            return true;
+         });
+         return result;
+      }
+
       function clearAllTimeouts(timeoutList) {
          for (let i = 0; i < timeoutList.length; i++) {
             clearTimeout(timeoutList[i]);
@@ -78,12 +91,18 @@
       // no_loader argument. If set to "true", the loader is not shown
       no_loader = typeof getParameter("no_loader") != 'undefined';
 
-
+      // disable scrolling
       no_scroll = getParameter("no_scroll");
+
+      // align to bottom of page (has no scrolling)
+      bottom_align = getParameter("bottom_align");
 
       document.addEventListener("DOMContentLoaded", () => {
          if (typeof no_scroll != 'undefined') {
             document.querySelector('body').classList.add("noscroll");
+         }
+         if (typeof bottom_align != 'undefined') {
+               document.querySelector('body').classList.add("bottom-align");
          }
 
          // loader animation
@@ -392,6 +411,13 @@
                      src_lang_el.replaceChildren("");
                      trg_lang_el.replaceChildren("");
 
+                     // add autodetect option
+                     let el = document.createElement("option");
+                     el.textContent = "[auto] " + "Autodetect";
+                     el.value = "auto";
+                     src_lang_el.appendChild(el);
+
+                     // add all available languages
                      for (let i = 0; i < received_msg.data.length; i++) {
                         let opt = received_msg.data[i];
 
@@ -488,10 +514,22 @@
                         document.querySelector('button#flan_do').disabled = true;
                      }
                   }
+                  // receive translation result
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "translate_result") {
                      document.querySelector('#transl_result_textarea').value = received_msg.translate_result;
                      if (typeof received_msg.original_text != 'undefined') {
                         document.querySelector('#translate_textarea').value = received_msg.original_text;
+                     }
+                     // show recognized language if set to autodetect
+                     if (typeof received_msg.txt_from_lang != 'undefined' && document.querySelector('#settings #src_lang').value === "auto") {
+                        let languageNameText = "";
+                        let languageName = getTextFromSelectOptionValue(document.querySelector('#settings #src_lang'), received_msg.txt_from_lang);
+                        if (languageName !== received_msg.txt_from_lang) {
+                            languageNameText = languageName;
+                        }
+                        document.querySelector('#auto_from_lang').textContent = languageNameText;
+                     } else {
+                        document.querySelector('#auto_from_lang').textContent = "";
                      }
                   }
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "windows_list") {
@@ -566,18 +604,21 @@
          <div class="container mt-5">
             <div class="row no-gutters">
                <div class="col">
-                  WhisperAI Task:
-                  <select name="whisper_task" id="whisper_task">
+                  <strong>WhisperAI:</strong>&nbsp;Task: <select name="whisper_task" id="whisper_task">
                      <option value="transcribe">transcribe</option>
                      <option value="translate">translate (to en)</option>
-                  </select>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-                  <label for="condition_on_previous_text">condition on previous text:</label> <input type="checkbox" id="condition_on_previous_text"
-                     name="condition_on_previous_text" value="1" />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-                  <label for="current_language">speaker language:</label> <select name="current_language" id="current_language">
+                  </select>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  <label for="condition_on_previous_text" title="Condition WhisperAI with previous response. (makes it more prone to looping or freezing.)">condition on previous text:</label> <input type="checkbox" id="condition_on_previous_text"
+                     name="condition_on_previous_text" value="1" />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  <label for="current_language" title="Set speaker language. Helps with WhisperAI precision as it does not have to guess the language.">speaker language:</label> <select name="current_language" id="current_language">
                         <option value="">Auto</option>
-                  </select>&nbsp;&nbsp;&nbsp;&nbsp;
-                  <label for="flan_whisper_answer">FLAN-T5 answering:</label> <input type="checkbox" id="flan_whisper_answer"
-                     name="flan_whisper_answer" value="1" />
+                  </select><br />
+                  <strong>FLAN-T5:</strong>&nbsp;<label for="flan_whisper_answer" title="enable FLAN-T5 to answer WhisperAI transcriptions or translations.">answering:</label> <input type="checkbox" id="flan_whisper_answer"
+                     name="flan_whisper_answer" value="1" />&nbsp;&nbsp;&nbsp;
+                  <label for="flan_process_only_questions" title="process only questions. FLAN-T5 only responses if a question-word and question-mark are found.">only questions:</label> <input type="checkbox" id="flan_process_only_questions"
+                     name="flan_process_only_questions" value="1" />&nbsp;&nbsp;&nbsp;
+                  <label for="flan_translate_to_speaker_language" title="Requires WhisperAI to return english. So for other languages, set task to 'translate'">reply in speaker lang.:</label> <input type="checkbox" id="flan_translate_to_speaker_language"
+                     name="flan_translate_to_speaker_language" value="1" />
                   <hr />
                </div>
             </div>
@@ -616,7 +657,7 @@
    <div id="manual_translate" class="hidden">
       <section>
          <div class="container mt-3">
-            Input:
+            Input: <small id="auto_from_lang"></small>
             <div id="text_translate_form" class="container lt-2" style="padding: 0;">
                <div class="row no-gutters">
                   <div class="col-5">

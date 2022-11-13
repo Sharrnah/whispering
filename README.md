@@ -13,6 +13,7 @@ It allows connecting to OSC (for VRChat for example) and Websockets (For Streami
 - [Usage](#usage)
 - [Websocket Clients](documentation/websocket-clients.md)
 - [Command-line flags](#command-line-flags)
+- [Settings File](documentation/settings-file.md)
 - [Usage with 3rd Party Applications](#usage-with-3rd-party-applications)
   - [VRChat](#vrchat)
   - [Live Streaming Applications (OBS, vMix, XSplit ...)](#live-streaming-applications-obs-vmix-xsplit-)
@@ -38,41 +39,43 @@ _(because of the 2 GB Limit, no direct release files on GitHub)_
 2. run `audioWhisper\audioWhisper.exe`. By default, it tries to find your default Microphone. Otherwise, you need to add `--device_index *` to the run command where the `*` is the device index found at step 3. Find more command-line flags in the following table.
 3. If websocket option is enabled, you can control the whisper task (translate or transcript) as well as textual translation options while the AI is running.
    
-   <img src=images/remote_control.png width=600>
+   <img src=images/remote_control.png width=750>
    
    For this: open the `websocket_clients/websocket-remote/` folder and start the index.html there.
    
    _If you have the AI running on a secondary PC, open the HTML file with the IP as parameter like this: `index.html?ws_server=ws://127.0.0.1:5000`_
 
 ## Command-line flags
-|            --flags             | Default Value  |                                                               Description                                                                |
-|:------------------------------:|:--------------:|:----------------------------------------------------------------------------------------------------------------------------------------:|
-|          `--devices`           |     False      |                                                       Print all available devices.                                                       |
-|        `--device_index`        |       -1       |             Choose the output device to listen to and transcribe the audio from this device. '-1' = auto-select by default.              |
-|        `--sample_rate`         |     16000      |                                                   Sample rate of the audio recording.                                                    |
-|         `--ai_device`          |      None      |                         defines on which device the AI is loaded. can be `cuda` or `cpu`. auto-select by default                         |
-|            `--task`            |   transcribe   |                                  Choose between to `transcribe` or to `translate` the audio to English.                                  |
-|           `--model`            |     small      |           Select model list. can be `tiny, base, small, medium, large`. where large models are not available for english only.           |
-|          `--language`          |      None      |                                 language spoken in the audio, specify None to perform language detection                                 |
-| `--condition_on_previous_text` |     False      | Feed it the previous result to keep it consistent across recognition windows, but makes it more prone to getting stuck in a failure loop |
-|           `--energy`           |      300       |                                                     Energy level for mic to detect.                                                      |
-|       `--dynamic_energy`       |     False      |                                                          Enable dynamic energy.                                                          |
-|           `--pause`            |      0.8       |                                                      Pause time before entry ends.                                                       |
-|     `--phrase_time_limit`      |      None      |                           Phrase time limit (in seconds) before entry ends to break up long recognition tasks.                           |
-|           `--osc_ip`           |       0        |                     IP to send OSC messages to. Set to '0' to disable. (For VRChat this should mostly be 127.0.0.1)                      |
-|          `--osc_port`          |      9000      |                                       Port to send OSC message to. ('9000' as default for VRChat)                                        |
-|        `--osc_address`         | /chatbox/input |                            The Address the OSC messages are send to. ('/chatbox/input' as default for VRChat)                            |
-|     `--osc_convert_ascii`      |     False      |                                         Convert Text to ASCII compatible when sending over OSC.                                          |
-|        `--websocket_ip`        |       0        |                                       IP where Websocket Server listens on. Set to '0' to disable.                                       |
-|       `--websocket_port`       |      5000      |                                                 Port where Websocket Server listens on.                                                  |
-|       `--txt_translator`       |     M2M100     |                          The Model the AI is loading for text translations. can be 'M2M100', 'ARGOS' or 'None'.                          |
-|        `--m2m100_size`         |     small      |         The Model size if M2M100 text translator is used. can be 'small' or 'large'. (has no effect with --txt_translator ARGOS)         |
-|       `--m2m100_device`        |      auto      |            The device used for M2M100 translation. can be 'auto', 'cuda' or 'cpu' (has no effect with --txt_translator ARGOS)            |
-|      `--ocr_window_name`       |     VRChat     |                                           Window name of the application for OCR translations.                                           |
-|        `--flan_enabled`        |     False      |                               Enable FLAN-T5 A.I. (General A.I. which can be used for Question Answering.)                               |
-|        `--open_browser`        |     False      |                     Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)                     |
-|           `--config`           |      None      |    Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]    |
-|          `--verbose`           |     False      |                                                     Whether to print verbose output.                                                     |
+_These take precedence to the [settings file](documentation/settings-file.md). But not all options are available as command-line flags._
+
+|            --flags             | Default Value  |                                                                                        Description                                                                                        |
+|:------------------------------:|:--------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+|          `--devices`           |     False      |                                                                               Print all available devices.                                                                                |
+|        `--device_index`        |       -1       |                                      Choose the output device to listen to and transcribe the audio from this device. '-1' = auto-select by default.                                      |
+|        `--sample_rate`         |     16000      |                                                                            Sample rate of the audio recording.                                                                            |
+|         `--ai_device`          |      None      |                                                 defines on which device the AI is loaded. can be `cuda` or `cpu`. auto-select by default                                                  |
+|            `--task`            |   transcribe   |                                                          Choose between to `transcribe` or to `translate` the audio to English.                                                           |
+|           `--model`            |     small      |                                   Select model list. can be `tiny, base, small, medium, large`. where large models are not available for english only.                                    |
+|          `--language`          |      None      |                                                         language spoken in the audio, specify None to perform language detection                                                          |
+| `--condition_on_previous_text` |     False      |                         Feed it the previous result to keep it consistent across recognition windows, but makes it more prone to getting stuck in a failure loop                          |
+|           `--energy`           |      300       |                                                                              Energy level for mic to detect.                                                                              |
+|       `--dynamic_energy`       |     False      |                                                                                  Enable dynamic energy.                                                                                   |
+|           `--pause`            |      0.8       |                                                                               Pause time before entry ends.                                                                               |
+|     `--phrase_time_limit`      |      None      |                                                   Phrase time limit (in seconds) before entry ends to break up long recognition tasks.                                                    |
+|           `--osc_ip`           |       0        |                                              IP to send OSC messages to. Set to '0' to disable. (For VRChat this should mostly be 127.0.0.1)                                              |
+|          `--osc_port`          |      9000      |                                                                Port to send OSC message to. ('9000' as default for VRChat)                                                                |
+|        `--osc_address`         | /chatbox/input |                                                    The Address the OSC messages are send to. ('/chatbox/input' as default for VRChat)                                                     |
+|     `--osc_convert_ascii`      |     False      |                                                                  Convert Text to ASCII compatible when sending over OSC.                                                                  |
+|        `--websocket_ip`        |       0        |                                                               IP where Websocket Server listens on. Set to '0' to disable.                                                                |
+|       `--websocket_port`       |      5000      |                                                                          Port where Websocket Server listens on.                                                                          |
+|       `--txt_translator`       |     M2M100     |                                                  The Model the AI is loading for text translations. can be 'M2M100', 'ARGOS' or 'None'.                                                   |
+|    `--txt_translator_size`     |     small      | The Model size of M2M100 or NLLB200 text translator is used. can be 'small', 'medium', 'large' for NLLB200, or 'small' or 'large' for M2M100. (has no effect with --txt_translator ARGOS) |
+|   `--txt_translator_device`    |      auto      |                               The device used for M2M100 translation. can be 'auto', 'cuda' or 'cpu' (has no effect with --txt_translator ARGOS or NLLB200)                               |
+|      `--ocr_window_name`       |     VRChat     |                                                                   Window name of the application for OCR translations.                                                                    |
+|        `--flan_enabled`        |     False      |                                                       Enable FLAN-T5 A.I. (General A.I. which can be used for Question Answering.)                                                        |
+|        `--open_browser`        |     False      |                                             Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)                                              |
+|           `--config`           |      None      |                            Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]                             |
+|          `--verbose`           |     False      |                                                                             Whether to print verbose output.                                                                              |
 
 ## Usage with 3rd Party Applications
 ### VRChat
@@ -89,7 +92,9 @@ _(because of the 2 GB Limit, no direct release files on GitHub)_
 
    > `audioWhisper\audioWhisper.exe --model medium --task translate --device_index 4 --energy 300 --phrase_time_limit 15 --websocket_ip 127.0.0.1`
 2. Find a streaming overlay website in the `websocket_clients` folder. (So far only `streaming-overlay-01` is optimized as overlay with transparent background.)
-3. Add the HTML file to your streaming application.
+3. Add the HTML file to your streaming application. (With some additional arguments if needed. See [[Websocket Clients]](documentation/websocket-clients.md#all-possible-configuration-url-arguments) for all possible arguments.)
+   
+   _For example:_ `websocket_clients/streaming-overlay-01/index.html?no_scroll=1&no_loader=1&bottom_align=1&auto_rm_message=15`
 
 ### Desktop+ (Currently only new-ui Beta with embedded Browser)
 1. Run the Application listening on your Audio-Device with the VRChat Sound.

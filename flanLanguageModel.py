@@ -37,7 +37,18 @@ PROMPT_FORMATTING = {
                  "including ", "into ", "is ", "isn't ", "like ", "may ", "mayn't ", "might ", "mightn't ", "must ", "mustn't ", "near ", "of ", "off ", "on ", "out ",
                  "over ", "plus ", "shall ", "shan't ", "should ", "shouldn't ", "since ", "through ", "throughout ", "to ", "towards ", "under ", "until ", "up ", "upon ",
                  "was ", "wasn't ", "were ", "weren't ", "what ", "what's ", "when ", "when's ", "where ", "where's ", "which ", "which's ", "who ", "who's ", "why ",
-                 "why's ", "will ", "with ", "within ", "without ", "won't ", "would ", "wouldn't "]
+                 "why's ", "will ", "with ", "within ", "without ", "won't ", "would ", "wouldn't "],
+    "statement": ["i ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ",
+                  "i can ", "i want ", "i need ", "i like ", "i love ", "i hate ", "i don't like ", "i don't love ", "i don't hate ", "i don't want ", "i don't need ", "i don't ",
+                  "i do ", "i do not ", "i did ", "i did not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ", "i can ",
+                  "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ",
+                  "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ",
+                  "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ",
+                  "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ",
+                  "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ",
+                  "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ",
+                  "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was "],
+    "command": ["you have ", "you should ", "you do ", "ai ", "artificial intelligence"],
 }
 
 
@@ -87,7 +98,7 @@ class FlanLanguageModel:
         possible_prompt_prefixes = []
         # looks like a question
         if "?" in question and any(ele in question for ele in PROMPT_FORMATTING['question']):
-            possible_prompt_prefixes.append("Answer the following question by reasoning step-by-step. ")
+            # possible_prompt_prefixes.append("Answer the following question by reasoning step-by-step. ")
             possible_prompt_prefixes.append("Answer the following question. ")
             possible_prompt_prefixes.append("Question: ")
             possible_prompt_prefixes.append("Q: ")
@@ -106,6 +117,9 @@ class FlanLanguageModel:
 
         outputs = self.model.generate(input_ids, max_new_tokens=token_length)
         result = self.tokenizer.decode(outputs[0]).replace("<pad>", "").replace("</s>", "").replace("<unk>", "").strip()
+
+        # remove A: from the start of the result (if used by Q: prefix in question)
+        result = result.removeprefix("A: ")
 
         return result
 

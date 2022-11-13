@@ -9,11 +9,11 @@ SETTINGS_PATH = Path(Path.cwd() / 'settings.yaml')
 TRANSLATE_SETTINGS = {
     # text translate settings
     "txt_translate": False,  # if enabled, pipes whisper A.I. results through text translator
-    "src_lang": "en",  # source language for text translator (Whisper A.I. in translation mode always translates to "en")
-    "trg_lang": "fr",  # target language for text translator
+    "src_lang": "auto",  # source language for text translator (Whisper A.I. in translation mode always translates to "en")
+    "trg_lang": "fra_Latn",  # target language for text translator
     "txt_ascii": False,  # if enabled, text translator will convert text to romaji.
-    "txt_translator": "M2M100",  # can be "M2M100" or "ARGOS"
-    "m2m100_size": "small",  # M2M100 model size. Can be "small" or "large"
+    "txt_translator": "NLLB200",  # can be "NLLB200", "M2M100" or "ARGOS"
+    "txt_translator_size": "small",  # for M2M100 model size: Can be "small" or "large", for NLLB200 model size: Can be "small", "medium", "large".
 
     # ocr settings
     "ocr_lang": "en",  # language for OCR image to text recognition.
@@ -31,7 +31,7 @@ TRANSLATE_SETTINGS = {
     "osc_port": 9000,
     "osc_address": "/chatbox/input",
     "osc_typing_indicator": True,
-    "osc_convert_ascii": "False",
+    "osc_convert_ascii": False,
 
     # websocket settings
     "websocket_ip": "0",
@@ -39,12 +39,13 @@ TRANSLATE_SETTINGS = {
 
     # FLAN settings
     "flan_enabled": False,  # Enable FLAN A.I.
-    "flan_size": "xl",  # FLAN model size. Can be "small", "base", "large", "xl" or "xxl"
+    "flan_size": "large",  # FLAN model size. Can be "small", "base", "large", "xl" or "xxl"
     "flan_bits": 32,  # precision can be set to 32 (float), 16 (float) or 8 (int) bits. 8 bits is the fastest but least precise
     "flan_device": "cpu",  # can be "cpu", "cuda" or "auto". ("cuda" and "auto" doing the same)
     "flan_whisper_answer": True,  # if True, the FLAN A.I. will answer to results from the Whisper A.I.
     "flan_process_only_questions": True,  # if True, the FLAN A.I. will only answer to questions
-    "flan_osc_prefix": "AI: "  # prefix for OSC messages
+    "flan_osc_prefix": "AI: ",  # prefix for OSC messages
+    "flan_translate_to_speaker_language": False  # Translate from english to speaker language
 }
 
 
