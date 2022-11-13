@@ -15,13 +15,17 @@
    <link rel="stylesheet" media="all" href="main.css">
 
    <script type="text/javascript">
-      var websocketServer = "ws://127.0.0.1:5000"
+      let websocketServer = "ws://127.0.0.1:5000";
 
-      var settings = null;
+      let settings = null;
+
+      let hideTimeouts = [];
+      let loaderTimeouts = [];
 
       HTMLSelectElement.prototype.contains = function( value ) {
-          for (var i = 0, l = this.options.length; i < l; i++) {
-              if (this.options[i].value == value) {
+          for (let i = 0, l = this.options.length; i < l; i++) {
+             // noinspection EqualityComparisonWithCoercionJS,JSIncompatibleTypesComparison
+             if (this.options[i].value == value) {
                   return true;
               }
           }
@@ -41,8 +45,21 @@
          return undefined;
       }
 
+      function getTextFromSelectOptionValue(elem, value) {
+         let result = undefined;
+         Object.values(elem.options).every(option => {
+            if (option.value === value) {
+               result = option.text;
+               return false;
+            }
+            // continue iterating
+            return true;
+         });
+         return result;
+      }
+
       function clearAllTimeouts(timeoutList) {
-         for (var i = 0; i < timeoutList.length; i++) {
+         for (let i = 0; i < timeoutList.length; i++) {
             clearTimeout(timeoutList[i]);
          }
       }
@@ -55,7 +72,6 @@
       auto_hide_message = getParameter("auto_hide_message");
       if (typeof auto_hide_message != 'undefined') {
          auto_hide_msg_time = auto_hide_message;
-         var hideTimeouts = [];
       } else {
          auto_hide_msg_time = 0;
       }
@@ -75,16 +91,21 @@
       // no_loader argument. If set to "true", the loader is not shown
       no_loader = typeof getParameter("no_loader") != 'undefined';
 
-
+      // disable scrolling
       no_scroll = getParameter("no_scroll");
+
+      // align to bottom of page (has no scrolling)
+      bottom_align = getParameter("bottom_align");
 
       document.addEventListener("DOMContentLoaded", () => {
          if (typeof no_scroll != 'undefined') {
             document.querySelector('body').classList.add("noscroll");
          }
+         if (typeof bottom_align != 'undefined') {
+               document.querySelector('body').classList.add("bottom-align");
+         }
 
          // loader animation
-         var loaderTimeouts = [];
          function showLoader(hideTime = 5) {
             document.querySelector('#loader').classList.remove("hidden");
             loaderTimeouts.push(
@@ -102,7 +123,7 @@
          function addMessage(message, type, deleteTime = 0, hideTime = 0, clickEvent = undefined) {
 
             if ('content' in document.createElement('template')) {
-               var el = document.querySelector('#sse .transcriptions');
+               let el = document.querySelector('#sse .transcriptions');
                // Instantiate the table with the existing HTML tbody
                // and the row with the template
                const template = document.querySelector('#transcript-part');
@@ -135,9 +156,8 @@
                // prepend (should not require scrolling)
                el.firstChild.before(clone);
 
-               console.log(clickEvent);
                // add click event
-               if (typeof clickEvent != 'undefined') {
+               if (typeof clickEvent !== 'undefined') {
                   transcriptEl[0].addEventListener("click", clickEvent);
                }
 
@@ -148,8 +168,8 @@
             } else {
                // Find another way to add the rows to the table because
                // the HTML template element is not supported.
-               var el = document.getElementById('sse');
-               var elemDiv = document.createElement('p');
+               let el = document.getElementById('sse');
+               let elemDiv = document.createElement('p');
                elemDiv.style.cssText = 'width:100%;z-index:100;background:#fff;color:#000;';
                elemDiv.innerText = message;
                el.appendChild(elemDiv);
@@ -160,7 +180,7 @@
             function showAllTranscriptions() {
                clearAllTimeouts(hideTimeouts);
                // first reshow all messages when a new message appears.
-               var transcriptElements = document.querySelectorAll('#sse .transcriptions .transcript');
+               let transcriptElements = document.querySelectorAll('#sse .transcriptions .transcript');
                transcriptElements.forEach((transcriptElement) => {
                   transcriptElement.classList.remove("hide-transcript");
                   hideTimeouts.push(
@@ -216,10 +236,10 @@
          function WebSocketStart() {
             if ("WebSocket" in window) {
                // Let us open a web socket
-               var ws = new ReconnectingWebSocket(websocketServer, null, { reconnectInterval: 5000 });
+               let ws = new ReconnectingWebSocket(websocketServer, null, { reconnectInterval: 5000 });
 
                function addWSSettingEvent(elementSelector, eventListener) {
-                  elements = document.querySelectorAll(elementSelector);
+                  let elements = document.querySelectorAll(elementSelector);
                   elements.forEach(element => {
                      element.addEventListener(eventListener, changeSettings);
                   });
@@ -253,9 +273,9 @@
                // send text translation request
                document.querySelector("button#translate_do").addEventListener("click", sendTranslateTask);
                function sendTranslateTask() {
-                  var src_lang = document.querySelector('#settings #src_lang').value;
-                  var trg_lang = document.querySelector('#settings #trg_lang').value;
-                  var translate_text = document.querySelector('#translate_textarea').value;
+                  let src_lang = document.querySelector('#settings #src_lang').value;
+                  let trg_lang = document.querySelector('#settings #trg_lang').value;
+                  let translate_text = document.querySelector('#translate_textarea').value;
 
                   let sendData = { type: "translate_req", text: translate_text, from_lang: src_lang, to_lang: trg_lang };
                   ws.send(JSON.stringify(sendData));
@@ -264,9 +284,9 @@
                // send OCR translation request
                document.querySelector("button#ocr_transl_do").addEventListener("click", sendOCRTranslateTask);
                function sendOCRTranslateTask() {
-                  var ocr_lang = document.querySelector('#settings #ocr_lang').value;
-                  var src_lang = document.querySelector('#settings #src_lang').value;
-                  var trg_lang = document.querySelector('#settings #trg_lang').value;
+                  let ocr_lang = document.querySelector('#settings #ocr_lang').value;
+                  let src_lang = document.querySelector('#settings #src_lang').value;
+                  let trg_lang = document.querySelector('#settings #trg_lang').value;
 
                   let sendData = { type: "ocr_req", ocr_lang: ocr_lang, from_lang: src_lang, to_lang: trg_lang };
                   ws.send(JSON.stringify(sendData));
@@ -284,9 +304,19 @@
                   ws.send(JSON.stringify(sendData));
                }
 
+               // send FLAN request
+               document.querySelector("button#flan_do").addEventListener("click", sendFlanTask);
+               function sendFlanTask() {
+                  let src_text = document.querySelector('#translate_textarea').value;
+
+                  let sendData = { type: "flan_req", text: src_text};
+                  ws.send(JSON.stringify(sendData));
+               }
+
+               // send OCR message
                document.querySelector("button#transl_result_textarea_sendosc").addEventListener("click", sendOSCTask);
                function sendOSCTask() {
-                  var translated_text = document.querySelector('#transl_result_textarea').value;
+                  let translated_text = document.querySelector('#transl_result_textarea').value;
 
                   let sendData = { type: "send_osc", text: translated_text };
                   ws.send(JSON.stringify(sendData));
@@ -301,20 +331,20 @@
                };
 
                ws.onmessage = function (evt) {
-                  var received_msg = JSON.parse(evt.data);
+                  let received_msg = JSON.parse(evt.data);
 
                   // receiving a transcription message
-                  if (typeof received_msg.text != 'undefined') {
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "transcript" && typeof received_msg.text != 'undefined') {
                      console.log(received_msg);
 
-                     message_text = received_msg.text.trim();
-                     txt_translation_html = "";
+                     let message_text = received_msg.text.trim();
+                     let txt_translation_html = "";
                      if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation !== '') {
                         message_text = received_msg.txt_translation;
 
                         txt_translation_html = "<br /><small><sup>[" + received_msg.txt_translation_target + "]</sup> " + received_msg.txt_translation + "</small>";
                      }
-                     clickEvent = function () {
+                     let clickEvent = function () {
                         document.querySelector('#translate_textarea').value = received_msg.text.trim();
                         if (typeof received_msg.txt_translation != 'undefined') {
                            document.querySelector('#transl_result_textarea').value = received_msg.txt_translation.trim();
@@ -323,6 +353,7 @@
                         }
                      };
 
+                     let messageHtml = "";
                      switch (show_transl_results) {
                          case 'both':
                              messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text.trim() + txt_translation_html;
@@ -345,35 +376,52 @@
                      );
                   }
 
+                  // receiving a flan answer
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "flan_answer") {
+                     let message_text = received_msg.text.trim();
+                     if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation !== '') {
+                        message_text = received_msg.txt_translation;
+                     }
+                     let question = message_text;
+                     let answer = received_msg.flan_answer;
+
+                     let messageHtml = "<small>Q: " + question + "</small><br /><sup class=\"mainsup\">[" + received_msg.language + "]</sup>A: " + answer;
+
+                     let clickEvent = function () {
+                        document.querySelector('#translate_textarea').value = question;
+                        document.querySelector('#transl_result_textarea').value = answer;
+                     };
+
+                     hideLoader();
+                     addMessage(
+                        messageHtml,
+                        "alert-warning",
+                        auto_remove_msg_time,
+                        auto_hide_msg_time,
+                        clickEvent
+                     );
+                  }
+
                   // receiving other messages
-                  // if (typeof received_msg.type != 'undefined' && received_msg.type === "whisper_languages") {
-                  //    // list all available langauges
-                  //    var whisper_lang_el = document.querySelector('#settings #current_language');
-                  //
-                  //    whisper_lang_el.replaceChildren("");
-                  //
-                  //    for (var i = 0; i < received_msg.data.length; i++) {
-                  //       var opt = received_msg.data[i];
-                  //
-                  //       var el = document.createElement("option");
-                  //       el.textContent = "[" + opt.code + "] " + opt.name;
-                  //       el.value = opt.code;
-                  //
-                  //       whisper_lang_el.appendChild(el);
-                  //    }
-                  // }
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "installed_languages") {
                      // list all available langauges
-                     var src_lang_el = document.querySelector('#settings #src_lang');
-                     var trg_lang_el = document.querySelector('#settings #trg_lang');
+                     let src_lang_el = document.querySelector('#settings #src_lang');
+                     let trg_lang_el = document.querySelector('#settings #trg_lang');
 
                      src_lang_el.replaceChildren("");
                      trg_lang_el.replaceChildren("");
 
-                     for (var i = 0; i < received_msg.data.length; i++) {
-                        var opt = received_msg.data[i];
+                     // add autodetect option
+                     let el = document.createElement("option");
+                     el.textContent = "[auto] " + "Autodetect";
+                     el.value = "auto";
+                     src_lang_el.appendChild(el);
 
-                        var el = document.createElement("option");
+                     // add all available languages
+                     for (let i = 0; i < received_msg.data.length; i++) {
+                        let opt = received_msg.data[i];
+
+                        let el = document.createElement("option");
                         el.textContent = "[" + opt.code + "] " + opt.name;
                         el.value = opt.code;
 
@@ -383,14 +431,14 @@
                   }
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "available_img_languages") {
                      // list all available langauges
-                     var img_lang_el = document.querySelector('#settings #ocr_lang');
+                     let img_lang_el = document.querySelector('#settings #ocr_lang');
 
                      img_lang_el.replaceChildren("");
 
-                     for (var i = 0; i < received_msg.data.length; i++) {
-                        var opt = received_msg.data[i];
+                     for (let i = 0; i < received_msg.data.length; i++) {
+                        let opt = received_msg.data[i];
 
-                        var el = document.createElement("option");
+                        let el = document.createElement("option");
                         el.textContent = "[" + opt.code + "] " + opt.name;
                         el.value = opt.code;
 
@@ -421,13 +469,13 @@
 
                         // populate whisper languages
                         if (settingKey === 'whisper_languages') {
-                           var whisper_lang_el = document.querySelector('#settings #current_language');
+                           let whisper_lang_el = document.querySelector('#settings #current_language');
 
                            whisper_lang_el.replaceChildren("");
-                           for (var i = 0; i < settingValue.length; i++) {
-                              var opt = settingValue[i];
+                           for (let i = 0; i < settingValue.length; i++) {
+                              let opt = settingValue[i];
 
-                              var el = document.createElement("option");
+                              let el = document.createElement("option");
 
                               el.textContent = "[" + opt.code + "] " + opt.name;
                               if (opt.code === '') {
@@ -454,26 +502,45 @@
                         }
                      }
 
-                     var osc_ip = received_msg.data.osc_ip;
+                     // disable send osc button if no osc server is defined
+                     let osc_ip = received_msg.data.osc_ip;
                      if (osc_ip === 0) {
                         document.querySelector('button#transl_result_textarea_sendosc').disabled = true;
                      }
+
+                     // disable flan button if flan is disabled
+                     let flan_enabled = received_msg.data.flan_enabled;
+                     if (!flan_enabled) {
+                        document.querySelector('button#flan_do').disabled = true;
+                     }
                   }
+                  // receive translation result
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "translate_result") {
                      document.querySelector('#transl_result_textarea').value = received_msg.translate_result;
                      if (typeof received_msg.original_text != 'undefined') {
                         document.querySelector('#translate_textarea').value = received_msg.original_text;
                      }
+                     // show recognized language if set to autodetect
+                     if (typeof received_msg.txt_from_lang != 'undefined' && document.querySelector('#settings #src_lang').value === "auto") {
+                        let languageNameText = "";
+                        let languageName = getTextFromSelectOptionValue(document.querySelector('#settings #src_lang'), received_msg.txt_from_lang);
+                        if (languageName !== received_msg.txt_from_lang) {
+                            languageNameText = languageName;
+                        }
+                        document.querySelector('#auto_from_lang').textContent = languageNameText;
+                     } else {
+                        document.querySelector('#auto_from_lang').textContent = "";
+                     }
                   }
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "windows_list") {
-                     var ocr_window_el = document.querySelector('select#ocr_window_name');
-                     var ocr_current_window = ocr_window_el.value;
+                     let ocr_window_el = document.querySelector('select#ocr_window_name');
+                     let ocr_current_window = ocr_window_el.value;
                      ocr_window_el.replaceChildren("");
 
-                     for (var i = 0; i < received_msg.data.length; i++) {
-                        var opt = received_msg.data[i];
+                     for (let i = 0; i < received_msg.data.length; i++) {
+                        let opt = received_msg.data[i];
 
-                        var el = document.createElement("option");
+                        let el = document.createElement("option");
 
                         //el.textContent = "[" + opt.hwnd + "] " + opt.title;
                         el.textContent = opt.title;
@@ -488,6 +555,11 @@
                         ocr_window_el.appendChild(el);
                      }
                      ocr_window_el.value = ocr_current_window;
+                  }
+
+                  // get flan result
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "flan_result") {
+                     document.querySelector('#transl_result_textarea').value = received_msg.flan_result;
                   }
 
                   // activate loading animation on processing_start message
@@ -532,16 +604,21 @@
          <div class="container mt-5">
             <div class="row no-gutters">
                <div class="col">
-                  WhisperAI Task:
-                  <select name="whisper_task" id="whisper_task">
+                  <strong>WhisperAI:</strong>&nbsp;Task: <select name="whisper_task" id="whisper_task">
                      <option value="transcribe">transcribe</option>
                      <option value="translate">translate (to en)</option>
-                  </select>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-                  <label for="condition_on_previous_text">condition on previous text:</label> <input type="checkbox" id="condition_on_previous_text"
-                     name="condition_on_previous_text" value="1" />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-                  <label for="current_language">speaker language:</label> <select name="current_language" id="current_language">
+                  </select>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  <label for="condition_on_previous_text" title="Condition WhisperAI with previous response. (makes it more prone to looping or freezing.)">condition on previous text:</label> <input type="checkbox" id="condition_on_previous_text"
+                     name="condition_on_previous_text" value="1" />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  <label for="current_language" title="Set speaker language. Helps with WhisperAI precision as it does not have to guess the language.">speaker language:</label> <select name="current_language" id="current_language">
                         <option value="">Auto</option>
-                  </select>
+                  </select><br />
+                  <strong>FLAN-T5:</strong>&nbsp;<label for="flan_whisper_answer" title="enable FLAN-T5 to answer WhisperAI transcriptions or translations.">answering:</label> <input type="checkbox" id="flan_whisper_answer"
+                     name="flan_whisper_answer" value="1" />&nbsp;&nbsp;&nbsp;
+                  <label for="flan_process_only_questions" title="process only questions. FLAN-T5 only responses if a question-word and question-mark are found.">only questions:</label> <input type="checkbox" id="flan_process_only_questions"
+                     name="flan_process_only_questions" value="1" />&nbsp;&nbsp;&nbsp;
+                  <label for="flan_translate_to_speaker_language" title="Requires WhisperAI to return english. So for other languages, set task to 'translate'">reply in speaker lang.:</label> <input type="checkbox" id="flan_translate_to_speaker_language"
+                     name="flan_translate_to_speaker_language" value="1" />
                   <hr />
                </div>
             </div>
@@ -580,7 +657,7 @@
    <div id="manual_translate" class="hidden">
       <section>
          <div class="container mt-3">
-            Translate:
+            Input: <small id="auto_from_lang"></small>
             <div id="text_translate_form" class="container lt-2" style="padding: 0;">
                <div class="row no-gutters">
                   <div class="col-5">
@@ -588,7 +665,8 @@
                   </div>
                   <div class="col-1">
                      <button name="translate_do" id="translate_do" value="1" style="width: 100%;">translate</button>
-                     <div style="text-align:center;"><button name="ocr_transl_do" id="ocr_transl_do" value="1" title="OCR translation">OCR transl.</button></div>
+                     <div style="text-align:center;"><button name="ocr_transl_do" id="ocr_transl_do" value="1" title="Optical Character Recognition processing" style="width: 100%;">OCR</button></div>
+                     <div style="text-align:center;"><button name="flan_do" id="flan_do" value="1" title="Ask FLAN A.I." style="width: 100%;">ask FLAN</button></div>
                   </div>
                   <div class="col-5">
                      <textarea style="width:100%;" name="transl_result_textarea" id="transl_result_textarea"></textarea>

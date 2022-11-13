@@ -4,6 +4,22 @@ body {
   overflow-x: hidden;
 }
 
+body select {
+  max-width: 13rem;
+}
+body textarea {
+  min-height: 5rem;
+}
+
+body.bottom-align {
+  position: absolute;
+  bottom: 0;
+  margin-left: auto;
+  margin-right: auto;
+  left: 0;
+  right: 0;
+}
+
 body.noscroll {
   overflow-y: hidden;
 }
@@ -90,10 +106,10 @@ body.noscroll {
 
 .alert-simple.alert-warning {
   border: 1px solid rgba(241, 142, 6, 0.81);
-  background-color: rgba(220, 128, 1, 0.16);
+  background-color: rgb(227, 176, 104);
   box-shadow: 0px 0px 2px #ffb103;
-  color: #ffb103;
-  text-shadow: 2px 1px #00040a;
+  color: #352500;
+  /*text-shadow: 2px 1px #00040a;*/
   transition: 0.5s;
   cursor: pointer;
 }
@@ -113,8 +129,8 @@ body.noscroll {
   border: 1px solid rgba(241, 6, 6, 0.81);
   background-color: rgba(220, 17, 1, 0.16);
   box-shadow: 0px 0px 2px #ff0303;
-  color: #ff0303;
-  text-shadow: 2px 1px #00040a;
+  color: #4c0000;
+  /*text-shadow: 2px 1px #00040a;*/
   transition: 0.5s;
   cursor: pointer;
 }

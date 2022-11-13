@@ -13,7 +13,10 @@
       <link rel="stylesheet" media="all" href="main.css">
 
       <script type = "text/javascript">
-         var websocketServer = "ws://127.0.0.1:5000"
+         let websocketServer = "ws://127.0.0.1:5000"
+
+         let hideTimeouts = [];
+         let loaderTimeouts = [];
          
          // url argument handling
          function getParameter(name) {
@@ -28,7 +31,7 @@
             return undefined;
          }
          function clearAllTimeouts(timeoutList) {
-             for (var i = 0; i < timeoutList.length; i++) {
+             for (let i = 0; i < timeoutList.length; i++) {
                 clearTimeout(timeoutList[i]);
              }
          }
@@ -41,7 +44,6 @@
          auto_hide_message = getParameter("auto_hide_message");
          if (typeof auto_hide_message != 'undefined') {
             auto_hide_msg_time = auto_hide_message;
-            var hideTimeouts = [];
          } else {
             auto_hide_msg_time = 0;
          }
@@ -61,15 +63,21 @@
          // no_loader argument. If set to "true", the loader is not shown
          no_loader = typeof getParameter("no_loader") != 'undefined';
 
+         // disable scrolling
          no_scroll = getParameter("no_scroll");
+
+         // align to bottom of page (has no scrolling)
+         bottom_align = getParameter("bottom_align");
 
          document.addEventListener("DOMContentLoaded", () => {
             if (typeof no_scroll != 'undefined') {
                document.querySelector('body').classList.add("noscroll");
             }
+            if (typeof bottom_align != 'undefined') {
+               document.querySelector('body').classList.add("bottom-align");
+            }
 
             // loader animation
-            var loaderTimeouts = [];
             function showLoader(hideTime = 5) {
                document.querySelector('#loader').classList.remove("hidden");
                loaderTimeouts.push(
@@ -87,7 +95,7 @@
             function addMessage(message, type, deleteTime = 0, hideTime = 0) {
 
                 if ('content' in document.createElement('template')) {
-                    var el = document.querySelector('#sse .transcriptions');
+                    let el = document.querySelector('#sse .transcriptions');
                     // Instantiate the table with the existing HTML tbody
                     // and the row with the template
                     const template = document.querySelector('#transcript-part');
@@ -127,8 +135,8 @@
                 } else {
                     // Find another way to add the rows to the table because
                     // the HTML template element is not supported.
-                    var el = document.getElementById('sse');
-                    var elemDiv = document.createElement('p');
+                    let el = document.getElementById('sse');
+                    let elemDiv = document.createElement('p');
                     elemDiv.style.cssText = 'width:100%;z-index:100;background:#fff;color:#000;';
                     elemDiv.innerText = message;
                     el.appendChild(elemDiv);
@@ -139,7 +147,7 @@
                function showAllTranscriptions() {
                   clearAllTimeouts(hideTimeouts);
                   // first reshow all messages when a new message appears.
-                  var transcriptElements = document.querySelectorAll('#sse .transcriptions .transcript');
+                  let transcriptElements = document.querySelectorAll('#sse .transcriptions .transcript');
                   transcriptElements.forEach((transcriptElement) => {
                      transcriptElement.classList.remove("hide-transcript");
                      hideTimeouts.push(
@@ -155,7 +163,7 @@
             function WebSocketStart() {
                if ("WebSocket" in window) {               
                   // Let us open a web socket
-                  var ws = new ReconnectingWebSocket(websocketServer, null, {reconnectInterval: 5000});
+                  let ws = new ReconnectingWebSocket(websocketServer, null, {reconnectInterval: 5000});
                
                   ws.onopen = function() {
                      // Web Socket is connected.
@@ -163,13 +171,14 @@
                   };
                
                   ws.onmessage = function (evt) {
-                     var received_msg = JSON.parse(evt.data);
+                     let received_msg = JSON.parse(evt.data);
                      
-                     // receiving a transcitption message
-                     if (typeof received_msg.text != 'undefined') {
+                     // receiving a transcription message
+                     if (typeof received_msg.type != 'undefined' && received_msg.type === "transcript" && typeof received_msg.text != 'undefined') {
                         console.log(received_msg);
 
-                        message_text = received_msg.text.trim();
+                        let message_text = received_msg.text.trim();
+                        let txt_translation_html = "";
                         // use argos translate text result if received
                         if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation.trim() !== '') {
                            message_text = received_msg.txt_translation.trim();
@@ -177,6 +186,7 @@
                            txt_translation_html = "<br /><small><sup>[" + received_msg.txt_translation_target + "]</sup> " + received_msg.txt_translation.trim() + "</small>";
                         }
 
+                        let messageHtml = "";
                         switch (show_transl_results) {
                             case 'both':
                                 messageHtml = "<sup class=\"mainsup\">[" + received_msg.language + "]</sup> " + received_msg.text.trim() + txt_translation_html;
@@ -197,6 +207,27 @@
                            auto_hide_msg_time
                         );
                      }
+
+
+                      // receiving a flan answer
+                      if (typeof received_msg.type != 'undefined' && received_msg.type === "flan_answer") {
+                         let message_text = received_msg.text.trim();
+                         if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation !== '') {
+                            message_text = received_msg.txt_translation;
+                         }
+                         let question = message_text;
+                         let answer = received_msg.flan_answer;
+
+                         let messageHtml = "<small>Q: " + question + "</small><br /><sup class=\"mainsup\">[" + received_msg.language + "]</sup>A: " + answer;
+
+                         hideLoader();
+                         addMessage(
+                            messageHtml,
+                            "alert-warning",
+                            auto_remove_msg_time,
+                            auto_hide_msg_time
+                         );
+                      }
 
                      // receiving other messages
                      if (!no_loader && typeof received_msg.type != 'undefined' && received_msg.type === "processing_start") {

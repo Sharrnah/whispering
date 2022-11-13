@@ -2,29 +2,38 @@ import threading
 import asyncio
 import websockets
 import json
+
 import texttranslate
 import imagetranslate
 from windowcapture import WindowCapture
 import settings
 import VRC_OSCLib
+import flanLanguageModel
+
 
 WS_CLIENTS = set()
 
 
 def websocketMessageHandler(msgObj):
+
     if msgObj["type"] == "setting_change":
         settings.SetOption(msgObj["name"], msgObj["value"])
         BroadcastMessage(json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))  # broadcast updated settings to all clients
 
     if msgObj["type"] == "translate_req":
-        translate_result = texttranslate.TranslateLanguage(msgObj["text"], msgObj["from_lang"], msgObj["to_lang"])
-        BroadcastMessage(json.dumps({"type": "translate_result", "translate_result": translate_result}))
+        translate_result, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(msgObj["text"], msgObj["from_lang"], msgObj["to_lang"])
+        BroadcastMessage(json.dumps({"type": "translate_result", "translate_result": translate_result, "txt_from_lang": txt_from_lang, "txt_to_lang": txt_to_lang}))
 
     if msgObj["type"] == "ocr_req":
         window_name = settings.GetOption("ocr_window_name")
         ocr_result = imagetranslate.run_image_processing(window_name, ['en', msgObj["ocr_lang"]])
-        translate_result = (texttranslate.TranslateLanguage(" -- ".join(ocr_result), msgObj["from_lang"], msgObj["to_lang"]))
-        BroadcastMessage(json.dumps({"type": "translate_result", "original_text": "\n".join(ocr_result), "translate_result": "\n".join(translate_result.split(" -- "))}))
+        translate_result, txt_from_lang, txt_to_lang = (texttranslate.TranslateLanguage(" -- ".join(ocr_result), msgObj["from_lang"], msgObj["to_lang"]))
+        BroadcastMessage(json.dumps({"type": "translate_result", "original_text": "\n".join(ocr_result), "translate_result": "\n".join(translate_result.split(" -- ")), "txt_from_lang": txt_from_lang, "txt_to_lang": txt_to_lang}))
+
+    if msgObj["type"] == "flan_req":
+        if flanLanguageModel.init():
+            flan_result = flanLanguageModel.flan.encode(msgObj["text"])
+            BroadcastMessage(json.dumps({"type": "flan_result", "flan_result": flan_result}))
 
     if msgObj["type"] == "get_windows_list":
         windows_list = WindowCapture.list_window_names()

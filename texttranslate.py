@@ -1,8 +1,9 @@
 import settings
 import pykakasi
 import texttranslateARGOS
-#import texttranslateM2M100
+# import texttranslateM2M100
 import texttranslateM2M100_CTranslate2
+import texttranslateNLLB200
 
 
 def get_current_translator():
@@ -25,7 +26,9 @@ def InstallLanguages():
         case "ARGOS":
             texttranslateARGOS.InstallLanguages()
         case "M2M100":
-            texttranslateM2M100_CTranslate2.load_model(settings.GetOption("m2m100_size"))
+            texttranslateM2M100_CTranslate2.load_model(settings.GetOption("txt_translator_size"))
+        case "NLLB200":
+            texttranslateNLLB200.load_model(settings.GetOption("txt_translator_size"))
 
 
 def GetInstalledLanguageNames():
@@ -34,19 +37,23 @@ def GetInstalledLanguageNames():
             return texttranslateARGOS.GetInstalledLanguageNames()
         case "M2M100":
             return texttranslateM2M100_CTranslate2.get_installed_language_names()
+        case "NLLB200":
+            return texttranslateNLLB200.get_installed_language_names()
 
 
-def TranslateLanguage(text, from_code, to_code, to_romaji=False):
+def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
     translation_text = ""
     match get_current_translator():
         case "ARGOS":
             translation_text = texttranslateARGOS.TranslateLanguage(text, from_code, to_code)
         case "M2M100":
             translation_text = texttranslateM2M100_CTranslate2.translate_language(text, from_code, to_code)
+        case "NLLB200":
+            translation_text, from_code, to_code = texttranslateNLLB200.translate_language(text, from_code, to_code, as_iso1)
     if to_romaji:
         translation_text = convert_to_romaji(translation_text)
 
-    return translation_text.strip()
+    return translation_text.strip(), from_code, to_code
 
 
 def SetDevice(option):

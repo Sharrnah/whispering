@@ -106,7 +106,7 @@ def Message(data="example", address="/example", IP='127.0.0.1', PORT=9000):
 
 
 # OSC Send Chat
-def Chat(data="example", send=True, address="/chatbox/input", IP='127.0.0.1', PORT=9000, convert_ascii=True):
+def Chat(data="example", send=True, nofify=True, address="/chatbox/input", IP='127.0.0.1', PORT=9000, convert_ascii=False):
     # OSC Bild
     client = udp_client.UDPClient(IP, PORT)
     msg = OscMessageBuilder(address=address)
@@ -115,6 +115,7 @@ def Chat(data="example", send=True, address="/chatbox/input", IP='127.0.0.1', PO
     else:
         msg.add_arg(data)
     msg.add_arg(send)
+    msg.add_arg(nofify)
     m = msg.build()
 
     # OSC Send
