@@ -148,7 +148,7 @@ def main(ctx, devices, device_index, sample_rate, task, model, language, conditi
             audioprocessor.q.put(audio_data)
 
             # set typing indicator for VRChat
-            if osc_ip != "0" and settings.GetOption("osc_typing_indicator"):
+            if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption("osc_typing_indicator"):
                 VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
             # send start info for processing indicator in websocket client
             websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))

@@ -11,6 +11,14 @@ body textarea {
   min-height: 5rem;
 }
 
+body button[disabled], body select[disabled] {
+  cursor: not-allowed;
+}
+body label.disabled {
+  color: #999;
+  cursor: not-allowed;
+}
+
 body.bottom-align {
   position: absolute;
   bottom: 0;

@@ -92,10 +92,13 @@ def whisper_result_handling(result):
                     print("FLAN question: " + prompted_text)
                     print("FLAN result: " + predicted_text)
                     send_message(flan_osc_prefix + predicted_text, result)
+
             # otherwise process every text with FLAN
             else:
-                print("flan general processing")
                 predicted_text = flanLanguageModel.flan.encode(predicted_text)
+                # translate from auto-detected language to speaker language
+                if settings.GetOption("flan_translate_to_speaker_language"):
+                    predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, "auto", result['language'], False, True)
                 result['flan_answer'] = predicted_text
                 print("FLAN result: " + predicted_text)
                 send_message(flan_osc_prefix + predicted_text, result)
@@ -112,7 +115,7 @@ def send_message(predicted_text, result_obj):
     websocket_ip = settings.GetOption("websocket_ip")
 
     # Send over OSC
-    if osc_ip != "0":
+    if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled"):
         VRC_OSCLib.Chat(predicted_text, True, True, osc_address, IP=osc_ip, PORT=osc_port,
                         convert_ascii=settings.GetOption("osc_convert_ascii"))
     # Send to Websocket

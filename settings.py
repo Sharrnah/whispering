@@ -27,11 +27,12 @@ TRANSLATE_SETTINGS = {
     "condition_on_previous_text": False,  # if enabled, Whisper will condition on previous text. (more prone to loops or getting stuck)
 
     # OSC settings
-    "osc_ip": "0",
+    "osc_ip": "0",  # OSC IP address. set to "0" to disable.
     "osc_port": 9000,
     "osc_address": "/chatbox/input",
     "osc_typing_indicator": True,
     "osc_convert_ascii": False,
+    "osc_auto_processing_enabled": True,  # Toggle auto sending of OSC messages on WhisperAI or Flan results. (not saved)
 
     # websocket settings
     "websocket_ip": "0",
@@ -74,12 +75,16 @@ def LoadYaml(path):
 
 def SaveYaml(path):
     to_save_settings = TRANSLATE_SETTINGS.copy()
+
+    # Remove settings that are not saved
     if "whisper_languages" in to_save_settings:
         del to_save_settings['whisper_languages']
     if "lang_swap" in to_save_settings:
         del to_save_settings['lang_swap']
     if "verbose" in to_save_settings:
         del to_save_settings['verbose']
+    if "osc_auto_processing_enabled" in to_save_settings:
+        del to_save_settings['osc_auto_processing_enabled']
 
     with open(path, "w") as f:
         yaml.dump(to_save_settings, f)
