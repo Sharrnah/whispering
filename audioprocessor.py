@@ -3,14 +3,15 @@ import queue
 import whisper
 import settings
 import VRC_OSCLib
-import texttranslate
+from Models.TextTranslation import texttranslate
 import websocket
 import json
 import numpy as np
 from pydub import AudioSegment
 from whisper.tokenizer import LANGUAGES, TO_LANGUAGE_CODE
 import io
-import flanLanguageModel
+from Models.LLM import flanLanguageModel
+from Models.TTS import silero
 
 # some regular mistakenly recognized words/sentences on mostly silence audio, which are ignored in processing
 blacklist = [
@@ -107,6 +108,10 @@ def whisper_result_handling(result):
         if not flan_loaded:
             send_message(predicted_text, result)
 
+        if settings.GetOption("tts_answer"):
+            silero_wav, sample_rate = silero.tts.tts(predicted_text)
+            silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
+
 
 def send_message(predicted_text, result_obj):
     osc_ip = settings.GetOption("osc_ip")
@@ -115,7 +120,7 @@ def send_message(predicted_text, result_obj):
     websocket_ip = settings.GetOption("websocket_ip")
 
     # Send over OSC
-    if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled"):
+    if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and predicted_text != "":
         VRC_OSCLib.Chat(predicted_text, True, True, osc_address, IP=osc_ip, PORT=osc_port,
                         convert_ascii=settings.GetOption("osc_convert_ascii"))
     # Send to Websocket

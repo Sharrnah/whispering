@@ -22,6 +22,51 @@
       let hideTimeouts = [];
       let loaderTimeouts = [];
 
+
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+      function b64toBlob(b64Data, contentType='', sliceSize=512) {
+         const byteCharacters = atob(b64Data);
+         const byteArrays = [];
+
+         for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+            const slice = byteCharacters.slice(offset, offset + sliceSize);
+
+            const byteNumbers = new Array(slice.length);
+            for (let i = 0; i < slice.length; i++) {
+               byteNumbers[i] = slice.charCodeAt(i);
+            }
+
+            const byteArray = new Uint8Array(byteNumbers);
+            byteArrays.push(byteArray);
+         }
+
+         return new Blob(byteArrays, {type: contentType});
+      }
+
+
+      function playWave(byteArray, sampleRate) {
+         let myAudioBuffer = audioContext.createBuffer(1, byteArray.length, sampleRate);
+         let nowBuffering = myAudioBuffer.getChannelData(0);
+         for (let i = 0; i < byteArray.length; i++) {
+             nowBuffering[i] = byteArray[i];
+         }
+         let source = audioContext.createBufferSource();
+         source.buffer = myAudioBuffer;
+         source.connect(audioContext.destination);
+         source.start();
+      }
+
+      function saveWave(base64binary) {
+         let contentType='audio/wav';
+         let url = "data:"+contentType+";base64,"+base64binary;
+
+         fetch(url)
+         .then(res => res.blob())
+         .then(URL.createObjectURL)
+         .then(window.open);
+      }
+
       HTMLSelectElement.prototype.contains = function( value ) {
           for (let i = 0, l = this.options.length; i < l; i++) {
              // noinspection EqualityComparisonWithCoercionJS,JSIncompatibleTypesComparison
@@ -247,9 +292,12 @@
                addWSSettingEvent("#settings input", "input");
                addWSSettingEvent("#settings select", "change");
                addWSSettingEvent("#settings button", "click");
+               addWSSettingEvent("#settings .setting-textarea textarea", "change");
                function changeSettings(e) {
                   let name = e.currentTarget.name;
                   let value = undefined;
+
+                  console.log(e.currentTarget.type);
                   switch (e.currentTarget.type) {
                      case 'checkbox':
                         value = e.currentTarget.checked;
@@ -261,12 +309,30 @@
                      case 'submit':
                         value = true;
                         break;
+                     case 'textarea':
+                        value = e.currentTarget.value.replace(/\r\n/g, "\n");
+                        break;
+                     case 'number':
+                        value = parseInt(e.currentTarget.value);
+                        break;
                      default:
                         break;
                   }
                   console.log({ name: name, type: e.currentTarget.type, value: value });
 
                   let sendData = { type: "setting_change", name: name, value: value };
+                  // special cases
+                  switch (name) {
+                     case "tts_model":
+                        // split model and voice values
+                        if (value !== null) {
+                           value = value.split(":");
+                        }
+                        sendData = { type: "setting_change", name: name, value: value };
+                        break;
+                  }
+
+
                   ws.send(JSON.stringify(sendData));
                }
 
@@ -319,6 +385,28 @@
                   let translated_text = document.querySelector('#transl_result_textarea').value;
 
                   let sendData = { type: "send_osc", text: translated_text };
+                  ws.send(JSON.stringify(sendData));
+               }
+
+               // send TTS message
+               document.querySelector("button#transl_result_textarea_sendtts").addEventListener("click", function() {sendTTSTask(false, false)});
+               document.querySelector("button#transl_result_textarea_sendtts_to_device").addEventListener("click", function() {sendTTSTask(true, false)});
+               document.querySelector("button#transl_result_textarea_sendtts_download").addEventListener("click", function() {sendTTSTask(false, true)});
+               function sendTTSTask(send_to_device, download) {
+                  let textarea_el = document.querySelector('#transl_result_textarea');
+                  let text = textarea_el.value;
+                  if (text === "") {
+                     textarea_el.focus();
+                     return;
+                  }
+
+                  let sendData = { type: "tts_req", text: text, to_device: send_to_device, download: download };
+                  ws.send(JSON.stringify(sendData));
+               }
+               // save TTS voice
+               document.querySelector("button#transl_result_textarea_savetts_voice").addEventListener("click", saveTTSVoiceTask);
+               function saveTTSVoiceTask() {
+                  let sendData = { type: "tts_voice_save_req" };
                   ws.send(JSON.stringify(sendData));
                }
 
@@ -445,6 +533,48 @@
                         img_lang_el.appendChild(el);
                      }
                   }
+                  // receive tts models
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "available_tts_models") {
+                     let tts_model_el = document.querySelector('#settings #tts_model');
+
+                     tts_model_el.replaceChildren("");
+
+                     for (let i = 0; i < received_msg.data.length; i++) {
+                        let opt = received_msg.data[i];
+
+                        let optgroup_el = document.createElement("optgroup");
+                        optgroup_el.label = opt.language;
+
+                        // add all available models to language optgroup
+                        for (let i2 = 0; i2 < opt.models.length; i2++) {
+                           let opt2 = opt.models[i2];
+
+                           let el = document.createElement("option");
+                           el.textContent = opt2;
+                           el.value = opt.language + ":" + opt2;
+
+                           optgroup_el.appendChild(el);
+                        }
+
+                        tts_model_el.appendChild(optgroup_el);
+                     }
+                  }
+                  // receive tts voices
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "available_tts_voices") {
+                     let tts_voice_el = document.querySelector('#settings #tts_voice');
+
+                     tts_voice_el.replaceChildren("");
+
+                     for (let i = 0; i < received_msg.data.length; i++) {
+                        let opt = received_msg.data[i];
+
+                        let el = document.createElement("option");
+                        el.textContent = opt;
+                        el.value = opt;
+
+                        tts_voice_el.appendChild(el);
+                     }
+                  }
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "translate_settings") {
                      settings = received_msg.data;
 
@@ -460,12 +590,19 @@
                                  setting_el.checked = settingValue;
                                  break;
                               case 'select-one':
+                                 // special setting value format handling
+                                 if (settingKey === 'tts_model') {
+                                    settingValue = settingValue[0] + ':' + settingValue[1];
+                                 }
+                              case 'textarea':
+                              case 'number':
                                  setting_el.value = settingValue;
                                  break;
                               default:
                                  break;
                            }
                         }
+
 
                         // populate whisper languages
                         if (settingKey === 'whisper_languages') {
@@ -515,6 +652,8 @@
                      let flan_enabled = received_msg.data.flan_enabled;
                      if (!flan_enabled) {
                         document.querySelector('button#flan_do').disabled = true;
+                        document.querySelector('button#flan_do').style.display = "none";
+                        document.querySelector('#settings .flan-settings').style.display = "none";
                      }
                   }
                   // receive translation result
@@ -558,6 +697,16 @@
                         ocr_window_el.appendChild(el);
                      }
                      ocr_window_el.value = ocr_current_window;
+                  }
+
+                  // get tts result
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "tts_result") {
+                     playWave(received_msg.wav_data, received_msg.sample_rate);
+                  }
+
+                  // download tts result
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "tts_save") {
+                     saveWave(received_msg.wav_data);
                   }
 
                   // get flan result
@@ -616,12 +765,21 @@
                   <label for="current_language" title="Set speaker language. Helps with WhisperAI precision as it does not have to guess the language.">speaker language: <select name="current_language" id="current_language">
                         <option value="">Auto</option>
                   </select></label><br />
-                  <strong>FLAN-T5:</strong>&nbsp;<label for="flan_whisper_answer" title="enable FLAN-T5 to answer WhisperAI transcriptions or translations.">answering: <input type="checkbox" id="flan_whisper_answer"
-                     name="flan_whisper_answer" value="1" /></label>&nbsp;&nbsp;&nbsp;
-                  <label for="flan_process_only_questions" title="process only questions. FLAN-T5 only responses if a question-word and question-mark are found.">only questions: <input type="checkbox" id="flan_process_only_questions"
-                     name="flan_process_only_questions" value="1" /></label>&nbsp;&nbsp;&nbsp;
-                  <label for="flan_translate_to_speaker_language" title="Try to reply in the language of the speaker.">reply in speaker lang.: <input type="checkbox" id="flan_translate_to_speaker_language"
-                     name="flan_translate_to_speaker_language" value="1" /></label>
+                  <div class="flan-settings">
+                     <strong>FLAN-T5:</strong>&nbsp;<label for="flan_whisper_answer" title="enable FLAN-T5 to answer WhisperAI transcriptions or translations.">answering: <input type="checkbox" id="flan_whisper_answer"
+                        name="flan_whisper_answer" value="1" /></label>&nbsp;&nbsp;&nbsp;
+                     <label for="flan_process_only_questions" title="process only questions. FLAN-T5 only responses if a question-word and question-mark are found.">only questions: <input type="checkbox" id="flan_process_only_questions"
+                        name="flan_process_only_questions" value="1" /></label>&nbsp;&nbsp;&nbsp;
+                     <label for="flan_translate_to_speaker_language" title="Try to reply in the language of the speaker.">reply in speaker lang.: <input type="checkbox" id="flan_translate_to_speaker_language"
+                        name="flan_translate_to_speaker_language" value="1" /></label>&nbsp;&nbsp;&nbsp;
+                     <label for="flan_prompt" class="setting-textarea" title="Prefix this before input or wrap around input at '??'">Prompt prefix:&nbsp;<textarea name="flan_prompt" id="flan_prompt" rows="1" cols="18" style="height: 3em;"></textarea></label>&nbsp;&nbsp;&nbsp;
+                     <label for="flan_conditioning_history">conditioning lines:&nbsp;<input type="number" id="flan_conditioning_history" name="flan_conditioning_history" min="0" style="width: 3rem;"></label>&nbsp;&nbsp;
+                     <label for="flan_memory" class="setting-textarea" title="long term memory (always added at top of prompt)">Prompt memory:&nbsp;<textarea name="flan_memory" id="flan_memory" rows="1" cols="18" style="height: 3em;"></textarea></label><br />
+                  </div>
+                  <strong>TTS:</strong>&nbsp;<label for="tts_answer" title="enable TTS to answer WhisperAI results.">answering: <input type="checkbox" id="tts_answer"
+                     name="tts_answer" value="1" /></label>&nbsp;&nbsp;&nbsp;Model: <select name="tts_model" id="tts_model"></select>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Voice: <select name="tts_voice" id="tts_voice"></select>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  <button name="transl_result_textarea_savetts_voice" id="transl_result_textarea_savetts_voice" value="1" title="save last random generated voice for use as 'last' voice">save random voice</button>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  <button name="transl_result_textarea_sendtts_download" id="transl_result_textarea_sendtts_download" value="1" title="download TTS speech">TTS 📥</button>
                   <hr />
                </div>
             </div>
@@ -678,7 +836,11 @@
                   </div>
                   <div class="col-1">
                      <button name="transl_result_textarea_sendosc" id="transl_result_textarea_sendosc" value="1"
-                        style="width: 100%; height: 100%;">send OSC</button>
+                        style="width: 100%;">send OSC</button>
+                     <button name="transl_result_textarea_sendtts" id="transl_result_textarea_sendtts" value="1" title="test TTS speech in Browser"
+                        style="width: 100%;">TTS test</button>
+                     <button name="transl_result_textarea_sendtts_to_device" id="transl_result_textarea_sendtts_to_device" value="1" title="send TTS speech to configured device"
+                        style="width: 100%;">TTS send</button>
                   </div>
                </div>
             </div>

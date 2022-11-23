@@ -11,6 +11,19 @@ body textarea {
   min-height: 5rem;
 }
 
+body label.setting-textarea {
+  position: relative;
+  display: inline-flex;
+  white-space: nowrap;
+}
+body label.setting-textarea textarea {
+  display: inline-flex;
+  min-height: 1rem;
+
+  font-size: 0.9em;
+  line-height: 1em;
+}
+
 body button[disabled], body select[disabled] {
   cursor: not-allowed;
 }

@@ -38,15 +38,26 @@ TRANSLATE_SETTINGS = {
     "websocket_ip": "0",
     "websocket_port": 5000,
 
+    # TTS settings
+    "tts_enabled": True,  # enable TTS
+    "tts_ai_device": "cuda",  # can be "cuda" or "cpu".
+    "tts_answer": True,  # answer to whisper results
+    "device_out_index": None,  # output device index for TTS
+    "tts_model": ["en", "v3_en"],  # TTS language and model to use
+    "tts_voice": "en_0",  # TTS voice (one of silero tts voices, or "last" to use last used voice)
+
     # FLAN settings
     "flan_enabled": False,  # Enable FLAN A.I.
     "flan_size": "large",  # FLAN model size. Can be "small", "base", "large", "xl" or "xxl"
     "flan_bits": 32,  # precision can be set to 32 (float), 16 (float) or 8 (int) bits. 8 bits is the fastest but least precise
     "flan_device": "cpu",  # can be "cpu", "cuda" or "auto". ("cuda" and "auto" doing the same)
     "flan_whisper_answer": True,  # if True, the FLAN A.I. will answer to results from the Whisper A.I.
-    "flan_process_only_questions": True,  # if True, the FLAN A.I. will only answer to questions
-    "flan_osc_prefix": "AI: ",  # prefix for OSC messages
-    "flan_translate_to_speaker_language": False  # Translate from english to speaker language
+    "flan_process_only_questions": True,  # if True, the FLAN A.I. will only answer to questions.
+    "flan_osc_prefix": "AI: ",  # prefix for OSC messages.
+    "flan_translate_to_speaker_language": False,  # Translate from english to speaker language
+    "flan_prompt": "",  # text for prompts or wraps prompt around input text if ?? (two question-marks) is present in the string. Otherwise, it is added to the end of the string.
+    "flan_memory": "",  # longer term memory for FLAN A.I.
+    "flan_conditioning_history": 0  # Number of previous messages to condition on. 0 for no conditioning.
 }
 
 

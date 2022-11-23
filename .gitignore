@@ -1,0 +1,4 @@
+__pycache__
+/dist_files/ffmpeg/
+/audioWhisper.spec
+*.yaml

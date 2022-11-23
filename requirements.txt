@@ -21,7 +21,9 @@ sentencepiece>=0.1.96
 protobuf==3.20.2
 progressbar2
 fasttext-wheel
-
+best-download
 pywin32
 easyocr
 mss
+pyaudio
+scipy

@@ -2,7 +2,7 @@ from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, models
 import os
 import downloader
 from pathlib import Path
-import languageClassification
+from Models import languageClassification
 
 LANGUAGES = {
     "Achinese (Arab)": "ace_Arab",
@@ -417,9 +417,30 @@ LANGUAGES_ISO1_TO_ISO3 = {
 # }
 
 MODEL_LINKS = {
-    "small": "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200%2Fsmall.zip",
-    "medium": "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200%2Fmedium.zip",
-    "large": "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200%2Flarge.zip"
+    "small": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/NLLB-200%2Fsmall.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200%2Fsmall.zip",
+            "https://s3.libs.space:9000/ai-models/NLLB-200/small.zip",
+        ],
+        "checksum": "598aca00cac6835bb1e41109c3fcb5d3988d60be57c5b2b200c1e1c58b0fd1e2"
+    },
+    "medium": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/NLLB-200%2Fmedium.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200%2Fmedium.zip",
+            "https://s3.libs.space:9000/ai-models/NLLB-200/medium.zip",
+        ],
+        "checksum": "5b68b58640b6c292d0e0f4617e7a1b61921ad74b6f5cb0f035087a9aed8b85ba"
+    },
+    "large": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/NLLB-200%2Flarge.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200%2Flarge.zip",
+            "https://s3.libs.space:9000/ai-models/NLLB-200/large.zip",
+        ],
+        "checksum": "00866e6aae6f8c9274b25eed118b8638a2598ba7121fa0436e098ff09b0a3520"
+    }
 }
 
 # [Modify] Set paths to the CTranslate2 and SentencePiece models
@@ -444,7 +465,7 @@ def load_model(size="small"):
 
     if not model_path.exists():
         print(f"Downloading {size} NLLB-200 model...")
-        downloader.download_extract(MODEL_LINKS[size], str(ct_model_path.resolve()))
+        downloader.download_extract(MODEL_LINKS[size]["urls"], str(ct_model_path.resolve()), MODEL_LINKS[size]["checksum"])
 
     model_path_string = str(model_path.resolve())
 

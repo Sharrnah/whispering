@@ -16,11 +16,46 @@ import downloader
 # }
 
 MODEL_LINKS = {
-    "small": "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Fsmall.zip",
-    "base": "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Fbase.zip",
-    "large": "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Flarge.zip",
-    "xl": "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Fxl.zip",
-    "xxl": "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Fxxl.zip"
+    "small": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5%2Fsmall.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Fsmall.zip",
+            "https://s3.libs.space:9000/ai-models/FLAN-T5/small.zip",
+        ],
+        "checksum": "34415fe1e13813e5e3037b950794197870deb5573b0de899d785a1094c1a5e0e"
+    },
+    "base": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5%2Fbase.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Fbase.zip",
+            "https://s3.libs.space:9000/ai-models/FLAN-T5/base.zip",
+         ],
+        "checksum": "577e84801ac0a0dac18a8c66962a688b828f3a567546e988879ae5279d51fcbe"
+     },
+    "large": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5%2Flarge.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Flarge.zip",
+            "https://s3.libs.space:9000/ai-models/FLAN-T5/large.zip",
+        ],
+        "checksum": "8a713559ffc9ba6ac1af3d8d24478261a085cac3d5448a934596379cb0420518"
+    },
+    "xl": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5%2Fxl.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Fxl.zip",
+            "https://s3.libs.space:9000/ai-models/FLAN-T5/xl.zip",
+        ],
+        "checksum": "15c85799f083b284c73e724068a7ff95c901cd7b55a206a49661940ae5bd4778"
+    },
+    "xxl": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5%2Fxxl.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Fxxl.zip",
+            "https://s3.libs.space:9000/ai-models/FLAN-T5/xxl.zip",
+        ],
+        "checksum": "66c221e46e230714675ae2f1af86852d886ddb2b26ba9ca7f73acd6ed27160dc"
+    }
 }
 
 cache_path = Path(Path.cwd() / ".cache" / "flan-t5-cache")
@@ -56,13 +91,15 @@ class FlanLanguageModel:
     tokenizer = None
     model = None
     model_size = "large"
-    max_length = 50  # max result token length. default is 20
+    max_length = 80  # max result token length. default is 20
     bit_length = 32  # can be 32 = 32 float, 16 = 16 float or 8 = 8 int
     device_map = "auto"  # can be "auto" or None
     low_cpu_mem_usage = True
 
+    conditioning_lines = []
+
     # Set the device. "cuda" for GPU or None for CPU
-    def __init__(self, model_size, device="auto", bit_length=32):
+    def __init__(self, model_size=model_size, device=device_map, bit_length=bit_length):
         self.model_size = model_size
         self.device_map = device
         self.bit_length = bit_length
@@ -71,7 +108,7 @@ class FlanLanguageModel:
 
         if not model_path.exists():
             print(f"Downloading {model_size} FLAN-T5 model...")
-            downloader.download_extract(MODEL_LINKS[model_size], str(cache_path.resolve()))
+            downloader.download_extract(MODEL_LINKS[model_size]["urls"], str(cache_path.resolve()), MODEL_LINKS[model_size]["checksum"])
 
         model_path_string = str(model_path.resolve())
 
@@ -110,6 +147,23 @@ class FlanLanguageModel:
         return question_prompt, prompt_change
 
     def encode(self, input_text, token_length=max_length):
+        # Add flan prompt prefix
+        if settings.GetOption("flan_prompt") != "":
+            flan_prompt = settings.GetOption("flan_prompt")
+            if flan_prompt.count("??") > 0:
+                input_text = flan_prompt.replace("??", input_text)
+            else:
+                input_text = flan_prompt + input_text
+        conditioning_input_text = input_text
+
+        # Add conditioning lines
+        if settings.GetOption("flan_conditioning_history") > 0 and len(self.conditioning_lines) > 0:
+            input_text = "\n".join(self.conditioning_lines) + "\n" + input_text
+
+        # Add flan long-term memory
+        if settings.GetOption("flan_memory") != "":
+            input_text = settings.GetOption("flan_memory") + "\n" + input_text
+
         if self.device_map == "auto":
             input_ids = self.tokenizer(input_text, return_tensors="pt").input_ids.to("cuda")
         else:
@@ -118,8 +172,20 @@ class FlanLanguageModel:
         outputs = self.model.generate(input_ids, max_new_tokens=token_length)
         result = self.tokenizer.decode(outputs[0]).replace("<pad>", "").replace("</s>", "").replace("<unk>", "").strip()
 
-        # remove A: from the start of the result (if used by Q: prefix in question)
+        # Add the result to the conditioning history and remove the oldest lines if needed
+        if settings.GetOption("flan_conditioning_history") > 0:
+            if len(self.conditioning_lines) >= settings.GetOption("flan_conditioning_history"):
+                difference = len(self.conditioning_lines) - settings.GetOption("flan_conditioning_history")
+                del self.conditioning_lines[0:difference - 1]
+
+            self.conditioning_lines.append(conditioning_input_text + result)
+        else:
+            self.conditioning_lines.clear()
+
+        # remove some common prefixes from the start of the result (@todo: make this configurable)
         result = result.removeprefix("A: ")
+        result = result.removeprefix("AI: ")
+        result = result.removeprefix("Human: ")
 
         return result
 

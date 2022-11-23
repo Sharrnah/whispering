@@ -9,14 +9,15 @@ import VRC_OSCLib
 import websocket
 import settings
 import remote_opener
-import texttranslate
+from Models.TextTranslation import texttranslate
 import pyaudiowpatch as pyaudio
 from whisper import available_models, audio as whisper_audio
 
 
 @click.command()
 @click.option('--devices', default='False', help='print all available devices id', type=str)
-@click.option('--device_index', default=-1, help='the id of the device (-1 = default active Mic)', type=int)
+@click.option('--device_index', default=-1, help='the id of the input device (-1 = default active Mic)', type=int)
+@click.option('--device_out_index', default=-1, help='the id of the output device (-1 = default active Speaker)', type=int)
 @click.option('--sample_rate', default=whisper_audio.SAMPLE_RATE, help='sample rate of recording', type=int)
 @click.option("--task", default="transcribe", help="task for the model whether to only transcribe the audio or translate the audio to english",
               type=click.Choice(["transcribe", "translate"]))
@@ -45,7 +46,7 @@ from whisper import available_models, audio as whisper_audio
 @click.option("--config", default=None, help="Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]", type=str)
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 @click.pass_context
-def main(ctx, devices, device_index, sample_rate, task, model, language, condition_on_previous_text, energy, dynamic_energy, pause, phrase_time_limit, osc_ip, osc_port,
+def main(ctx, devices, device_index, device_out_index, sample_rate, task, model, language, condition_on_previous_text, energy, dynamic_energy, pause, phrase_time_limit, osc_ip, osc_port,
          osc_address, osc_convert_ascii, websocket_ip, websocket_port, ai_device, txt_translator, txt_translator_size, txt_translator_device, ocr_window_name, flan_enabled, open_browser, config, verbose):
 
     # Load settings from file
@@ -60,12 +61,23 @@ def main(ctx, devices, device_index, sample_rate, task, model, language, conditi
         print(" In form of: DEVICE_NAME [Sample Rate=?] [Loopback?] (Index=INDEX) ")
         print("-------------------------------------------------------------------")
         for device in audio.get_device_info_generator():
-            device_index = device["index"]
-            device_name = device["name"]
-            device_sample_rate = int(device["defaultSampleRate"])
-            device_max_channels = audio.get_device_info_by_index(device_index)['maxInputChannels']
-            if device_max_channels >= 1:
-                print(f"{device_name} [Sample Rate={device_sample_rate}] (Index={device_index})")
+            device_list_index = device["index"]
+            device_list_name = device["name"]
+            device_list_sample_rate = int(device["defaultSampleRate"])
+            device_list_max_channels = audio.get_device_info_by_index(device_list_index)['maxInputChannels']
+            if device_list_max_channels >= 1:
+                print(f"{device_list_name} [Sample Rate={device_list_sample_rate}] (Index={device_list_index})")
+        print("")
+        print("-------------------------------------------------------------------")
+        print("                          Output Devices                           ")
+        print("-------------------------------------------------------------------")
+        for device in audio.get_device_info_generator():
+            device_list_index = device["index"]
+            device_list_name = device["name"]
+            device_list_sample_rate = int(device["defaultSampleRate"])
+            device_list_max_channels = audio.get_device_info_by_index(device_list_index)['maxOutputChannels']
+            if device_list_max_channels >= 1:
+                print(f"{device_list_name} [Sample Rate={device_list_sample_rate}] (Index={device_list_index})")
         return
 
     print("###################################")
@@ -74,6 +86,7 @@ def main(ctx, devices, device_index, sample_rate, task, model, language, conditi
 
     # set initial settings
     settings.IsArgumentSetting(ctx, "task") and settings.SetOption("whisper_task", task)
+    settings.IsArgumentSetting(ctx, "device_out_index") and settings.SetOption("device_out_index", (device_out_index if device_out_index > -1 else None))
 
     settings.IsArgumentSetting(ctx, "condition_on_previous_text") and settings.SetOption("condition_on_previous_text", condition_on_previous_text)
     settings.IsArgumentSetting(ctx, "model") and settings.SetOption("model", model)

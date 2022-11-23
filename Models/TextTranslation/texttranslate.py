@@ -1,9 +1,9 @@
 import settings
 import pykakasi
-import texttranslateARGOS
+from Models.TextTranslation import texttranslateARGOS
 # import texttranslateM2M100
-import texttranslateM2M100_CTranslate2
-import texttranslateNLLB200
+from Models.TextTranslation import texttranslateM2M100_CTranslate2
+from Models.TextTranslation import texttranslateNLLB200
 
 
 def get_current_translator():
