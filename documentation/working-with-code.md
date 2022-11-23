@@ -9,4 +9,4 @@
 6. Git clone or download this repository
 7. `pip install -r requirements.txt -U` (or `install.bat`)
 
-_All examples of main README.md work. Only difference is running them using **"`python audioWhisper.py`"** instead of "`audioWhisper\audioWhisper.exe`".
+_All examples in the documentation work. Only difference is running them using **"`python audioWhisper.py`"** instead of "`audioWhisper\audioWhisper.exe`".

@@ -26,7 +26,7 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
 ### Features
 - Runs 100% locally on your machine. (Once A.I. Models are downloaded, no further internet connection is required)
 - **Speech recognition, translation and transcription**
-  - OpenAI's [Whisper](https://github.com/openai/whisper) project, Supports ~98 languages) 
+  - OpenAI's [Whisper](https://github.com/openai/whisper) project, Supports ~98 languages)
 - **Text translation**
   - LID _[Language Identification]_ (Supports 200 languages)
   - NLLB-200 (single model, Supporting 200 languages, high accuracy)
@@ -34,6 +34,8 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
   - ARGOS (multiple models, Supporting 56 languages, depending on the language, low accuracy)
 - **OCR** _[Optical Character Recognition]_ (to capture game images and translate in-game text)
   - EasyOCR (Supports 80+ languages)
+- **TTS** _[Text-to-Speech]_ (Read out transcriptions/translations)
+  - Silero
 - **LLM** _[Large language model]_ (Continuation of text. automatic answer generation etc.)
   - FLAN-T5
 
@@ -61,3 +63,4 @@ A thanks goes to
 - Argos Translate https://github.com/argosopentech/argos-translate
 - EasyOCR https://github.com/jaidedai/easyocr
 - Google Research (FLAN-T5) https://ai.googleblog.com/2021/10/introducing-flan-more-generalizable.html
+- Silero (TTS) https://github.com/snakers4/silero-models
