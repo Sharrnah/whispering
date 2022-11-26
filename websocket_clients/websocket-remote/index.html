@@ -408,6 +408,11 @@
                function saveTTSVoiceTask() {
                   let sendData = { type: "tts_voice_save_req" };
                   ws.send(JSON.stringify(sendData));
+
+                  // set to last saved voice
+                  let tts_voice_el = document.querySelector('#settings #tts_voice');
+                  tts_voice_el.value = "last";
+                  tts_voice_el.dispatchEvent(new Event("change"));
                }
 
 

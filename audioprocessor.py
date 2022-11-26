@@ -108,7 +108,7 @@ def whisper_result_handling(result):
         if not flan_loaded:
             send_message(predicted_text, result)
 
-        if settings.GetOption("tts_answer"):
+        if settings.GetOption("tts_answer") and silero.init():
             silero_wav, sample_rate = silero.tts.tts(predicted_text)
             silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
 
