@@ -68,6 +68,28 @@ class Silero:
     def set_model(self, model_id):
         self.model_id = model_id
 
+    def _load_model(self, repo_or_dir, model, source='github', trust_repo=None, verbose=False, skip_validation=False, fallback_local_dir=None):
+        try:
+            self.model, _ = torch.hub.load(trust_repo=trust_repo, skip_validation=skip_validation,
+                                           source=source,
+                                           repo_or_dir=repo_or_dir,
+                                           model=model,
+                                           language=self.lang,
+                                           speaker=self.model_id,
+                                           verbose=verbose)
+        except:
+            try:
+                self._load_model(trust_repo=trust_repo, skip_validation=skip_validation,
+                                 source="local",
+                                 repo_or_dir=fallback_local_dir,
+                                 model=model,
+                                 verbose=verbose)
+            except:
+                print("Error loading TTS model")
+                return False
+
+        return True
+
     def load(self):
         self.set_language(settings.GetOption('tts_model')[0])
         self.set_model(settings.GetOption('tts_model')[1])
@@ -77,13 +99,17 @@ class Silero:
         # set cache path
         torch.hub.set_dir(str(Path(cache_path).resolve()))
 
-        self.model, _ = torch.hub.load(trust_repo=True, repo_or_dir='snakers4/silero-models',
-                                   model='silero_tts',
-                                   language=self.lang,
-                                   speaker=self.model_id)
+        # load model
+        load_error = self._load_model(trust_repo=True, skip_validation=True,
+                                      repo_or_dir='snakers4/silero-models',
+                                      model='silero_tts',
+                                      fallback_local_dir=str(Path(cache_path / "snakers4_silero-models_master").resolve()))
+
         self.model.to(device)
         if self.device == "cpu":
             torch.set_num_threads(4)
+
+        return load_error
 
     def save_voice(self, voice_path=last_voice):
         if settings.GetOption('tts_voice') == 'random':
@@ -100,8 +126,11 @@ class Silero:
         else:
             self.speaker = settings.GetOption('tts_voice')
 
-        self.load()
+        # Try to load model repo from github or locally
+        if not self.load():
+            return None, None
 
+        # Try to generate tts
         try:
             audio = self.model.apply_tts(text=text,
                                          speaker=self.speaker,
@@ -112,7 +141,6 @@ class Silero:
         except Exception as e:
             return None, None
 
-        # return audio.tolist(), self.sample_rate
         return audio, self.sample_rate
 
     @staticmethod

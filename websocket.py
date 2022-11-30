@@ -39,14 +39,17 @@ def websocketMessageHandler(msgObj):
     if msgObj["type"] == "tts_req":
         if silero.init():
             silero_wav, sample_rate = silero.tts.tts(msgObj["text"])
-            if msgObj["to_device"]:
-                silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
+            if silero_wav is not None:
+                if msgObj["to_device"]:
+                    silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
+                else:
+                    BroadcastMessage(json.dumps({"type": "tts_result", "wav_data": silero_wav.tolist(), "sample_rate": sample_rate}))
+                    if msgObj["download"]:
+                        wav_data = silero.tts.return_wav_file_binary(silero_wav)
+                        wav_data = base64.b64encode(wav_data).decode('utf-8')
+                        BroadcastMessage(json.dumps({"type": "tts_save", "wav_data": wav_data}))
             else:
-                BroadcastMessage(json.dumps({"type": "tts_result", "wav_data": silero_wav.tolist(), "sample_rate": sample_rate}))
-                if msgObj["download"]:
-                    wav_data = silero.tts.return_wav_file_binary(silero_wav)
-                    wav_data = base64.b64encode(wav_data).decode('utf-8')
-                    BroadcastMessage(json.dumps({"type": "tts_save", "wav_data": wav_data}))
+                print("TTS failed")
 
     if msgObj["type"] == "tts_voice_save_req":
         if silero.init():
