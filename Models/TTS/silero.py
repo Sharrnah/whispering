@@ -8,14 +8,16 @@ import os
 from pydub import AudioSegment
 import settings
 from scipy.io.wavfile import write
+import re
+import num2words
 
 tts = None
-
 
 cache_path = Path(Path.cwd() / ".cache" / "silero-cache")
 os.makedirs(cache_path, exist_ok=True)
 voices_path = Path(cache_path / "voices")
 os.makedirs(voices_path, exist_ok=True)
+
 
 #  https://github.com/snakers4/silero-models#standalone-use
 
@@ -118,6 +120,14 @@ class Silero:
         else:
             print("No generated random voice to save")
 
+    def _preprocess_tts(self, text):
+        # replace all numbers with their word representations
+        text = re.sub(r"(\d+)", lambda x: num2words.num2words(int(x.group(0)), lang=self.lang), text)
+
+        # replace parts the tts has trouble with
+        text = text.replace("...", ".")
+        return text
+
     def tts(self, text):
         voice_path = None
         if settings.GetOption('tts_voice') == 'last':
@@ -126,12 +136,13 @@ class Silero:
         else:
             self.speaker = settings.GetOption('tts_voice')
 
-        # Try to load model repo from github or locally
+        # Try to load model repo from GitHub or locally
         if not self.load():
             return None, None
 
         # Try to generate tts
         try:
+            text = self._preprocess_tts(text)
             audio = self.model.apply_tts(text=text,
                                          speaker=self.speaker,
                                          sample_rate=self.sample_rate,

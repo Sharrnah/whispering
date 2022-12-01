@@ -27,3 +27,4 @@ easyocr
 mss
 pyaudio
 scipy
+num2words
