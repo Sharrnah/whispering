@@ -102,7 +102,7 @@ async def handler(websocket):
     try:
         async for message in websocket:
             msgObj = json.loads(message)
-            print(msgObj)
+            print(message.encode('utf-8'))
             websocketMessageHandler(msgObj)
 
         await websocket.wait_closed()

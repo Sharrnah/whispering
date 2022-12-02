@@ -94,8 +94,6 @@ def SaveYaml(path):
         del to_save_settings['lang_swap']
     if "verbose" in to_save_settings:
         del to_save_settings['verbose']
-    if "osc_auto_processing_enabled" in to_save_settings:
-        del to_save_settings['osc_auto_processing_enabled']
 
     with open(path, "w") as f:
         yaml.dump(to_save_settings, f)

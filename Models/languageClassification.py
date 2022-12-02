@@ -26,6 +26,8 @@ def classify(text):
         downloader.download_extract(MODEL_LINKS["lid218e"]["urls"], str(ct_model_path.resolve()), MODEL_LINKS["lid218e"]["checksum"])
 
     model = fasttext.load_model(str(pretrained_lang_model_file.resolve()))
+
+    text = text.replace("\n", " ")
     predictions = model.predict(text, k=1)
 
     return predictions[0][0].replace('__label__', '')

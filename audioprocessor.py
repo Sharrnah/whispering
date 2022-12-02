@@ -109,8 +109,11 @@ def whisper_result_handling(result):
             send_message(predicted_text, result)
 
         if settings.GetOption("tts_answer") and silero.init():
-            silero_wav, sample_rate = silero.tts.tts(predicted_text)
-            silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
+            try:
+                silero_wav, sample_rate = silero.tts.tts(predicted_text)
+                silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
+            except Exception as e:
+                print("Error while playing TTS audio: " + str(e))
 
 
 def send_message(predicted_text, result_obj):
