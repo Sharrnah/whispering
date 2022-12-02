@@ -343,7 +343,7 @@
                   let trg_lang = document.querySelector('#settings #trg_lang').value;
                   let translate_text = document.querySelector('#translate_textarea').value;
 
-                  let sendData = { type: "translate_req", text: translate_text, from_lang: src_lang, to_lang: trg_lang };
+                  let sendData = { type: "translate_req", value:{text: translate_text, from_lang: src_lang, to_lang: trg_lang} };
                   ws.send(JSON.stringify(sendData));
                }
 
@@ -354,7 +354,7 @@
                   let src_lang = document.querySelector('#settings #src_lang').value;
                   let trg_lang = document.querySelector('#settings #trg_lang').value;
 
-                  let sendData = { type: "ocr_req", ocr_lang: ocr_lang, from_lang: src_lang, to_lang: trg_lang };
+                  let sendData = { type: "ocr_req", value:{ocr_lang: ocr_lang, from_lang: src_lang, to_lang: trg_lang} };
                   ws.send(JSON.stringify(sendData));
                }
 
@@ -400,7 +400,7 @@
                      return;
                   }
 
-                  let sendData = { type: "tts_req", text: text, to_device: send_to_device, download: download };
+                  let sendData = { type: "tts_req", value:{text: text, to_device: send_to_device, download: download} };
                   ws.send(JSON.stringify(sendData));
                }
                // save TTS voice
