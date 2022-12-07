@@ -35,6 +35,8 @@ class Silero:
     last_voice = str(Path(voices_path / "last_voice.pt").resolve())
 
     def __init__(self):
+        self.device = "cuda" if settings.GetOption("tts_ai_device") == "cuda" or settings.GetOption("tts_ai_device") == "auto" else "cpu"
+
         models_config_file = str(Path(cache_path / 'latest_silero_models.yml').resolve())
 
         torch.hub.download_url_to_file('https://raw.githubusercontent.com/snakers4/silero-models/master/models.yml',
