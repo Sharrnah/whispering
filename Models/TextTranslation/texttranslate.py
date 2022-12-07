@@ -45,11 +45,20 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
     translation_text = ""
     match get_current_translator():
         case "ARGOS":
-            translation_text = texttranslateARGOS.TranslateLanguage(text, from_code, to_code)
+            try:
+                translation_text = texttranslateARGOS.TranslateLanguage(text, from_code, to_code)
+            except Exception as e:
+                print("Error: " + str(e))
         case "M2M100":
-            translation_text = texttranslateM2M100_CTranslate2.translate_language(text, from_code, to_code)
+            try:
+                translation_text = texttranslateM2M100_CTranslate2.translate_language(text, from_code, to_code)
+            except Exception as e:
+                print("Error: " + str(e))
         case "NLLB200":
-            translation_text, from_code, to_code = texttranslateNLLB200.translate_language(text, from_code, to_code, as_iso1)
+            try:
+                translation_text, from_code, to_code = texttranslateNLLB200.translate_language(text, from_code, to_code, as_iso1)
+            except Exception as e:
+                print("Error: " + str(e))
     if to_romaji:
         translation_text = convert_to_romaji(translation_text)
 

@@ -126,6 +126,10 @@ class Silero:
 
         # replace parts the tts has trouble with
         text = text.replace("...", ".")
+
+        if not text.endswith(".") or not text.endswith("!") or not text.endswith("?") or not text.endswith(",") or not text.endswith(";") or not text.endswith(":") or not text.endswith(")") or not text.endswith("]"):
+            text += "."
+
         return text
 
     def tts(self, text):

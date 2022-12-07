@@ -46,8 +46,7 @@ from whisper import available_models, audio as whisper_audio
 @click.option("--config", default=None, help="Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]", type=str)
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 @click.pass_context
-def main(ctx, devices, device_index, device_out_index, sample_rate, task, model, language, condition_on_previous_text, energy, dynamic_energy, pause, phrase_time_limit, osc_ip, osc_port,
-         osc_address, osc_convert_ascii, websocket_ip, websocket_port, ai_device, txt_translator, txt_translator_size, txt_translator_device, ocr_window_name, flan_enabled, open_browser, config, verbose):
+def main(ctx, devices, device_index, sample_rate, energy, dynamic_energy, pause, phrase_time_limit, txt_translator_device, open_browser, config, verbose, **kwargs):
 
     # Load settings from file
     if config is not None:
@@ -85,18 +84,19 @@ def main(ctx, devices, device_index, device_out_index, sample_rate, task, model,
     print("###################################")
 
     # set initial settings
-    settings.IsArgumentSetting(ctx, "task") and settings.SetOption("whisper_task", task)
-    settings.IsArgumentSetting(ctx, "device_out_index") and settings.SetOption("device_out_index", (device_out_index if device_out_index > -1 else None))
+    settings.SetOption("whisper_task", settings.GetArgumentSettingFallback(ctx, "task", "whisper_task"))
+    device_out_index = settings.GetArgumentSettingFallback(ctx, "device_out_index", "device_out_index")
+    settings.SetOption("device_out_index", (device_out_index if device_out_index is None or device_out_index > -1 else None))
 
-    settings.IsArgumentSetting(ctx, "condition_on_previous_text") and settings.SetOption("condition_on_previous_text", condition_on_previous_text)
-    settings.IsArgumentSetting(ctx, "model") and settings.SetOption("model", model)
+    settings.SetOption("condition_on_previous_text", settings.GetArgumentSettingFallback(ctx, "condition_on_previous_text", "condition_on_previous_text"))
+    model = settings.SetOption("model", settings.GetArgumentSettingFallback(ctx, "model", "model"))
 
-    settings.IsArgumentSetting(ctx, "language") and settings.SetOption("current_language", language)
+    language = settings.SetOption("current_language", settings.GetArgumentSettingFallback(ctx, "language", "current_language"))
 
     # check if english only model is loaded, and configure whisper languages accordingly.
     if model.endswith(".en") and language not in {"en", "English"}:
         if language is not None:
-            print(f"{model} is an English-only model but receipted '{language}'; using English instead.")
+            print(f"{model} is an English-only model but received '{language}' as language; using English instead.")
 
         print(f"{model} is an English-only model. only English speech is supported.")
         settings.SetOption("current_language", "en")
@@ -104,24 +104,24 @@ def main(ctx, devices, device_index, device_out_index, sample_rate, task, model,
     else:
         settings.SetOption("whisper_languages", audioprocessor.whisper_get_languages())
 
-    settings.IsArgumentSetting(ctx, "ai_device") and settings.SetOption("ai_device", ai_device)
+    settings.SetOption("ai_device", settings.GetArgumentSettingFallback(ctx, "ai_device", "ai_device"))
     settings.SetOption("verbose", verbose)
 
-    settings.IsArgumentSetting(ctx, "osc_ip") and settings.SetOption("osc_ip", osc_ip)
-    settings.IsArgumentSetting(ctx, "osc_port") and settings.SetOption("osc_port", osc_port)
-    settings.IsArgumentSetting(ctx, "osc_address") and settings.SetOption("osc_address", osc_address)
-    settings.IsArgumentSetting(ctx, "osc_convert_ascii") and settings.SetOption("osc_convert_ascii", str2bool(osc_convert_ascii))
+    osc_ip = settings.SetOption("osc_ip", settings.GetArgumentSettingFallback(ctx, "osc_ip", "osc_ip"))
+    osc_port = settings.SetOption("osc_port", settings.GetArgumentSettingFallback(ctx, "osc_port", "osc_port"))
+    settings.SetOption("osc_address", settings.GetArgumentSettingFallback(ctx, "osc_address", "osc_address"))
+    settings.SetOption("osc_convert_ascii", str2bool(settings.GetArgumentSettingFallback(ctx, "osc_convert_ascii", "osc_convert_ascii")))
 
-    settings.IsArgumentSetting(ctx, "websocket_ip") and settings.SetOption("websocket_ip", websocket_ip)
-    settings.IsArgumentSetting(ctx, "websocket_port") and settings.SetOption("websocket_port", websocket_port)
+    websocket_ip = settings.SetOption("websocket_ip", settings.GetArgumentSettingFallback(ctx, "websocket_ip", "websocket_ip"))
+    websocket_port = settings.SetOption("websocket_port", settings.GetArgumentSettingFallback(ctx, "websocket_port", "websocket_port"))
 
-    settings.IsArgumentSetting(ctx, "txt_translator") and settings.SetOption("txt_translator", txt_translator)
-    settings.IsArgumentSetting(ctx, "txt_translator_size") and settings.SetOption("txt_translator_size", txt_translator_size)
+    txt_translator = settings.SetOption("txt_translator", settings.GetArgumentSettingFallback(ctx, "txt_translator", "txt_translator"))
+    settings.SetOption("txt_translator_size", settings.GetArgumentSettingFallback(ctx, "txt_translator_size", "txt_translator_size"))
     texttranslate.SetDevice(txt_translator_device)
 
-    settings.IsArgumentSetting(ctx, "ocr_window_name") and settings.SetOption("ocr_window_name", ocr_window_name)
+    settings.SetOption("ocr_window_name", settings.GetArgumentSettingFallback(ctx, "ocr_window_name", "ocr_window_name"))
 
-    settings.IsArgumentSetting(ctx, "flan_enabled") and settings.SetOption("flan_enabled", flan_enabled)
+    settings.SetOption("flan_enabled", settings.GetArgumentSettingFallback(ctx, "flan_enabled", "flan_enabled"))
 
     if websocket_ip != "0":
         websocket.StartWebsocketServer(websocket_ip, websocket_port)
@@ -168,11 +168,14 @@ def main(ctx, devices, device_index, device_out_index, sample_rate, task, model,
 
 
 def str2bool(string):
-    str2val = {"true": True, "false": False}
-    if string.lower() in str2val:
-        return str2val[string.lower()]
+    if type(string) == str:
+        str2val = {"true": True, "false": False}
+        if string.lower() in str2val:
+            return str2val[string.lower()]
+        else:
+            raise ValueError(f"Expected one of {set(str2val.keys())}, got {string}")
     else:
-        raise ValueError(f"Expected one of {set(str2val.keys())}, got {string}")
+        return bool(string)
 
 
 main()

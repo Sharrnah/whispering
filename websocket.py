@@ -16,7 +16,7 @@ from Models.TTS import silero
 WS_CLIENTS = set()
 
 
-def websocketMessageHandler(msgObj):
+def websocketMessageHandler(msgObj, websocket):
 
     if msgObj["type"] == "setting_change":
         settings.SetOption(msgObj["name"], msgObj["value"])
@@ -42,13 +42,18 @@ def websocketMessageHandler(msgObj):
             silero_wav, sample_rate = silero.tts.tts(msgObj["value"]["text"])
             if silero_wav is not None:
                 if msgObj["value"]["to_device"]:
-                    silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
+                    if "device_index" in msgObj["value"]:
+                        silero.tts.play_audio(silero_wav, msgObj["value"]["device_index"])
+                    else:
+                        silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
                 else:
-                    BroadcastMessage(json.dumps({"type": "tts_result", "wav_data": silero_wav.tolist(), "sample_rate": sample_rate}))
+                    AnswerMessage(websocket, json.dumps({"type": "tts_result", "wav_data": silero_wav.tolist(), "sample_rate": sample_rate}))
+                    #BroadcastMessage(json.dumps({"type": "tts_result", "wav_data": silero_wav.tolist(), "sample_rate": sample_rate}))
                     if msgObj["value"]["download"]:
                         wav_data = silero.tts.return_wav_file_binary(silero_wav)
                         wav_data = base64.b64encode(wav_data).decode('utf-8')
-                        BroadcastMessage(json.dumps({"type": "tts_save", "wav_data": wav_data}))
+                        AnswerMessage(websocket, json.dumps({"type": "tts_save", "wav_data": wav_data}))
+                        #BroadcastMessage(json.dumps({"type": "tts_save", "wav_data": wav_data}))
             else:
                 print("TTS failed")
 
@@ -63,14 +68,14 @@ def websocketMessageHandler(msgObj):
 
     if msgObj["type"] == "get_windows_list":
         windows_list = WindowCapture.list_window_names()
-        BroadcastMessage(json.dumps({"type": "windows_list", "data": windows_list}))
+        AnswerMessage(websocket, json.dumps({"type": "windows_list", "data": windows_list}))
 
     if msgObj["type"] == "send_osc":
         osc_address = settings.GetOption("osc_address")
         osc_ip = settings.GetOption("osc_ip")
         osc_port = settings.GetOption("osc_port")
         if osc_ip != "0":
-            VRC_OSCLib.Chat(msgObj["text"], True, osc_address, IP=osc_ip, PORT=osc_port)
+            VRC_OSCLib.Chat(msgObj["value"], True, osc_address, IP=osc_ip, PORT=osc_port)
 
 
 async def handler(websocket):
@@ -84,12 +89,7 @@ async def handler(websocket):
     available_languages = easyocr.get_installed_language_names()
     await send(websocket, json.dumps({"type": "available_img_languages", "data": available_languages}))
 
-    # send all available TTS models
-    if silero.init():
-        available_tts_models = silero.tts.list_models_indexed()
-        await send(websocket, json.dumps({"type": "available_tts_models", "data": available_tts_models}))
-
-    # send all available TTS models
+    # send all available TTS models + voices
     if silero.init():
         available_tts_models = silero.tts.list_models_indexed()
         await send(websocket, json.dumps({"type": "available_tts_models", "data": available_tts_models}))
@@ -104,7 +104,7 @@ async def handler(websocket):
         async for message in websocket:
             msgObj = json.loads(message)
             print(message.encode('utf-8'))
-            websocketMessageHandler(msgObj)
+            websocketMessageHandler(msgObj, websocket)
 
         await websocket.wait_closed()
     except websockets.ConnectionClosedError as error:
@@ -125,6 +125,17 @@ async def broadcast(message):
     for websocket in WS_CLIENTS:
         asyncio.create_task(send(websocket, message))
 
+def AnswerMessage(websocket, message):
+    # detect if a loop is running and run on existing loop or asyncio.run
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # 'RuntimeError: There is no current event loop...'
+        loop = None
+
+    if loop and loop.is_running():
+        loop.create_task(send(websocket, message))
+    else:
+        asyncio.run(send(websocket, message))
 
 def BroadcastMessage(message):
     # detect if a loop is running and run on existing loop or asyncio.run

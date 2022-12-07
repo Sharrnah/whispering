@@ -35,7 +35,7 @@ TRANSLATE_SETTINGS = {
     "osc_auto_processing_enabled": True,  # Toggle auto sending of OSC messages on WhisperAI or Flan results. (not saved)
 
     # websocket settings
-    "websocket_ip": "0",
+    "websocket_ip": "127.0.0.1",
     "websocket_port": 5000,
 
     # TTS settings
@@ -71,7 +71,7 @@ def SetOption(setting, value):
         TRANSLATE_SETTINGS[setting] = value
         # Save settings
         SaveYaml(SETTINGS_PATH)
-
+    return value
 
 def GetOption(setting):
     return TRANSLATE_SETTINGS[setting]
@@ -94,6 +94,10 @@ def SaveYaml(path):
         del to_save_settings['lang_swap']
     if "verbose" in to_save_settings:
         del to_save_settings['verbose']
+    if "transl_result_textarea_savetts_voice" in to_save_settings:
+        del to_save_settings['transl_result_textarea_savetts_voice']
+    if "transl_result_textarea_sendtts_download" in to_save_settings:
+        del to_save_settings['transl_result_textarea_sendtts_download']
 
     with open(path, "w") as f:
         yaml.dump(to_save_settings, f)
@@ -101,3 +105,11 @@ def SaveYaml(path):
 
 def IsArgumentSetting(ctx, argument_name):
     return ctx.get_parameter_source(argument_name) == core.ParameterSource.COMMANDLINE
+
+
+# Get Setting from argument if it is set, otherwise get setting from settings file
+def GetArgumentSettingFallback(ctx, argument_name, fallback_setting_name):
+    if IsArgumentSetting(ctx, argument_name):
+        return ctx.params[argument_name]
+    else:
+        return GetOption(fallback_setting_name)

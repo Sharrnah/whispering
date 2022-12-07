@@ -384,7 +384,7 @@
                function sendOSCTask() {
                   let translated_text = document.querySelector('#transl_result_textarea').value;
 
-                  let sendData = { type: "send_osc", text: translated_text };
+                  let sendData = { type: "send_osc", value: translated_text };
                   ws.send(JSON.stringify(sendData));
                }
 

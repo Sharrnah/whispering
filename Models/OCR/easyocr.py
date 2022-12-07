@@ -106,7 +106,11 @@ def init_reader(languages):
 
     if reader is None or CURRENT_LANGUAGES != languages:
         CURRENT_LANGUAGES = languages
-        reader = easyocr.Reader(CURRENT_LANGUAGES, model_storage_directory=str(model_path.resolve()))
+        try:
+            reader = easyocr.Reader(CURRENT_LANGUAGES, model_storage_directory=str(model_path.resolve()))
+        except Exception as e:
+            print(e)
+            return False
 
 
 def get_installed_language_names():
@@ -120,12 +124,17 @@ def initialize_window_capture(window_name):
 
 def run_image_processing(window_name, src_languages):
     init_reader(src_languages)
+    result = ""
+    if reader is not None:
+        try:
+            win_cap = initialize_window_capture(window_name)
 
-    win_cap = initialize_window_capture(window_name)
+            # get an updated image of the game
+            screenshot = win_cap.get_screenshot_mss()
 
-    # get an updated image of the game
-    screenshot = win_cap.get_screenshot_mss()
-
-    result = reader.readtext(screenshot, detail=0, paragraph=True)
+            result = reader.readtext(screenshot, detail=0, paragraph=True)
+        except Exception as e:
+            print(e)
+            return False
 
     return result
