@@ -3,6 +3,7 @@ import yaml
 import os
 from pathlib import Path
 from click import core
+from whisper import available_models
 
 SETTINGS_PATH = Path(Path.cwd() / 'settings.yaml')
 
@@ -113,3 +114,16 @@ def GetArgumentSettingFallback(ctx, argument_name, fallback_setting_name):
         return ctx.params[argument_name]
     else:
         return GetOption(fallback_setting_name)
+
+
+def GetAvailableSettingValues():
+    possible_settings = {
+        "ai_device": ["None", "cuda", "cpu"],
+        "model": available_models(),
+        "whisper_task": ["transcribe", "translate"],
+        "tts_ai_device": ["cuda", "cpu"],
+        "txt_translator": ["NLLB200", "M2M100", "ARGOS"],
+        "txt_translator_size": ["small", "medium", "large"],
+    }
+
+    return possible_settings

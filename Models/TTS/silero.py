@@ -29,13 +29,17 @@ class Silero:
     sample_rate = 48000
     speaker = 'random'
     models = []
-    device = "cuda" if settings.GetOption("tts_ai_device") == "cuda" or settings.GetOption("tts_ai_device") == "auto" else "cpu"
+    device = "cpu"  # cpu or cuda
 
     last_speaker = None
     last_voice = str(Path(voices_path / "last_voice.pt").resolve())
 
     def __init__(self):
         self.device = "cuda" if settings.GetOption("tts_ai_device") == "cuda" or settings.GetOption("tts_ai_device") == "auto" else "cpu"
+        # if cuda is not available, use cpu
+        if self.device == "cuda" and not torch.cuda.is_available():
+            print("CUDA not available, using CPU for TTS Model")
+            self.device = "cpu"
 
         models_config_file = str(Path(cache_path / 'latest_silero_models.yml').resolve())
 

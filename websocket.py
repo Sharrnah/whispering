@@ -96,7 +96,10 @@ async def handler(websocket):
         silero.tts.load()
         await send(websocket, json.dumps({"type": "available_tts_voices", "data": silero.tts.list_voices()}))
 
-    # send all current text translation settings
+    # send all available setting values
+    await send(websocket, json.dumps({"type": "settings_values", "data": settings.GetAvailableSettingValues()}))
+
+    # send all current settings
     await send(websocket, json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))
 
     WS_CLIENTS.add(websocket)
