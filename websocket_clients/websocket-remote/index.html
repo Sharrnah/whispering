@@ -553,6 +553,9 @@
                         // add all available models to language optgroup
                         for (let i2 = 0; i2 < opt.models.length; i2++) {
                            let opt2 = opt.models[i2];
+                           if (!opt2.includes("v3")) {
+                              continue;
+                           }
 
                            let el = document.createElement("option");
                            el.textContent = opt2;
