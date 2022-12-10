@@ -176,10 +176,17 @@ def whisper_worker():
 
         whisper_condition_on_previous_text = settings.GetOption("condition_on_previous_text")
 
-        result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
-                                        condition_on_previous_text=whisper_condition_on_previous_text)
+        # some fix for invalid whisper language configs
+        if whisper_language == "" or whisper_language == "auto" or whisper_language == "null":
+            whisper_language = None
 
-        whisper_result_handling(result)
+        try:
+
+            result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
+                                        condition_on_previous_text=whisper_condition_on_previous_text)
+            whisper_result_handling(result)
+        except Exception as e:
+            print("Error while processing audio: " + str(e))
 
         q.task_done()
 

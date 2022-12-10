@@ -1,4 +1,7 @@
 import json
+import signal
+import sys
+
 #import speech_recognition_patch as sr  # this is a patched version of speech_recognition. (disabled for now because of freeze issues)
 import speech_recognition as sr
 import audioprocessor
@@ -12,6 +15,16 @@ import remote_opener
 from Models.TextTranslation import texttranslate
 import pyaudiowpatch as pyaudio
 from whisper import available_models, audio as whisper_audio
+
+
+def sigterm_handler(_signo, _stack_frame):
+    # it raises SystemExit(0):
+    print('Process died')
+    sys.exit(0)
+
+
+signal.signal(signal.SIGTERM, sigterm_handler)
+signal.signal(signal.SIGINT, sigterm_handler)
 
 
 @click.command()
@@ -61,6 +74,7 @@ def main(ctx, devices, device_index, sample_rate, energy, dynamic_energy, pause,
         print("-------------------------------------------------------------------")
         for device in audio.get_device_info_generator():
             device_list_index = device["index"]
+            #device_list_api = device["hostApi"]
             device_list_name = device["name"]
             device_list_sample_rate = int(device["defaultSampleRate"])
             device_list_max_channels = audio.get_device_info_by_index(device_list_index)['maxInputChannels']
