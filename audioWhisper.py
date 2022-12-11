@@ -59,7 +59,7 @@ signal.signal(signal.SIGINT, sigterm_handler)
 @click.option("--config", default=None, help="Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]", type=str)
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 @click.pass_context
-def main(ctx, devices, device_index, sample_rate, dynamic_energy, txt_translator_device, open_browser, config, verbose, **kwargs):
+def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, config, verbose, **kwargs):
 
     # Load settings from file
     if config is not None:
@@ -139,6 +139,8 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, txt_translator
 
     txt_translator = settings.SetOption("txt_translator", settings.GetArgumentSettingFallback(ctx, "txt_translator", "txt_translator"))
     settings.SetOption("txt_translator_size", settings.GetArgumentSettingFallback(ctx, "txt_translator_size", "txt_translator_size"))
+
+    txt_translator_device = settings.SetOption("txt_translator_device", settings.GetArgumentSettingFallback(ctx, "txt_translator_device", "txt_translator_device"))
     texttranslate.SetDevice(txt_translator_device)
 
     settings.SetOption("ocr_window_name", settings.GetArgumentSettingFallback(ctx, "ocr_window_name", "ocr_window_name"))

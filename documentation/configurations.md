@@ -35,7 +35,7 @@ _These take precedence to the [settings file](#settings-file). But not all optio
 |       `--websocket_port`       |      5000      |                                                                          Port where Websocket Server listens on.                                                                          |
 |       `--txt_translator`       |     M2M100     |                                                  The Model the AI is loading for text translations. can be 'M2M100', 'ARGOS' or 'None'.                                                   |
 |    `--txt_translator_size`     |     small      | The Model size of M2M100 or NLLB200 text translator is used. can be 'small', 'medium', 'large' for NLLB200, or 'small' or 'large' for M2M100. (has no effect with --txt_translator ARGOS) |
-|   `--txt_translator_device`    |      auto      |                               The device used for M2M100 translation. can be 'auto', 'cuda' or 'cpu' (has no effect with --txt_translator ARGOS or NLLB200)                               |
+|   `--txt_translator_device`    |      auto      |                                    The device used for M2M100 translation. can be 'auto', 'cuda' or 'cpu' (has no effect with --txt_translator ARGOS)                                     |
 |      `--ocr_window_name`       |     VRChat     |                                                                   Window name of the application for OCR translations.                                                                    |
 |        `--flan_enabled`        |     False      |                                                       Enable FLAN-T5 A.I. (General A.I. which can be used for Question Answering.)                                                        |
 |        `--open_browser`        |     False      |                                             Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)                                              |
@@ -58,6 +58,7 @@ condition_on_previous_text: true  # if enabled, Whisper will condition on previo
 
 # text translate settings
 txt_translate: false  # if enabled, pipes whisper A.I. results through text translator.
+txt_translator_device: 'cuda'  # can be "cuda" or "cpu".
 src_lang: auto  # source language for text translator.
 trg_lang: fra_Latn  # target language for text translator.
 txt_ascii: false  # if enabled, text translator will convert text to romaji.

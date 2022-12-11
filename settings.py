@@ -10,6 +10,7 @@ SETTINGS_PATH = Path(Path.cwd() / 'settings.yaml')
 TRANSLATE_SETTINGS = {
     # text translate settings
     "txt_translate": False,  # if enabled, pipes whisper A.I. results through text translator
+    "txt_translator_device": "auto",  # auto, cuda, cpu
     "src_lang": "auto",  # source language for text translator (Whisper A.I. in translation mode always translates to "en")
     "trg_lang": "fra_Latn",  # target language for text translator
     "txt_ascii": False,  # if enabled, text translator will convert text to romaji.

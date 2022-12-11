@@ -66,4 +66,5 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
 
 
 def SetDevice(option):
+    texttranslateNLLB200.set_device(option)
     texttranslateM2M100_CTranslate2.set_device(option)

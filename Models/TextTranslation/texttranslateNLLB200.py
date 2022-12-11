@@ -1,3 +1,4 @@
+import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, models
 import os
 import downloader
@@ -450,9 +451,18 @@ os.makedirs(ct_model_path, exist_ok=True)
 model = AutoModelForSeq2SeqLM
 tokenizer: models.nllb.NllbTokenizer = AutoTokenizer  # type: ignore
 
+torch_device = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 def get_installed_language_names():
     return tuple([{"code": code, "name": language} for language, code in LANGUAGES.items()])
+
+
+def set_device(device: str):
+    global torch_device
+    if device == "cuda" or device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    torch_device = device
 
 
 def load_model(size="small"):
@@ -469,7 +479,9 @@ def load_model(size="small"):
 
     model_path_string = str(model_path.resolve())
 
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_path_string)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_path_string).to(torch_device)
+    if torch_device == 'cuda':
+        model = model.half()
     tokenizer = AutoTokenizer.from_pretrained(model_path_string)
 
     print(f"NLLB-200 model loaded.")
@@ -495,7 +507,7 @@ def translate_language(text, from_code, to_code, as_iso1=False):
         return text
 
     tokenizer.src_lang = from_code
-    inputs = tokenizer(text, return_tensors="pt")
+    inputs = tokenizer(text, return_tensors="pt").to(torch_device)
     translated_tokens = model.generate(** inputs, forced_bos_token_id=tokenizer.lang_code_to_id[to_code], max_length=200)
 
     translation_text = tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
