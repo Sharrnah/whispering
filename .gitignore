@@ -1,4 +1,7 @@
+.idea/
 __pycache__
 /dist_files/ffmpeg/
 /audioWhisper.spec
 *.yaml
+/build/
+/dist/
