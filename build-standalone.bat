@@ -1,5 +1,6 @@
 pip install -U pyinstaller
 pyinstaller audioWhisper.py -y ^
+            --python-option=-u ^
             --hidden-import=pytorch --collect-data torch --copy-metadata torch ^
             --copy-metadata tqdm ^
             --copy-metadata regex ^

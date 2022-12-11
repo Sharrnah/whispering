@@ -28,7 +28,7 @@ TRANSLATE_SETTINGS = {
     "condition_on_previous_text": False,  # if enabled, Whisper will condition on previous text. (more prone to loops or getting stuck)
 
     # OSC settings
-    "osc_ip": "0",  # OSC IP address. set to "0" to disable.
+    "osc_ip": "127.0.0.1",  # OSC IP address. set to "0" to disable.
     "osc_port": 9000,
     "osc_address": "/chatbox/input",
     "osc_typing_indicator": True,

@@ -99,8 +99,10 @@ class Silero:
         return True
 
     def load(self):
-        self.set_language(settings.GetOption('tts_model')[0])
-        self.set_model(settings.GetOption('tts_model')[1])
+        if len(settings.GetOption('tts_model')) == 2:
+            self.set_language(settings.GetOption('tts_model')[0])
+            self.set_model(settings.GetOption('tts_model')[1])
+
 
         device = torch.device(self.device)
 

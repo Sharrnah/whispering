@@ -27,7 +27,7 @@ _These take precedence to the [settings file](#settings-file). But not all optio
 |       `--dynamic_energy`       |     False      |                                                                                  Enable dynamic energy.                                                                                   |
 |           `--pause`            |      0.8       |                                                                               Pause time before entry ends.                                                                               |
 |     `--phrase_time_limit`      |      None      |                                                   Phrase time limit (in seconds) before entry ends to break up long recognition tasks.                                                    |
-|           `--osc_ip`           |       0        |                                              IP to send OSC messages to. Set to '0' to disable. (For VRChat this should mostly be 127.0.0.1)                                              |
+|           `--osc_ip`           |   127.0.0.1    |                                              IP to send OSC messages to. Set to '0' to disable. (For VRChat this should mostly be 127.0.0.1)                                              |
 |          `--osc_port`          |      9000      |                                                                Port to send OSC message to. ('9000' as default for VRChat)                                                                |
 |        `--osc_address`         | /chatbox/input |                                                    The Address the OSC messages are send to. ('/chatbox/input' as default for VRChat)                                                     |
 |     `--osc_convert_ascii`      |     False      |                                                                  Convert Text to ASCII compatible when sending over OSC.                                                                  |
@@ -69,7 +69,7 @@ websocket_ip: 127.0.0.1
 websocket_port: 5000
 
 # OSC settings
-osc_ip: '0'
+osc_ip: '127.0.0.1'
 osc_port: 9000
 osc_address: /chatbox/input
 osc_typing_indicator: true

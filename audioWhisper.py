@@ -43,7 +43,7 @@ signal.signal(signal.SIGINT, sigterm_handler)
 @click.option("--dynamic_energy", default=False, is_flag=True, help="Flag to enable dynamic engergy", type=bool)
 @click.option("--pause", default=0.8, help="Pause time before entry ends", type=float)
 @click.option("--phrase_time_limit", default=None, help="phrase time limit before entry ends to break up long recognitions.", type=float)
-@click.option("--osc_ip", default="0", help="IP to send OSC message to. Set to '0' to disable", type=str)
+@click.option("--osc_ip", default="127.0.0.1", help="IP to send OSC message to. Set to '0' to disable", type=str)
 @click.option("--osc_port", default=9000, help="Port to send OSC message to. ('9000' as default for VRChat)", type=int)
 @click.option("--osc_address", default="/chatbox/input", help="The Address the OSC messages are send to. ('/chatbox/input' as default for VRChat)", type=str)
 @click.option("--osc_convert_ascii", default='False', help="Convert Text to ASCII compatible when sending over OSC.", type=str)
@@ -59,7 +59,7 @@ signal.signal(signal.SIGINT, sigterm_handler)
 @click.option("--config", default=None, help="Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]", type=str)
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 @click.pass_context
-def main(ctx, devices, device_index, sample_rate, energy, dynamic_energy, pause, phrase_time_limit, txt_translator_device, open_browser, config, verbose, **kwargs):
+def main(ctx, devices, device_index, sample_rate, dynamic_energy, txt_translator_device, open_browser, config, verbose, **kwargs):
 
     # Load settings from file
     if config is not None:
@@ -106,6 +106,14 @@ def main(ctx, devices, device_index, sample_rate, energy, dynamic_energy, pause,
     model = settings.SetOption("model", settings.GetArgumentSettingFallback(ctx, "model", "model"))
 
     language = settings.SetOption("current_language", settings.GetArgumentSettingFallback(ctx, "language", "current_language"))
+
+    phrase_time_limit = settings.SetOption("phrase_time_limit", settings.GetArgumentSettingFallback(ctx, "phrase_time_limit", "phrase_time_limit"))
+    if phrase_time_limit == 0:
+        phrase_time_limit = None
+
+    pause = settings.SetOption("pause", settings.GetArgumentSettingFallback(ctx, "pause", "pause"))
+
+    energy = settings.SetOption("energy", settings.GetArgumentSettingFallback(ctx, "energy", "energy"))
 
     # check if english only model is loaded, and configure whisper languages accordingly.
     if model.endswith(".en") and language not in {"en", "English"}:
