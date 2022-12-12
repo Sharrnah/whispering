@@ -18,40 +18,40 @@ import downloader
 MODEL_LINKS = {
     "small": {
         "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5%2Fsmall.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Fsmall.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/small.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/small.zip",
             "https://s3.libs.space:9000/ai-models/FLAN-T5/small.zip",
         ],
         "checksum": "34415fe1e13813e5e3037b950794197870deb5573b0de899d785a1094c1a5e0e"
     },
     "base": {
         "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5%2Fbase.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Fbase.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/base.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/base.zip",
             "https://s3.libs.space:9000/ai-models/FLAN-T5/base.zip",
          ],
         "checksum": "577e84801ac0a0dac18a8c66962a688b828f3a567546e988879ae5279d51fcbe"
      },
     "large": {
         "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5%2Flarge.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Flarge.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/large.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/large.zip",
             "https://s3.libs.space:9000/ai-models/FLAN-T5/large.zip",
         ],
         "checksum": "8a713559ffc9ba6ac1af3d8d24478261a085cac3d5448a934596379cb0420518"
     },
     "xl": {
         "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5%2Fxl.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Fxl.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/xl.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/xl.zip",
             "https://s3.libs.space:9000/ai-models/FLAN-T5/xl.zip",
         ],
         "checksum": "15c85799f083b284c73e724068a7ff95c901cd7b55a206a49661940ae5bd4778"
     },
     "xxl": {
         "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5%2Fxxl.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5%2Fxxl.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/xxl.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/xxl.zip",
             "https://s3.libs.space:9000/ai-models/FLAN-T5/xxl.zip",
         ],
         "checksum": "66c221e46e230714675ae2f1af86852d886ddb2b26ba9ca7f73acd6ed27160dc"

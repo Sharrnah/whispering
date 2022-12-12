@@ -113,16 +113,16 @@ LANGUAGES = {
 MODEL_LINKS = {
     "small": {
         "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/M2M100_ctranslate2%2Fm2m100_ct2_418m.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/M2M100_ctranslate2%2Fm2m100_ct2_418m.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/M2M100_ctranslate2/m2m100_ct2_418m.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/M2M100_ctranslate2/m2m100_ct2_418m.zip",
             "https://s3.libs.space:9000/ai-models/M2M100_ctranslate2/m2m100_ct2_418m.zip",
         ],
         "checksum": "aa2dc13ad93664021a5f3c16bf91028bd1145ccad622668a99292b11d832ebc6"
     },
     "large": {
         "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/M2M100_ctranslate2%2Fm2m100_ct2_12b.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/M2M100_ctranslate2%2Fm2m100_ct2_12b.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/M2M100_ctranslate2/m2m100_ct2_12b.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/M2M100_ctranslate2/m2m100_ct2_12b.zip",
             "https://s3.libs.space:9000/ai-models/M2M100_ctranslate2/m2m100_ct2_12b.zip",
         ],
         "checksum": "67657e00b42f1a12ce0b85e377212eae6747057c735d6edb8fe920d5eb583deb"
