@@ -13,6 +13,8 @@ import websocket
 import settings
 import remote_opener
 from Models.TextTranslation import texttranslate
+from Models import languageClassification
+from Models.LLM import flanLanguageModel
 import pyaudiowpatch as pyaudio
 from whisper import available_models, audio as whisper_audio
 
@@ -164,6 +166,12 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
         except Exception as e:
             print(e)
             pass
+
+    # Load language identification dependencies
+    languageClassification.download_model()
+
+    # Load FLAN-T5 dependencies
+    flanLanguageModel.init()
 
     # load the speech recognizer and set the initial energy threshold and pause threshold
     r = sr.Recognizer()

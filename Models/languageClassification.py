@@ -18,14 +18,26 @@ MODEL_LINKS = {
     }
 }
 
+model = None
 
-def classify(text):
+
+def download_model():
     pretrained_lang_model_file = Path(ct_model_path / "lid218e.bin")
-    if not pretrained_lang_model_file.exists():
+    if not pretrained_lang_model_file.is_file():
         print(f"Downloading LID (language identification) model...")
         downloader.download_extract(MODEL_LINKS["lid218e"]["urls"], str(ct_model_path.resolve()), MODEL_LINKS["lid218e"]["checksum"])
 
-    model = fasttext.load_model(str(pretrained_lang_model_file.resolve()))
+
+def classify(text):
+    global model
+    pretrained_lang_model_file = Path(ct_model_path / "lid218e.bin")
+    if not pretrained_lang_model_file.is_file():
+        print(f"Error: LID (language identification model missing.")
+        return ""
+
+    if model is None:
+        print(f"Loading LID (language identification) model...")
+        model = fasttext.load_model(str(pretrained_lang_model_file.resolve()))
 
     text = text.replace("\n", " ")
     predictions = model.predict(text, k=1)
