@@ -27,6 +27,9 @@ TRANSLATE_SETTINGS = {
     "current_language": None,  # can be None (auto) or any Whisper supported language.
     "model": "small",  # Whisper model size. Can be "tiny", "base", "small", "medium" or "large"
     "condition_on_previous_text": False,  # if enabled, Whisper will condition on previous text. (more prone to loops or getting stuck)
+    "energy": 300,  # energy of audio volume to start whisper processing. Can be 0-1000
+    "phrase_time_limit": 0,  # time limit for Whisper to generate a phrase. (0 = no limit)
+    "pause": 0.8,  # pause between phrases.
 
     # OSC settings
     "osc_ip": "127.0.0.1",  # OSC IP address. set to "0" to disable.
