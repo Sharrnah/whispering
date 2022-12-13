@@ -12,15 +12,13 @@ import VRC_OSCLib
 from Models.LLM import flanLanguageModel
 from Models.TTS import silero
 
-
 WS_CLIENTS = set()
 
 
 def websocketMessageHandler(msgObj, websocket):
-
     if msgObj["type"] == "setting_change":
         settings.SetOption(msgObj["name"], msgObj["value"])
-        BroadcastMessage(json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))  # broadcast updated settings to all clients
+        BroadcastMessage(json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}), exclude_client=websocket)  # broadcast updated settings to all clients
         # reload tts voices if tts model changed
         if msgObj["name"] == "tts_model":
             silero.tts.load()
@@ -35,7 +33,9 @@ def websocketMessageHandler(msgObj, websocket):
         window_name = settings.GetOption("ocr_window_name")
         ocr_result = easyocr.run_image_processing(window_name, ['en', msgObj["value"]["ocr_lang"]])
         translate_result, txt_from_lang, txt_to_lang = (texttranslate.TranslateLanguage(" -- ".join(ocr_result), msgObj["value"]["from_lang"], msgObj["value"]["to_lang"]))
-        BroadcastMessage(json.dumps({"type": "translate_result", "original_text": "\n".join(ocr_result), "translate_result": "\n".join(translate_result.split(" -- ")), "txt_from_lang": txt_from_lang, "txt_to_lang": txt_to_lang}))
+        BroadcastMessage(json.dumps(
+            {"type": "translate_result", "original_text": "\n".join(ocr_result), "translate_result": "\n".join(translate_result.split(" -- ")), "txt_from_lang": txt_from_lang,
+             "txt_to_lang": txt_to_lang}))
 
     if msgObj["type"] == "tts_req":
         if silero.init():
@@ -48,12 +48,10 @@ def websocketMessageHandler(msgObj, websocket):
                         silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
                 else:
                     AnswerMessage(websocket, json.dumps({"type": "tts_result", "wav_data": silero_wav.tolist(), "sample_rate": sample_rate}))
-                    #BroadcastMessage(json.dumps({"type": "tts_result", "wav_data": silero_wav.tolist(), "sample_rate": sample_rate}))
                     if msgObj["value"]["download"]:
                         wav_data = silero.tts.return_wav_file_binary(silero_wav)
                         wav_data = base64.b64encode(wav_data).decode('utf-8')
                         AnswerMessage(websocket, json.dumps({"type": "tts_save", "wav_data": wav_data}))
-                        #BroadcastMessage(json.dumps({"type": "tts_save", "wav_data": wav_data}))
             else:
                 print("TTS failed")
 
@@ -124,9 +122,11 @@ async def send(websocket, message):
         pass
 
 
-async def broadcast(message):
+async def broadcast(message, exclude_client=None):
     for websocket in WS_CLIENTS:
-        asyncio.create_task(send(websocket, message))
+        if websocket != exclude_client:
+            asyncio.create_task(send(websocket, message))
+
 
 def AnswerMessage(websocket, message):
     # detect if a loop is running and run on existing loop or asyncio.run
@@ -140,7 +140,8 @@ def AnswerMessage(websocket, message):
     else:
         asyncio.run(send(websocket, message))
 
-def BroadcastMessage(message):
+
+def BroadcastMessage(message, exclude_client=None):
     # detect if a loop is running and run on existing loop or asyncio.run
     try:
         loop = asyncio.get_running_loop()
@@ -148,9 +149,9 @@ def BroadcastMessage(message):
         loop = None
 
     if loop and loop.is_running():
-        loop.create_task(broadcast(message))
+        loop.create_task(broadcast(message, exclude_client))
     else:
-        asyncio.run(broadcast(message))
+        asyncio.run(broadcast(message, exclude_client))
 
 
 async def server_program(ip, port):
