@@ -189,6 +189,8 @@ def whisper_worker():
             print("Error while processing audio: " + str(e))
 
         q.task_done()
+        # send start info for processing indicator in websocket client
+        websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": False}))
 
 
 def start_whisper_thread():
