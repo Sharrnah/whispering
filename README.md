@@ -8,6 +8,7 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
 
 ## Content:
 - [Features](#features)
+- [Quickstart](#quickstart)
 - [Release Downloads](#release-downloads)
 - [Usage](documentation/usage.md)
   - [Usage with 3rd Party Applications](documentation/usage.md#usage-with-3rd-party-applications)
