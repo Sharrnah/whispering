@@ -41,7 +41,7 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
   - FLAN-T5
 
 ## Quickstart
-For a quick and easy start, download the latest Whispering Tiger UI from here: https://github.com/Sharrnah/whispering-ui
+For a quick and easy start, download the latest Whispering Tiger UI from here: [https://github.com/Sharrnah/whispering-ui](https://github.com/Sharrnah/whispering-ui#readme)
 
 This is a native UI application that allows keeping your Whispering Tiger version up-to-date and manage the settings more easily.
 
