@@ -39,9 +39,16 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
 - **LLM** _[Large language model]_ (Continuation of text. automatic answer generation etc.)
   - FLAN-T5
 
+## Quickstart
+For a quick and easy start, download the latest Whispering Tiger UI from here: https://github.com/Sharrnah/whispering-ui
+
+This is a native UI application that allows keeping your Whispering Tiger version up-to-date and manage the settings more easily.
+
+<img src=https://github.com/Sharrnah/whispering-ui/raw/main/doc/images/speech2text.png width=825>
+
 
 ## Release Downloads
-Standalone Releases with all dependencies included are now provided.
+Standalone Releases with all dependencies included.
 
 Go to the [GitHub Releases Page](https://github.com/Sharrnah/whispering/releases) and Download from the download Link in the description or find the [Latest Release here.](https://github.com/Sharrnah/whispering/releases/latest)
 
