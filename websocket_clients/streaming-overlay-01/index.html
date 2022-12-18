@@ -233,8 +233,12 @@
                      if (!no_loader && typeof received_msg.type != 'undefined' && received_msg.type === "processing_start") {
                          clearAllTimeouts(loaderTimeouts);
                          // show loader for 5 seconds
-                         showLoader(5);
-                     }
+                         if (received_msg.data) {
+                            showLoader(5);
+                         } else {
+                            hideLoader();
+                         }
+                      }
                   };
                
                   ws.onclose = function() {
