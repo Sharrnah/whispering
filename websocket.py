@@ -56,6 +56,9 @@ def websocketMessageHandler(msgObj, websocket):
             silero.tts.load()
             BroadcastMessage(json.dumps({"type": "available_tts_voices", "data": silero.tts.list_voices()}))
 
+    if msgObj["type"] == "setting_update_req":
+        AnswerMessage(websocket, json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))
+
     if msgObj["type"] == "translate_req":
         if msgObj["value"]["to_lang"] != "":  # if to_lang is empty, don't translate
             translate_result, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(msgObj["value"]["text"], msgObj["value"]["from_lang"], msgObj["value"]["to_lang"])

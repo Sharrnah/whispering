@@ -128,6 +128,9 @@ def GetAvailableSettingValues():
         "tts_ai_device": ["cuda", "cpu"],
         "txt_translator": ["NLLB200", "M2M100", "ARGOS"],
         "txt_translator_size": ["small", "medium", "large"],
+        "flan_device": ["cpu", "cuda"],
+        "flan_bits": ["32", "16", "8"],
+        "flan_size": ["small", "base", "large", "xl", "xxl"],
     }
 
     return possible_settings
