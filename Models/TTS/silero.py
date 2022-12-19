@@ -48,7 +48,7 @@ class Silero:
                                            models_config_file,
                                            progress=False)
         except:
-            print("could not load latest TTS models file. using offline file instead.")
+            print("could not load latest TTS models file. using existing offline file.")
 
         self.models = OmegaConf.load(models_config_file)
 
