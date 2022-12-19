@@ -30,6 +30,7 @@ TRANSLATE_SETTINGS = {
     "energy": 300,  # energy of audio volume to start whisper processing. Can be 0-1000
     "phrase_time_limit": 0,  # time limit for Whisper to generate a phrase. (0 = no limit)
     "pause": 0.8,  # pause between phrases.
+    "initial_prompt": "",  # initial prompt for Whisper. for example "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking." will give more filler words.
 
     # OSC settings
     "osc_ip": "127.0.0.1",  # OSC IP address. set to "0" to disable.

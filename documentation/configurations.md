@@ -55,6 +55,7 @@ whisper_task: translate  # Whisper A.I. Can do "transcribe" or "translate".
 current_language: null  # can be null (auto) or any Whisper supported language (improves accuracy if whisper does not have to detect the language).
 model: small  # Whisper model size. Can be "tiny", "base", "small", "medium" or "large".
 condition_on_previous_text: true  # if enabled, Whisper will condition on previous text (more prone to loops or getting stuck).
+initial_prompt: ""  # initial prompt for Whisper to try to follow its style. for example "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking." will give more filler words.
 
 # text translate settings
 txt_translate: false  # if enabled, pipes whisper A.I. results through text translator.

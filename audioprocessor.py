@@ -140,7 +140,7 @@ def convert_audio(audio_bytes: bytes):
     audio_clip = AudioSegment.from_file(audio_data)
 
     audio_clip = audio_clip.set_frame_rate(whisper.audio.SAMPLE_RATE)
-    #audio_clip = audio_clip.set_channels(1)
+    # audio_clip = audio_clip.set_channels(1)
 
     return np.frombuffer(audio_clip.get_array_of_samples(), np.int16).flatten().astype(np.float32) / 32768.0
 
@@ -176,6 +176,10 @@ def whisper_worker():
 
         whisper_condition_on_previous_text = settings.GetOption("condition_on_previous_text")
 
+        whisper_initial_prompt = settings.GetOption("initial_prompt").strip()
+        if whisper_initial_prompt == "" or whisper_initial_prompt.lower() == "none":
+            whisper_initial_prompt = None
+
         # some fix for invalid whisper language configs
         if whisper_language == "" or whisper_language == "auto" or whisper_language == "null":
             whisper_language = None
@@ -183,7 +187,7 @@ def whisper_worker():
         try:
 
             result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
-                                        condition_on_previous_text=whisper_condition_on_previous_text)
+                                            condition_on_previous_text=whisper_condition_on_previous_text, initial_prompt=whisper_initial_prompt)
             whisper_result_handling(result)
         except Exception as e:
             print("Error while processing audio: " + str(e))
