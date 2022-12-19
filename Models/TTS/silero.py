@@ -43,9 +43,13 @@ class Silero:
 
         models_config_file = str(Path(cache_path / 'latest_silero_models.yml').resolve())
 
-        torch.hub.download_url_to_file('https://raw.githubusercontent.com/snakers4/silero-models/master/models.yml',
-                                       models_config_file,
-                                       progress=False)
+        try:
+            torch.hub.download_url_to_file('https://raw.githubusercontent.com/snakers4/silero-models/master/models.yml',
+                                           models_config_file,
+                                           progress=False)
+        except:
+            print("could not load latest TTS models file. using offline file instead.")
+
         self.models = OmegaConf.load(models_config_file)
 
     def list_languages(self):
@@ -103,7 +107,6 @@ class Silero:
             self.set_language(settings.GetOption('tts_model')[0])
             self.set_model(settings.GetOption('tts_model')[1])
 
-
         device = torch.device(self.device)
 
         # set cache path
@@ -135,7 +138,8 @@ class Silero:
         # replace parts the tts has trouble with
         text = text.replace("...", ".")
 
-        if not text.endswith(".") or not text.endswith("!") or not text.endswith("?") or not text.endswith(",") or not text.endswith(";") or not text.endswith(":") or not text.endswith(")") or not text.endswith("]"):
+        if not text.endswith(".") or not text.endswith("!") or not text.endswith("?") or not text.endswith(",") or not text.endswith(";") or not text.endswith(
+                ":") or not text.endswith(")") or not text.endswith("]"):
             text += "."
 
         return text
