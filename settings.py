@@ -126,6 +126,7 @@ def GetAvailableSettingValues():
         "model": available_models(),
         "whisper_task": ["transcribe", "translate"],
         "tts_ai_device": ["cuda", "cpu"],
+        "txt_translator_device": ["cpu", "cuda"],
         "txt_translator": ["NLLB200", "M2M100", "ARGOS"],
         "txt_translator_size": ["small", "medium", "large"],
         "flan_device": ["cpu", "cuda"],
