@@ -171,23 +171,38 @@ def whisper_worker():
         audio_sample = convert_audio(audio)
 
         whisper_task = settings.GetOption("whisper_task")
-
         whisper_language = settings.GetOption("current_language")
-
         whisper_condition_on_previous_text = settings.GetOption("condition_on_previous_text")
+        whisper_logprob_threshold = settings.GetOption("logprob_threshold")
+        whisper_no_speech_threshold = settings.GetOption("no_speech_threshold")
 
         whisper_initial_prompt = settings.GetOption("initial_prompt").strip()
         if whisper_initial_prompt == "" or whisper_initial_prompt.lower() == "none":
             whisper_initial_prompt = None
 
         # some fix for invalid whisper language configs
-        if whisper_language == "" or whisper_language == "auto" or whisper_language == "null":
+        if whisper_language == "" or whisper_language.lower() == "auto" or whisper_language.lower() == "null":
             whisper_language = None
+
+        if whisper_logprob_threshold == "" or whisper_logprob_threshold.lower() == "none" or whisper_logprob_threshold.lower() == "null":
+            whisper_logprob_threshold = None
+        else:
+            whisper_logprob_threshold = float(whisper_logprob_threshold)
+
+        if whisper_no_speech_threshold == "" or whisper_no_speech_threshold.lower() == "none" or whisper_no_speech_threshold.lower() == "null":
+            whisper_no_speech_threshold = None
+        else:
+            whisper_no_speech_threshold = float(whisper_no_speech_threshold)
 
         try:
 
             result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
-                                            condition_on_previous_text=whisper_condition_on_previous_text, initial_prompt=whisper_initial_prompt)
+                                            condition_on_previous_text=whisper_condition_on_previous_text,
+                                            initial_prompt=whisper_initial_prompt,
+                                            logprob_threshold=whisper_logprob_threshold,
+                                            no_speech_threshold=whisper_no_speech_threshold
+                                            )
+
             whisper_result_handling(result)
         except Exception as e:
             print("Error while processing audio: " + str(e))

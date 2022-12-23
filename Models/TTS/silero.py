@@ -30,6 +30,8 @@ class Silero:
     speaker = 'random'
     models = []
     device = "cpu"  # cpu or cuda
+    rate = ""
+    pitch = ""
 
     last_speaker = None
     last_voice = str(Path(voices_path / "last_voice.pt").resolve())
@@ -79,6 +81,12 @@ class Silero:
 
     def set_model(self, model_id):
         self.model_id = model_id
+
+    def set_rate(self, rate):
+        self.rate = rate
+
+    def set_pitch(self, pitch):
+        self.pitch = pitch
 
     def _load_model(self, repo_or_dir, model, source='github', trust_repo=None, verbose=False, skip_validation=False, fallback_local_dir=None):
         try:
@@ -156,10 +164,26 @@ class Silero:
         if not self.load():
             return None, None
 
+        # preprocess text
+        text = self._preprocess_tts(text)
+
+        # configure prosody tag
+        self.set_rate(settings.GetOption('tts_prosody_rate'))
+        self.set_pitch(settings.GetOption('tts_prosody_pitch'))
+        prosody_tag = ""
+        if self.rate != "" and self.pitch != "":
+            prosody_tag = f'<prosody rate="{self.rate}" pitch="{self.pitch}">'
+        elif self.rate != "":
+            prosody_tag = f'<prosody rate="{self.rate}">'
+        elif self.pitch != "":
+            prosody_tag = f'<prosody pitch="{self.pitch}">'
+
+        if prosody_tag != "":
+            text = f"{prosody_tag}{text}</prosody>"
+
         # Try to generate tts
         try:
-            text = self._preprocess_tts(text)
-            audio = self.model.apply_tts(text=text,
+            audio = self.model.apply_tts(ssml_text="<speak>" + text + "</speak>",
                                          speaker=self.speaker,
                                          sample_rate=self.sample_rate,
                                          voice_path=voice_path,

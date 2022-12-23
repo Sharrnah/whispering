@@ -31,6 +31,8 @@ TRANSLATE_SETTINGS = {
     "phrase_time_limit": 0,  # time limit for Whisper to generate a phrase. (0 = no limit)
     "pause": 0.8,  # pause between phrases.
     "initial_prompt": "",  # initial prompt for Whisper. for example "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking." will give more filler words.
+    "logprob_threshold": "",
+    "no_speech_threshold": "0.275",
 
     # OSC settings
     "osc_ip": "127.0.0.1",  # OSC IP address. set to "0" to disable.
@@ -51,6 +53,8 @@ TRANSLATE_SETTINGS = {
     "device_out_index": None,  # output device index for TTS
     "tts_model": ["en", "v3_en"],  # TTS language and model to use
     "tts_voice": "en_0",  # TTS voice (one of silero tts voices, or "last" to use last used voice)
+    "tts_prosody_rate": "",  # TTS voice speed. Can be "x-slow", "slow", "medium", "fast", "x-fast" or "" for default.
+    "tts_prosody_pitch": "",  # TTS voice pitch. Can be "x-low", "low", "medium", "high", "x-high" or "" for default.
 
     # FLAN settings
     "flan_enabled": False,  # Enable FLAN A.I.
@@ -133,6 +137,8 @@ def GetAvailableSettingValues():
         "flan_device": ["cpu", "cuda"],
         "flan_bits": ["32", "16", "8"],
         "flan_size": ["small", "base", "large", "xl", "xxl"],
+        "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
+        "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
     }
 
     return possible_settings
