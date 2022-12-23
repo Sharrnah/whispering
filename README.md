@@ -13,7 +13,7 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
 - [Usage](documentation/usage.md)
   - [Usage with 3rd Party Applications](documentation/usage.md#usage-with-3rd-party-applications)
     - [VRChat](documentation/usage.md#vrchat)
-    - [Live Streaming Applications (OBS, vMix, XSplit ...)](documentation/usage.md#live-streaming-applications--obs-vmix-xsplit--)
+    - [Live Streaming Applications (OBS, vMix, XSplit ...)](documentation/usage.md#live-streaming-applications-obs-vmix-xsplit-)
     - [Desktop+](documentation/usage.md#desktop-currently-only-new-ui-beta-with-embedded-browser) 
 - [Websocket Clients](documentation/websocket-clients.md)
 - [Configurations](documentation/configurations.md)
