@@ -177,19 +177,19 @@ def whisper_worker():
         whisper_no_speech_threshold = settings.GetOption("no_speech_threshold")
 
         whisper_initial_prompt = settings.GetOption("initial_prompt").strip()
-        if whisper_initial_prompt == "" or whisper_initial_prompt.lower() == "none":
+        if whisper_initial_prompt is None or whisper_initial_prompt == "" or whisper_initial_prompt.lower() == "none":
             whisper_initial_prompt = None
 
         # some fix for invalid whisper language configs
-        if whisper_language == "" or whisper_language.lower() == "auto" or whisper_language.lower() == "null":
+        if whisper_language is None or whisper_language == "" or whisper_language.lower() == "auto" or whisper_language.lower() == "null":
             whisper_language = None
 
-        if whisper_logprob_threshold == "" or whisper_logprob_threshold.lower() == "none" or whisper_logprob_threshold.lower() == "null":
+        if whisper_logprob_threshold is None or whisper_logprob_threshold == "" or whisper_logprob_threshold.lower() == "none" or whisper_logprob_threshold.lower() == "null":
             whisper_logprob_threshold = None
         else:
             whisper_logprob_threshold = float(whisper_logprob_threshold)
 
-        if whisper_no_speech_threshold == "" or whisper_no_speech_threshold.lower() == "none" or whisper_no_speech_threshold.lower() == "null":
+        if whisper_no_speech_threshold is None or whisper_no_speech_threshold == "" or whisper_no_speech_threshold.lower() == "none" or whisper_no_speech_threshold.lower() == "null":
             whisper_no_speech_threshold = None
         else:
             whisper_no_speech_threshold = float(whisper_no_speech_threshold)
