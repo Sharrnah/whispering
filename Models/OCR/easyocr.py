@@ -124,7 +124,7 @@ def initialize_window_capture(window_name):
 
 def run_image_processing(window_name, src_languages):
     init_reader(src_languages)
-    result = ""
+    result_lines = []
     if reader is not None:
         try:
             win_cap = initialize_window_capture(window_name)
@@ -132,9 +132,17 @@ def run_image_processing(window_name, src_languages):
             # get an updated image of the game
             screenshot = win_cap.get_screenshot_mss()
 
-            result = reader.readtext(screenshot, detail=0, paragraph=True)
+            result_data = reader.readtext(screenshot, paragraph=True)
+            if len(result_data) > 0:
+                for line in result_data:
+                    bounding_box = line[0]
+                    text_detection = line[1]
+                    print(bounding_box)
+                    print(text_detection)
+                    result_lines.append(text_detection)
+
         except Exception as e:
             print(e)
             return False
 
-    return result
+    return result_lines
