@@ -24,7 +24,7 @@ class WindowCapture:
             if not self.hwnd:
                 self.hwnd = win32gui.GetDesktopWindow()
                 print('Window not found: {}. capturing whole desktop instead.'.format(window_name))
-                #raise Exception('Window not found: {}'.format(window_name))
+                # raise Exception('Window not found: {}'.format(window_name))
             else:
                 # try to focus window to be able to capture it
                 try:
@@ -75,7 +75,7 @@ class WindowCapture:
         c_dc.BitBlt((0, 0), (self.w, self.h), dc_obj, (self.cropped_x, self.cropped_y), win32con.SRCCOPY)
 
         # convert the raw data into a format opencv can read
-        #data_bit_map.SaveBitmapFile(c_dc, 'debug.bmp')
+        # data_bit_map.SaveBitmapFile(c_dc, 'debug.bmp')
         signed_ints_array = data_bit_map.GetBitmapBits(True)
         img = np.fromstring(signed_ints_array, dtype='uint8')
         img.shape = (self.h, self.w, 4)
@@ -114,13 +114,14 @@ class WindowCapture:
             img.shape = (self.h, self.w, 4)
 
             # Save to the picture file
-            #mss.tools.to_png(sct_img.rgb, sct_img.size, output="debug.png")
+            png_image = mss.tools.to_png(sct_img.rgb, sct_img.size, output=None)
 
             # drop alpha channel
             img = img[..., :3]
 
             # Save to the picture file
-            return img
+            return img, png_image
+
 
     # find the name of the window you're interested in.
     # once you have it, update window_capture()

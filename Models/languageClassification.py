@@ -38,6 +38,7 @@ def classify(text):
     if model is None:
         print(f"Loading LID (language identification) model...")
         model = fasttext.load_model(str(pretrained_lang_model_file.resolve()))
+        print(f"LID loaded.")
 
     text = text.replace("\n", " ")
     predictions = model.predict(text, k=1)

@@ -122,27 +122,48 @@ def initialize_window_capture(window_name):
     return win_cap
 
 
+def convert_bounding_box(coords):
+    # Extract the minimum and maximum x and y coordinates
+    min_x = min(coords, key=lambda x: x[0])[0]
+    min_y = min(coords, key=lambda x: x[1])[1]
+    max_x = max(coords, key=lambda x: x[0])[0]
+    max_y = max(coords, key=lambda x: x[1])[1]
+
+    # Calculate the width and height of the bounding box
+    width = max_x - min_x
+    height = max_y - min_y
+
+    # Return the absolute pixel coordinates of the bounding box
+    return min_x, min_y, min_x + width, min_y + height
+
+
 def run_image_processing(window_name, src_languages):
     init_reader(src_languages)
+    screenshot_png = None
     result_lines = []
+    bounding_boxes = []
     if reader is not None:
         try:
             win_cap = initialize_window_capture(window_name)
 
             # get an updated image of the game
-            screenshot = win_cap.get_screenshot_mss()
+            screenshot, screenshot_png = win_cap.get_screenshot_mss()
 
             result_data = reader.readtext(screenshot, paragraph=True)
             if len(result_data) > 0:
                 for line in result_data:
-                    bounding_box = line[0]
+                    # bbox to pixel value bbox
+                    bbox_pixels = convert_bounding_box(line[0])
+
+                    # bounding_box = line[0]
+                    bounding_box = bbox_pixels
                     text_detection = line[1]
-                    print(bounding_box)
-                    print(text_detection)
                     result_lines.append(text_detection)
+                    bounding_boxes.append(bounding_box)
+
+                #image_with_boxes = win_cap.draw_rectangles(result_data, result_data[0][0])
 
         except Exception as e:
             print(e)
-            return False
 
-    return result_lines
+    return result_lines, screenshot_png, bounding_boxes

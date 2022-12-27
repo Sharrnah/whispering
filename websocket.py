@@ -40,11 +40,15 @@ def flan_req(msgObj, websocket):
 
 def ocr_req(msgObj, websocket):
     window_name = settings.GetOption("ocr_window_name")
-    ocr_result = easyocr.run_image_processing(window_name, ['en', msgObj["value"]["ocr_lang"]])
-    translate_result, txt_from_lang, txt_to_lang = (texttranslate.TranslateLanguage(" -- ".join(ocr_result), msgObj["value"]["from_lang"], msgObj["value"]["to_lang"]))
-    AnswerMessage(websocket, json.dumps(
-        {"type": "translate_result", "original_text": "\n".join(ocr_result), "translate_result": "\n".join(translate_result.split(" -- ")), "txt_from_lang": txt_from_lang,
-         "txt_to_lang": txt_to_lang}))
+    ocr_result, image, bounding_boxes = easyocr.run_image_processing(window_name, ['en', msgObj["value"]["ocr_lang"]])
+    if len(ocr_result) > 0:
+        image_data = base64.b64encode(image).decode('utf-8')
+        translate_result, txt_from_lang, txt_to_lang = (texttranslate.TranslateLanguage(" -- ".join(ocr_result), msgObj["value"]["from_lang"], msgObj["value"]["to_lang"]))
+        AnswerMessage(websocket, json.dumps(
+            {"type": "translate_result", "original_text": "\n".join(ocr_result), "translate_result": "\n".join(translate_result.split(" -- ")), "txt_from_lang": txt_from_lang,
+             "txt_to_lang": txt_to_lang}))
+        AnswerMessage(websocket, json.dumps(
+            {"type": "ocr_result", "data": {"bounding_boxes": bounding_boxes, "image_data": image_data}}))
 
 
 def websocketMessageHandler(msgObj, websocket):
