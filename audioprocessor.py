@@ -12,6 +12,7 @@ from whisper.tokenizer import LANGUAGES, TO_LANGUAGE_CODE
 import io
 from Models.LLM import flanLanguageModel
 from Models.TTS import silero
+import loading_state
 
 # some regular mistakenly recognized words/sentences on mostly silence audio, which are ignored in processing
 blacklist = [
@@ -149,7 +150,9 @@ def whisper_worker():
     whisper_model = settings.GetOption("model")
 
     whisper_ai_device = settings.GetOption("ai_device")
+    loading_state.set_loading_state("whisper_loading", True)
     audio_model = load_whisper(whisper_model, whisper_ai_device)
+    loading_state.set_loading_state("whisper_loading", False)
 
     print("Whisper AI Ready. You can now say something!")
 

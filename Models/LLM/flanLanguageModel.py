@@ -3,6 +3,8 @@ from transformers import T5Tokenizer, T5ForConditionalGeneration
 import torch
 from pathlib import Path
 import os
+
+import loading_state
 import settings
 import random
 import downloader
@@ -193,6 +195,7 @@ class FlanLanguageModel:
 def init():
     global flan
     if settings.GetOption("flan_enabled") and flan is None:
+        loading_state.set_loading_state("flan_loading", False)
         model_size = settings.GetOption("flan_size")
         flan_bits = settings.GetOption("flan_bits")
         flan_device = "auto" if settings.GetOption("flan_device") == "cuda" or settings.GetOption("flan_device") == "auto" else None
@@ -200,6 +203,7 @@ def init():
 
         flan = FlanLanguageModel(model_size, bit_length=flan_bits, device=flan_device)
         print("Flan loaded.")
+        loading_state.set_loading_state("flan_loading", False)
         return True
     else:
         if flan is not None:

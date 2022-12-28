@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import click
 import VRC_OSCLib
+import loading_state
 import websocket
 import settings
 import remote_opener
@@ -161,11 +162,13 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
     # Load textual translation dependencies
     if txt_translator.lower() != "none":
+        loading_state.set_loading_state("txt_transl_loading", True)
         try:
             texttranslate.InstallLanguages()
         except Exception as e:
             print(e)
             pass
+        loading_state.set_loading_state("txt_transl_loading", False)
 
     # Load language identification dependencies
     languageClassification.download_model()

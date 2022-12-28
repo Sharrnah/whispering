@@ -4,6 +4,8 @@ import os
 import downloader
 from pathlib import Path
 
+import loading_state
+
 ct_model_path = Path(Path.cwd() / ".cache" / "lid")
 os.makedirs(ct_model_path, exist_ok=True)
 
@@ -22,11 +24,13 @@ model = None
 
 
 def download_model():
+    loading_state.set_loading_state("lid_downloading", True)
     pretrained_lang_model_file = Path(ct_model_path / "lid218e.bin")
     if not pretrained_lang_model_file.is_file():
         print(f"Downloading LID (language identification) model...")
         downloader.download_extract(MODEL_LINKS["lid218e"]["urls"], str(ct_model_path.resolve()), MODEL_LINKS["lid218e"]["checksum"])
 
+    loading_state.set_loading_state("lid_downloading", False)
 
 def classify(text):
     global model
@@ -36,8 +40,10 @@ def classify(text):
         return ""
 
     if model is None:
+        loading_state.set_loading_state("lid_loading", True)
         print(f"Loading LID (language identification) model...")
         model = fasttext.load_model(str(pretrained_lang_model_file.resolve()))
+        loading_state.set_loading_state("lid_loading", False)
         print(f"LID loaded.")
 
     text = text.replace("\n", " ")

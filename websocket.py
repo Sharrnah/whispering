@@ -6,6 +6,7 @@ import base64
 
 from Models.TextTranslation import texttranslate
 from Models.OCR import easyocr
+from loading_state import LOADING_QUEUE
 from windowcapture import WindowCapture
 import settings
 import VRC_OSCLib
@@ -121,6 +122,10 @@ async def handler(websocket):
 
     # send all current settings
     await send(websocket, json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))
+
+    # send loading state
+    if len(LOADING_QUEUE) > 0:
+        await send(websocket, json.dumps({"type": "loading_state", "data": LOADING_QUEUE}))
 
     WS_CLIENTS.add(websocket)
     try:

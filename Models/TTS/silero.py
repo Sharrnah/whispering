@@ -6,6 +6,8 @@ import io
 from pathlib import Path
 import os
 from pydub import AudioSegment
+
+import loading_state
 import settings
 from scipy.io.wavfile import write
 import re
@@ -45,6 +47,7 @@ class Silero:
 
         models_config_file = str(Path(cache_path / 'latest_silero_models.yml').resolve())
 
+        loading_state.set_loading_state("tts_loading", True)
         try:
             torch.hub.download_url_to_file('https://raw.githubusercontent.com/snakers4/silero-models/master/models.yml',
                                            models_config_file,
@@ -53,6 +56,7 @@ class Silero:
             print("could not load latest TTS models file. using existing offline file.")
 
         self.models = OmegaConf.load(models_config_file)
+        loading_state.set_loading_state("tts_loading", False)
 
     def list_languages(self):
         return list(self.models.tts_models.keys())
