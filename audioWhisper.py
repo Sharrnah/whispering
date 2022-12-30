@@ -1,8 +1,10 @@
+import io
 import json
 import signal
 import sys
+import time
 
-#import speech_recognition_patch as sr  # this is a patched version of speech_recognition. (disabled for now because of freeze issues)
+# import speech_recognition_patch as sr  # this is a patched version of speech_recognition. (disabled for now because of freeze issues)
 import speech_recognition as sr
 import audioprocessor
 import os
@@ -19,6 +21,21 @@ from Models.LLM import flanLanguageModel
 import pyaudiowpatch as pyaudio
 from whisper import available_models, audio as whisper_audio
 
+import numpy as np
+import torch
+import torchaudio
+import wave
+
+torchaudio.set_audio_backend("soundfile")
+py_audio = pyaudio.PyAudio()
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
+SAMPLE_RATE = whisper_audio.SAMPLE_RATE
+CHUNK = int(SAMPLE_RATE / 10)
+
+cache_vad_path = Path(Path.cwd() / ".cache" / "silero-vad")
+os.makedirs(cache_vad_path, exist_ok=True)
+
 
 def sigterm_handler(_signo, _stack_frame):
     # it raises SystemExit(0):
@@ -30,6 +47,24 @@ signal.signal(signal.SIGTERM, sigterm_handler)
 signal.signal(signal.SIGINT, sigterm_handler)
 
 
+# Taken from utils_vad.py
+def validate(model,
+             inputs: torch.Tensor):
+    with torch.no_grad():
+        outs = model(inputs)
+    return outs
+
+
+# Provided by Alexander Veysov
+def int2float(sound):
+    abs_max = np.abs(sound).max()
+    sound = sound.astype('float32')
+    if abs_max > 0:
+        sound *= 1 / abs_max
+    sound = sound.squeeze()  # depends on the use case
+    return sound
+
+
 @click.command()
 @click.option('--devices', default='False', help='print all available devices id', type=str)
 @click.option('--device_index', default=-1, help='the id of the input device (-1 = default active Mic)', type=int)
@@ -38,7 +73,8 @@ signal.signal(signal.SIGINT, sigterm_handler)
 @click.option("--task", default="transcribe", help="task for the model whether to only transcribe the audio or translate the audio to english",
               type=click.Choice(["transcribe", "translate"]))
 @click.option("--model", default="small", help="Model to use", type=click.Choice(available_models()))
-@click.option("--language", default=None, help="language spoken in the audio, specify None to perform language detection", type=click.Choice(audioprocessor.whisper_get_languages_list_keys()))
+@click.option("--language", default=None, help="language spoken in the audio, specify None to perform language detection",
+              type=click.Choice(audioprocessor.whisper_get_languages_list_keys()))
 @click.option("--condition_on_previous_text", default=False,
               help="Feed it the previous result to keep it consistent across recognition windows, but makes it more prone to getting stuck in a failure loop", is_flag=True,
               type=bool)
@@ -53,17 +89,21 @@ signal.signal(signal.SIGINT, sigterm_handler)
 @click.option("--websocket_ip", default="0", help="IP where Websocket Server listens on. Set to '0' to disable", type=str)
 @click.option("--websocket_port", default=5000, help="Port where Websocket Server listens on. ('5000' as default)", type=int)
 @click.option("--ai_device", default=None, help="The Device the AI is loaded on. can be 'cuda' or 'cpu'. default does autodetect", type=click.Choice(["cuda", "cpu"]))
-@click.option("--txt_translator", default="NLLB200", help="The Model the AI is loading for text translations. can be 'NLLB200', 'M2M100', 'ARGOS' or 'None'. default is M2M100", type=click.Choice(["NLLB200", "M2M100", "ARGOS"]))
-@click.option("--txt_translator_size", default="small", help="The Model size if M2M100 or NLLB200 text translator is used. can be 'small', 'medium' or 'large' for NLLB200 or 'small' or 'large' for M2M100. default is small. (has no effect with ARGOS)", type=click.Choice(["small", "medium", "large"]))
-@click.option("--txt_translator_device", default="auto", help="The device used for M2M100 translation. (has no effect with ARGOS or NLLB200)", type=click.Choice(["auto", "cuda", "cpu"]))
+@click.option("--txt_translator", default="NLLB200", help="The Model the AI is loading for text translations. can be 'NLLB200', 'M2M100', 'ARGOS' or 'None'. default is M2M100",
+              type=click.Choice(["NLLB200", "M2M100", "ARGOS"]))
+@click.option("--txt_translator_size", default="small",
+              help="The Model size if M2M100 or NLLB200 text translator is used. can be 'small', 'medium' or 'large' for NLLB200 or 'small' or 'large' for M2M100. default is small. (has no effect with ARGOS)",
+              type=click.Choice(["small", "medium", "large"]))
+@click.option("--txt_translator_device", default="auto", help="The device used for M2M100 translation. (has no effect with ARGOS or NLLB200)",
+              type=click.Choice(["auto", "cuda", "cpu"]))
 @click.option("--ocr_window_name", default="VRChat", help="Window name of the application for OCR translations. (Default: 'VRChat')", type=str)
 @click.option("--flan_enabled", default=False, help="Enable FLAN-T5 A.I. (General A.I. which can be used for Question Answering.)", type=bool)
 @click.option("--open_browser", default=False, help="Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)", is_flag=True, type=bool)
-@click.option("--config", default=None, help="Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]", type=str)
+@click.option("--config", default=None, help="Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]",
+              type=str)
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 @click.pass_context
 def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, config, verbose, **kwargs):
-
     # Load settings from file
     if config is not None:
         settings.SETTINGS_PATH = Path(Path.cwd() / config)
@@ -77,7 +117,7 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
         print("-------------------------------------------------------------------")
         for device in audio.get_device_info_generator():
             device_list_index = device["index"]
-            #device_list_api = device["hostApi"]
+            # device_list_api = device["hostApi"]
             device_list_name = device["name"]
             device_list_sample_rate = int(device["defaultSampleRate"])
             device_list_max_channels = audio.get_device_info_by_index(device_list_index)['maxInputChannels']
@@ -175,6 +215,75 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
     # Load FLAN-T5 dependencies
     flanLanguageModel.init()
+
+    torch.hub.set_dir(str(Path(cache_vad_path).resolve()))
+    torch.set_num_threads(1)
+    vad_model, vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
+                                          repo_or_dir="snakers4/silero-vad", model="silero_vad", onnx=False
+                                          )
+
+    # num_samples = 1536
+    num_samples = 3000
+    clip_duration = 4
+    confidence_threshold = 0.4
+    overlap = 0
+    frames = []
+    stream = py_audio.open(format=FORMAT,
+                           channels=CHANNELS,
+                           rate=SAMPLE_RATE,
+                           input=True,
+                           input_device_index=(device_index if device_index > -1 else None),
+                           frames_per_buffer=CHUNK)
+
+    audioprocessor.start_whisper_thread()
+
+    fps = int(SAMPLE_RATE / CHUNK * clip_duration)
+
+    start_time = time.time()
+
+    continue_recording = True
+    while continue_recording:
+        audio_chunk = stream.read(num_samples)
+
+        audio_int16 = np.frombuffer(audio_chunk, np.int16)
+
+        audio_float32 = int2float(audio_int16)
+
+        # get the confidences and add them to the list to plot them later
+        new_confidence = vad_model(torch.from_numpy(audio_float32), 16000).item()
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+        # put frames with recognized speech into a list and send to whisper
+        if len(frames) > fps or (elapsed_time > 3 and len(frames) > 0):
+            clip = []
+            # for i in range(0, fps):
+            for i in range(0, len(frames)):
+                clip.append(frames[i])
+
+            wavefiledata = b''.join(clip)
+
+            finalwavfile = io.BytesIO()
+            wavefile = wave.open(finalwavfile, 'wb')
+            wavefile.setnchannels(CHANNELS)
+            wavefile.setsampwidth(2)
+            wavefile.setframerate(SAMPLE_RATE)
+            wavefile.writeframes(wavefiledata)
+
+            finalwavfile.seek(0)
+            audioprocessor.q.put(finalwavfile.read())
+
+            wavefile.close()
+            frames = []
+            start_time = time.time()
+
+        # print(new_confidence)
+
+        if new_confidence >= confidence_threshold:
+            # print("speech")
+            frames.append(audio_chunk)
+            start_time = time.time()
 
     # load the speech recognizer and set the initial energy threshold and pause threshold
     r = sr.Recognizer()

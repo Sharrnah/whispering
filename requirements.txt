@@ -28,3 +28,4 @@ mss
 pyaudio
 scipy
 num2words
+onnxruntime
