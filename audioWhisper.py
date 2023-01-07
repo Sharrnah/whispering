@@ -216,9 +216,9 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     # Load FLAN-T5 dependencies
     flanLanguageModel.init()
 
-    use_vad = settings.SetOption("use_vad", settings.GetArgumentSettingFallback(ctx, "use_vad", "use_vad"))
+    vad_enabled = settings.SetOption("vad_enabled", settings.GetArgumentSettingFallback(ctx, "vad_enabled", "vad_enabled"))
 
-    if use_vad:
+    if vad_enabled:
         torch.hub.set_dir(str(Path(cache_vad_path).resolve()))
         torch.set_num_threads(1)
         vad_model, vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
