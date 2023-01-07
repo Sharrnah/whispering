@@ -216,99 +216,129 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     # Load FLAN-T5 dependencies
     flanLanguageModel.init()
 
-    torch.hub.set_dir(str(Path(cache_vad_path).resolve()))
-    torch.set_num_threads(1)
-    vad_model, vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
-                                          repo_or_dir="snakers4/silero-vad", model="silero_vad", onnx=False
-                                          )
+    use_vad = settings.SetOption("use_vad", settings.GetArgumentSettingFallback(ctx, "use_vad", "use_vad"))
 
-    # num_samples = 1536
-    num_samples = 3000
-    clip_duration = 4
-    confidence_threshold = 0.4
-    overlap = 0
-    frames = []
-    stream = py_audio.open(format=FORMAT,
-                           channels=CHANNELS,
-                           rate=SAMPLE_RATE,
-                           input=True,
-                           input_device_index=(device_index if device_index > -1 else None),
-                           frames_per_buffer=CHUNK)
+    if use_vad:
+        torch.hub.set_dir(str(Path(cache_vad_path).resolve()))
+        torch.set_num_threads(1)
+        vad_model, vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
+                                              repo_or_dir="snakers4/silero-vad", model="silero_vad", onnx=False
+                                              )
 
-    audioprocessor.start_whisper_thread()
+        # num_samples = 1536
+        num_samples = int(settings.SetOption("vad_num_samples", settings.GetArgumentSettingFallback(ctx, "vad_num_samples", "vad_num_samples")))
+        # clip_duration = 4
+        clip_duration = phrase_time_limit
 
-    fps = int(SAMPLE_RATE / CHUNK * clip_duration)
-
-    start_time = time.time()
-
-    continue_recording = True
-    while continue_recording:
-        audio_chunk = stream.read(num_samples)
-
-        audio_int16 = np.frombuffer(audio_chunk, np.int16)
-
-        audio_float32 = int2float(audio_int16)
-
-        # get the confidences and add them to the list to plot them later
-        new_confidence = vad_model(torch.from_numpy(audio_float32), 16000).item()
-
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-
-        # put frames with recognized speech into a list and send to whisper
-        if len(frames) > fps or (elapsed_time > 3 and len(frames) > 0):
-            clip = []
-            # for i in range(0, fps):
-            for i in range(0, len(frames)):
-                clip.append(frames[i])
-
-            wavefiledata = b''.join(clip)
-
-            finalwavfile = io.BytesIO()
-            wavefile = wave.open(finalwavfile, 'wb')
-            wavefile.setnchannels(CHANNELS)
-            wavefile.setsampwidth(2)
-            wavefile.setframerate(SAMPLE_RATE)
-            wavefile.writeframes(wavefiledata)
-
-            finalwavfile.seek(0)
-            audioprocessor.q.put(finalwavfile.read())
-
-            wavefile.close()
-            frames = []
-            start_time = time.time()
-
-        # print(new_confidence)
-
-        if new_confidence >= confidence_threshold:
-            # print("speech")
-            frames.append(audio_chunk)
-            start_time = time.time()
-
-    # load the speech recognizer and set the initial energy threshold and pause threshold
-    r = sr.Recognizer()
-    r.energy_threshold = energy
-    r.pause_threshold = pause
-    r.dynamic_energy_threshold = dynamic_energy
-
-    with sr.Microphone(sample_rate=sample_rate, device_index=(device_index if device_index > -1 else None)) as source:
+        confidence_threshold = float(
+            settings.SetOption("vad_confidence_threshold", settings.GetArgumentSettingFallback(ctx, "vad_confidence_threshold", "vad_confidence_threshold")))
+        frames = []
+        stream = py_audio.open(format=FORMAT,
+                               channels=CHANNELS,
+                               rate=SAMPLE_RATE,
+                               input=True,
+                               input_device_index=(device_index if device_index > -1 else None),
+                               frames_per_buffer=CHUNK)
 
         audioprocessor.start_whisper_thread()
 
-        while True:
-            # get and save audio to wav file
-            audio = r.listen(source, phrase_time_limit=phrase_time_limit)
+        fps = 0
+        if clip_duration is not None:
+            fps = int(SAMPLE_RATE / CHUNK * clip_duration)
 
-            audio_data = audio.get_wav_data()
+        start_time = time.time()
+        pause_time = time.time()
 
-            # add audio data to the queue
-            audioprocessor.q.put(audio_data)
+        start_rec_on_volume_threshold = False
 
-            # set typing indicator for VRChat
-            if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption("osc_typing_indicator"):
-                VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
-            # send start info for processing indicator in websocket client
-            websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
+        continue_recording = True
+        while continue_recording:
+            audio_chunk = stream.read(num_samples)
+
+            audio_int16 = np.frombuffer(audio_chunk, np.int16)
+
+            audio_float32 = int2float(audio_int16)
+
+            # rms = np.sqrt(np.mean(audio_int16.astype(np.float32) ** 2))  # audio volume
+
+            # Calculate the peak amplitude of the audio samples
+            # peak_amplitude = np.max(np.abs(audio_int16.astype(np.float32)))
+            peak_amplitude = np.max(np.abs(audio_int16))
+
+            # get the confidences and add them to the list to plot them later
+            new_confidence = vad_model(torch.from_numpy(audio_float32), 16000).item()
+
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+
+            # put frames with recognized speech into a list and send to whisper
+            # if (clip_duration is not None and len(frames) > fps) or (elapsed_time > 3 and len(frames) > 0):
+            if (clip_duration is not None and len(frames) > fps) or (elapsed_time > pause and len(frames) > 0):
+                clip = []
+                # for i in range(0, fps):
+                for i in range(0, len(frames)):
+                    clip.append(frames[i])
+
+                wavefiledata = b''.join(clip)
+
+                finalwavfile = io.BytesIO()
+                wavefile = wave.open(finalwavfile, 'wb')
+                wavefile.setnchannels(CHANNELS)
+                wavefile.setsampwidth(2)
+                wavefile.setframerate(SAMPLE_RATE)
+                wavefile.writeframes(wavefiledata)
+
+                finalwavfile.seek(0)
+                audioprocessor.q.put(finalwavfile.read())
+
+                wavefile.close()
+                frames = []
+                start_time = time.time()
+
+                # set typing indicator for VRChat
+                if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption("osc_typing_indicator"):
+                    VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
+                # send start info for processing indicator in websocket client
+                websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
+
+            if peak_amplitude >= energy and new_confidence >= confidence_threshold:
+                start_rec_on_volume_threshold = True
+                pause_time = time.time()
+
+            if start_rec_on_volume_threshold:
+                # print("speech")
+                frames.append(audio_chunk)
+                start_time = time.time()
+
+            # stop recording if no speech is detected for pause seconds
+            if start_rec_on_volume_threshold and new_confidence < confidence_threshold and peak_amplitude < energy and (time.time() - pause_time) > pause:
+                start_rec_on_volume_threshold = False
+
+    else:
+        # load the speech recognizer and set the initial energy threshold and pause threshold
+        r = sr.Recognizer()
+        r.energy_threshold = energy
+        r.pause_threshold = pause
+        r.dynamic_energy_threshold = dynamic_energy
+
+        with sr.Microphone(sample_rate=sample_rate, device_index=(device_index if device_index > -1 else None)) as source:
+
+            audioprocessor.start_whisper_thread()
+
+            while True:
+                # get and save audio to wav file
+                audio = r.listen(source, phrase_time_limit=phrase_time_limit)
+
+                audio_data = audio.get_wav_data()
+
+                # add audio data to the queue
+                audioprocessor.q.put(audio_data)
+
+                # set typing indicator for VRChat
+                if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption("osc_typing_indicator"):
+                    VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
+                # send start info for processing indicator in websocket client
+                websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
 
 
 def str2bool(string):
