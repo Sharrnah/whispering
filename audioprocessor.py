@@ -59,9 +59,16 @@ def whisper_result_handling(result):
 
     if not predicted_text.lower() in blacklist:
         if not verbose:
-            print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": " + predicted_text)
+            try:
+                print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": " + predicted_text.encode('utf-8', 'ignore').decode('utf-8', 'ignore'))
+            except:
+                print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": ???")
+
         else:
-            print(result)
+            try:
+                print(result.encode('utf-8', 'ignore').decode('utf-8', 'ignore'))
+            except:
+                print("???")
 
         # translate using text translator if enabled
         do_txt_translate = settings.GetOption("txt_translate")
@@ -91,8 +98,13 @@ def whisper_result_handling(result):
                     if settings.GetOption("flan_translate_to_speaker_language"):
                         predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, "auto", result['language'], False, True)
                     result['flan_answer'] = predicted_text
-                    print("FLAN question: " + prompted_text)
-                    print("FLAN result: " + predicted_text)
+                    try:
+                        print("FLAN question: " + prompted_text)
+                        print("FLAN result: " + predicted_text)
+                    except:
+                        print("FLAN question: ???")
+                        print("FLAN result: ???")
+
                     send_message(flan_osc_prefix + predicted_text, result)
 
             # otherwise process every text with FLAN
@@ -102,7 +114,10 @@ def whisper_result_handling(result):
                 if settings.GetOption("flan_translate_to_speaker_language"):
                     predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, "auto", result['language'], False, True)
                 result['flan_answer'] = predicted_text
-                print("FLAN result: " + predicted_text)
+                try:
+                    print("FLAN result: " + predicted_text)
+                except:
+                    print("FLAN result: ???")
                 send_message(flan_osc_prefix + predicted_text, result)
 
         # send regular message if flan was not loaded

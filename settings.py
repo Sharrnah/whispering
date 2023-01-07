@@ -31,8 +31,8 @@ TRANSLATE_SETTINGS = {
     "phrase_time_limit": 0,  # time limit for Whisper to generate a phrase. (0 = no limit)
     "pause": 0.8,  # pause between phrases.
     "initial_prompt": "",  # initial prompt for Whisper. for example "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking." will give more filler words.
-    "logprob_threshold": "",
-    "no_speech_threshold": "0.275",
+    "logprob_threshold": "-1.0",
+    "no_speech_threshold": "0.6",
 
     # OSC settings
     "osc_ip": "127.0.0.1",  # OSC IP address. set to "0" to disable.
