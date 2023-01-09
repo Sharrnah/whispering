@@ -34,7 +34,7 @@ TRANSLATE_SETTINGS = {
     "logprob_threshold": "-1.0",
     "no_speech_threshold": "0.6",
     "vad_enabled": True,  # Enable Voice activity detection (VAD)
-    "vad_confidence_threshold": "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
+    "vad_confidence_threshold": "0.6",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
     "vad_num_samples": 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
 
     # OSC settings

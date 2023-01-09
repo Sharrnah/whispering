@@ -248,6 +248,7 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
         start_time = time.time()
         pause_time = time.time()
+        previous_audio_chunk = None
 
         start_rec_on_volume_threshold = False
 
@@ -301,18 +302,29 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                 # send start info for processing indicator in websocket client
                 websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
 
+            # set start recording variable to true if the volume and voice confidence is above the threshold
             if peak_amplitude >= energy and new_confidence >= confidence_threshold:
                 start_rec_on_volume_threshold = True
                 pause_time = time.time()
 
-            if start_rec_on_volume_threshold:
-                # print("speech")
+            # append audio frame to the list if the recording var is set and voice confidence is above the threshold (So it only adds the audio parts with speech)
+            if start_rec_on_volume_threshold and new_confidence >= confidence_threshold:
+                # append previous audio chunk to current audio chunk to improve recognition on too late audio recording starts
+                if previous_audio_chunk is not None:
+                    audio_chunk = previous_audio_chunk + audio_chunk
+
                 frames.append(audio_chunk)
                 start_time = time.time()
 
             # stop recording if no speech is detected for pause seconds
             if start_rec_on_volume_threshold and new_confidence < confidence_threshold and peak_amplitude < energy and (time.time() - pause_time) > pause:
                 start_rec_on_volume_threshold = False
+
+            # save chunk as previous audio chunk to reuse later
+            if not start_rec_on_volume_threshold and new_confidence < confidence_threshold:
+                previous_audio_chunk = audio_chunk
+            else:
+                previous_audio_chunk = None
 
     else:
         # load the speech recognizer and set the initial energy threshold and pause threshold
