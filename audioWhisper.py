@@ -272,6 +272,8 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
             end_time = time.time()
             elapsed_time = end_time - start_time
 
+            confidence_threshold = float(settings.GetOption("vad_confidence_threshold"))
+
             # put frames with recognized speech into a list and send to whisper
             # if (clip_duration is not None and len(frames) > fps) or (elapsed_time > 3 and len(frames) > 0):
             if (clip_duration is not None and len(frames) > fps) or (elapsed_time > pause and len(frames) > 0):
@@ -317,11 +319,11 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                 start_time = time.time()
 
             # stop recording if no speech is detected for pause seconds
-            if start_rec_on_volume_threshold and new_confidence < confidence_threshold and peak_amplitude < energy and (time.time() - pause_time) > pause:
+            if start_rec_on_volume_threshold and (new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (time.time() - pause_time) > pause:
                 start_rec_on_volume_threshold = False
 
             # save chunk as previous audio chunk to reuse later
-            if not start_rec_on_volume_threshold and new_confidence < confidence_threshold:
+            if not start_rec_on_volume_threshold and (new_confidence < confidence_threshold or confidence_threshold == 0.0):
                 previous_audio_chunk = audio_chunk
             else:
                 previous_audio_chunk = None
