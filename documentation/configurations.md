@@ -56,6 +56,12 @@ current_language: null  # can be null (auto) or any Whisper supported language (
 model: small  # Whisper model size. Can be "tiny", "base", "small", "medium" or "large".
 condition_on_previous_text: true  # if enabled, Whisper will condition on previous text (more prone to loops or getting stuck).
 initial_prompt: ""  # initial prompt for Whisper to try to follow its style. for example "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking." will give more filler words.
+logprob_threshold: "-1.0",  # log probability threshold for Whisper to treat as failed. (can be negative or positive).
+no_speech_threshold: "0.6",  # If the no_speech probability is higher than this value AND the average log probability over sampled tokens is below `logprob_threshold`, consider the segment as silent
+vad_enabled: True,  # Enable Voice activity detection (VAD)
+vad_confidence_threshold: "0.6",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
+vad_num_samples: 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
+vad_thread_num: 1,  # number of threads to use for VAD.
 
 # text translate settings
 txt_translate: false  # if enabled, pipes whisper A.I. results through text translator.

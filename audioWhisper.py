@@ -217,10 +217,11 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     flanLanguageModel.init()
 
     vad_enabled = settings.SetOption("vad_enabled", settings.GetArgumentSettingFallback(ctx, "vad_enabled", "vad_enabled"))
+    vad_thread_num = settings.SetOption("vad_thread_num", settings.GetArgumentSettingFallback(ctx, "vad_thread_num", "vad_thread_num"))
 
     if vad_enabled:
         torch.hub.set_dir(str(Path(cache_vad_path).resolve()))
-        torch.set_num_threads(1)
+        torch.set_num_threads(vad_thread_num)
         vad_model, vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
                                               repo_or_dir="snakers4/silero-vad", model="silero_vad", onnx=False
                                               )
