@@ -309,9 +309,9 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
             # append audio frame to the list if the recording var is set and voice confidence is above the threshold (So it only adds the audio parts with speech)
             if start_rec_on_volume_threshold and new_confidence >= confidence_threshold:
-                # append previous audio chunk to current audio chunk to improve recognition on too late audio recording starts
+                # append previous audio chunk to improve recognition on too late audio recording starts
                 if previous_audio_chunk is not None:
-                    audio_chunk = previous_audio_chunk + audio_chunk
+                    frames.append(previous_audio_chunk)
 
                 frames.append(audio_chunk)
                 start_time = time.time()
