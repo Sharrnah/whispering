@@ -231,8 +231,6 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
         # clip_duration = 4
         clip_duration = phrase_time_limit
 
-        confidence_threshold = float(
-            settings.SetOption("vad_confidence_threshold", settings.GetArgumentSettingFallback(ctx, "vad_confidence_threshold", "vad_confidence_threshold")))
         frames = []
         stream = py_audio.open(format=FORMAT,
                                channels=CHANNELS,
@@ -268,7 +266,7 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
             peak_amplitude = np.max(np.abs(audio_int16))
 
             # get the confidences and add them to the list to plot them later
-            new_confidence = vad_model(torch.from_numpy(audio_float32), 16000).item()
+            new_confidence = vad_model(torch.from_numpy(audio_float32), SAMPLE_RATE).item()
 
             end_time = time.time()
             elapsed_time = end_time - start_time
@@ -320,7 +318,8 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                 start_time = time.time()
 
             # stop recording if no speech is detected for pause seconds
-            if start_rec_on_volume_threshold and (new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (time.time() - pause_time) > pause:
+            if start_rec_on_volume_threshold and (new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (
+                    time.time() - pause_time) > pause:
                 start_rec_on_volume_threshold = False
 
             # save chunk as previous audio chunk to reuse later
