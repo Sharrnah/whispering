@@ -34,9 +34,9 @@ def tts_request(msgObj, websocket):
         print("TTS failed")
 
 
-def flan_req(msgObj, websocket):
-    flan_result = flanLanguageModel.flan.encode(msgObj["text"])
-    BroadcastMessage(json.dumps({"type": "flan_result", "flan_result": flan_result}))
+def flan_req(text, websocket):
+    flan_result = flanLanguageModel.flan.encode(text)
+    AnswerMessage(websocket, json.dumps({"type": "flan_result", "flan_result": flan_result}))
 
 
 def ocr_req(msgObj, websocket):
@@ -84,7 +84,7 @@ def websocketMessageHandler(msgObj, websocket):
 
     if msgObj["type"] == "flan_req":
         if flanLanguageModel.init():
-            flan_thread = threading.Thread(target=flan_req, args=msgObj)
+            flan_thread = threading.Thread(target=flan_req, args=(msgObj["text"], websocket))
             flan_thread.start()
 
     if msgObj["type"] == "get_windows_list":
