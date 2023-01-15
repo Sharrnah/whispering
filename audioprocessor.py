@@ -193,6 +193,7 @@ def whisper_worker():
         whisper_condition_on_previous_text = settings.GetOption("condition_on_previous_text")
         whisper_logprob_threshold = settings.GetOption("logprob_threshold")
         whisper_no_speech_threshold = settings.GetOption("no_speech_threshold")
+        whisper_fp16 = settings.GetOption("fp16")
 
         whisper_initial_prompt = settings.GetOption("initial_prompt").strip()
         if whisper_initial_prompt is None or whisper_initial_prompt == "" or whisper_initial_prompt.lower() == "none":
@@ -218,7 +219,8 @@ def whisper_worker():
                                             condition_on_previous_text=whisper_condition_on_previous_text,
                                             initial_prompt=whisper_initial_prompt,
                                             logprob_threshold=whisper_logprob_threshold,
-                                            no_speech_threshold=whisper_no_speech_threshold
+                                            no_speech_threshold=whisper_no_speech_threshold,
+                                            fp16=whisper_fp16
                                             )
 
             whisper_result_handling(result)

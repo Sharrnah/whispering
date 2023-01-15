@@ -37,6 +37,7 @@ TRANSLATE_SETTINGS = {
     "vad_confidence_threshold": "0.6",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
     "vad_num_samples": 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
     "vad_thread_num": 1,  # number of threads to use for VAD.
+    "fp16": False,  # Set to True to use FP16 instead of FP32.
 
     # OSC settings
     "osc_ip": "127.0.0.1",  # OSC IP address. set to "0" to disable.
