@@ -10,7 +10,7 @@ import numpy as np
 from pydub import AudioSegment
 from whisper.tokenizer import LANGUAGES, TO_LANGUAGE_CODE
 import io
-from Models.LLM import flanLanguageModel
+from Models.LLM import LLM
 from Models.TTS import silero
 import loading_state
 
@@ -84,15 +84,15 @@ def whisper_result_handling(result):
         # replace predicted_text with FLAN response
         flan_loaded = False
         # check if FLAN is enabled
-        if flan_whisper_answer and flanLanguageModel.init():
+        if flan_whisper_answer and LLM.init():
             flan_osc_prefix = settings.GetOption("flan_osc_prefix")
             flan_loaded = True
             result["type"] = "flan_answer"
             # Only process using FLAN if question is asked
             if settings.GetOption("flan_process_only_questions"):
-                prompted_text, prompt_change = flanLanguageModel.flan.whisper_result_prompter(predicted_text)
+                prompted_text, prompt_change = LLM.llm.whisper_result_prompter(predicted_text)
                 if prompt_change:
-                    predicted_text = flanLanguageModel.flan.encode(prompted_text)
+                    predicted_text = LLM.llm.encode(prompted_text)
 
                     # translate from auto-detected language to speaker language
                     if settings.GetOption("flan_translate_to_speaker_language"):
@@ -109,7 +109,7 @@ def whisper_result_handling(result):
 
             # otherwise process every text with FLAN
             else:
-                predicted_text = flanLanguageModel.flan.encode(predicted_text)
+                predicted_text = LLM.llm.encode(predicted_text)
                 # translate from auto-detected language to speaker language
                 if settings.GetOption("flan_translate_to_speaker_language"):
                     predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, "auto", result['language'], False, True)

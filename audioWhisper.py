@@ -17,7 +17,7 @@ import settings
 import remote_opener
 from Models.TextTranslation import texttranslate
 from Models import languageClassification
-from Models.LLM import flanLanguageModel
+from Models.LLM import LLM
 import pyaudiowpatch as pyaudio
 from whisper import available_models, audio as whisper_audio
 
@@ -214,7 +214,7 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     languageClassification.download_model()
 
     # Load FLAN-T5 dependencies
-    flanLanguageModel.init()
+    LLM.init()
 
     vad_enabled = settings.SetOption("vad_enabled", settings.GetArgumentSettingFallback(ctx, "vad_enabled", "vad_enabled"))
     vad_thread_num = settings.SetOption("vad_thread_num", settings.GetArgumentSettingFallback(ctx, "vad_thread_num", "vad_thread_num"))

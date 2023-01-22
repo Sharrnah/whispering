@@ -150,8 +150,8 @@ class Silero:
         # replace parts the tts has trouble with
         text = text.replace("...", ".")
 
-        if not text.endswith(".") or not text.endswith("!") or not text.endswith("?") or not text.endswith(",") or not text.endswith(";") or not text.endswith(
-                ":") or not text.endswith(")") or not text.endswith("]"):
+        if not text.endswith(".") and not text.endswith("!") and not text.endswith("?") and not text.endswith(",") and not text.endswith(";") and not text.endswith(
+                ":") and not text.endswith(")") and not text.endswith("]"):
             text += "."
 
         return text

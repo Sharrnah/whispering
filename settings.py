@@ -63,6 +63,7 @@ TRANSLATE_SETTINGS = {
 
     # FLAN settings
     "flan_enabled": False,  # Enable FLAN A.I.
+    "llm_model": "bloomz",  # LLM model to use. Can be "flan" or "bloomz"
     "flan_size": "large",  # FLAN model size. Can be "small", "base", "large", "xl" or "xxl"
     "flan_bits": 32,  # precision can be set to 32 (float), 16 (float) or 8 (int) bits. 8 bits is the fastest but least precise
     "flan_device": "cpu",  # can be "cpu", "cuda" or "auto". ("cuda" and "auto" doing the same)

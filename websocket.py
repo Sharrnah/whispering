@@ -10,7 +10,7 @@ from loading_state import LOADING_QUEUE
 from windowcapture import WindowCapture
 import settings
 import VRC_OSCLib
-from Models.LLM import flanLanguageModel
+from Models.LLM import LLM
 from Models.TTS import silero
 
 WS_CLIENTS = set()
@@ -35,7 +35,7 @@ def tts_request(msgObj, websocket):
 
 
 def flan_req(text, websocket):
-    flan_result = flanLanguageModel.flan.encode(text)
+    flan_result = LLM.llm.encode(text)
     AnswerMessage(websocket, json.dumps({"type": "flan_result", "flan_result": flan_result}))
 
 
@@ -83,7 +83,7 @@ def websocketMessageHandler(msgObj, websocket):
             silero.tts.save_voice()
 
     if msgObj["type"] == "flan_req":
-        if flanLanguageModel.init():
+        if LLM.init():
             flan_thread = threading.Thread(target=flan_req, args=(msgObj["text"], websocket))
             flan_thread.start()
 
@@ -131,7 +131,10 @@ async def handler(websocket):
     try:
         async for message in websocket:
             msgObj = json.loads(message)
-            print(message.encode('utf-8'))
+            try:
+                print(message.encode('utf-8'))
+            except:
+                print("???")
             websocketMessageHandler(msgObj, websocket)
 
         await websocket.wait_closed()
