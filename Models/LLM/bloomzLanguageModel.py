@@ -28,6 +28,7 @@ MODEL_LINKS = {
     },
 }
 TMP_CHECKPOINT = "bigscience/bloomz-7b1"
+#TMP_CHECKPOINT = "bigscience/bloomz"
 
 cache_path = Path(Path.cwd() / ".cache" / "bloomz-cache")
 os.makedirs(cache_path, exist_ok=True)
@@ -138,9 +139,9 @@ class BloomzLanguageModel:
 
 
         if self.device_map == "auto":
-            input_ids = self.tokenizer(input_text, return_tensors="pt").input_ids.to("cuda")
+            input_ids = self.tokenizer(input_text, add_special_tokens=False, return_tensors="pt").input_ids.to("cuda")
         else:
-            input_ids = self.tokenizer(input_text, return_tensors="pt").input_ids
+            input_ids = self.tokenizer(input_text, add_special_tokens=False, return_tensors="pt").input_ids
 
         outputs = self.model.generate(input_ids, max_new_tokens=token_length)
         result = self.tokenizer.decode(outputs[0]).replace("<pad>", "").replace("</s>", "").replace("<unk>", "").strip()

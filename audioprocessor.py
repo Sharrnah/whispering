@@ -105,10 +105,12 @@ def whisper_result_handling(result):
                         print("FLAN question: ???")
                         print("FLAN result: ???")
 
-                    send_message(flan_osc_prefix + predicted_text, result)
+                    if predicted_text != prompted_text:
+                        send_message(flan_osc_prefix + predicted_text, result)
 
             # otherwise process every text with FLAN
             else:
+                orig_predicted_text = predicted_text
                 predicted_text = LLM.llm.encode(predicted_text)
                 # translate from auto-detected language to speaker language
                 if settings.GetOption("flan_translate_to_speaker_language"):
@@ -118,18 +120,13 @@ def whisper_result_handling(result):
                     print("FLAN result: " + predicted_text)
                 except:
                     print("FLAN result: ???")
-                send_message(flan_osc_prefix + predicted_text, result)
+
+                if predicted_text != orig_predicted_text:
+                    send_message(flan_osc_prefix + predicted_text, result)
 
         # send regular message if flan was not loaded
         if not flan_loaded:
             send_message(predicted_text, result)
-
-        if settings.GetOption("tts_answer") and silero.init():
-            try:
-                silero_wav, sample_rate = silero.tts.tts(predicted_text)
-                silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
-            except Exception as e:
-                print("Error while playing TTS audio: " + str(e))
 
 
 def send_message(predicted_text, result_obj):
@@ -145,6 +142,17 @@ def send_message(predicted_text, result_obj):
     # Send to Websocket
     if websocket_ip != "0":
         websocket.BroadcastMessage(json.dumps(result_obj))
+
+    # Send to TTS
+    if settings.GetOption("flan_whisper_answer"):
+        # remove osc prefix from message
+        predicted_text = predicted_text.removeprefix(settings.GetOption("flan_osc_prefix")).strip()
+    if settings.GetOption("tts_answer") and predicted_text != "" and silero.init():
+        try:
+            silero_wav, sample_rate = silero.tts.tts(predicted_text)
+            silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
+        except Exception as e:
+            print("Error while playing TTS audio: " + str(e))
 
 
 def load_whisper(model, ai_device):

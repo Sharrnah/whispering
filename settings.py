@@ -63,7 +63,7 @@ TRANSLATE_SETTINGS = {
 
     # FLAN settings
     "flan_enabled": False,  # Enable FLAN A.I.
-    "llm_model": "bloomz",  # LLM model to use. Can be "flan" or "bloomz"
+    "llm_model": "flan",  # LLM model to use. Can be "flan", "bloomz" or "gptj"
     "flan_size": "large",  # FLAN model size. Can be "small", "base", "large", "xl" or "xxl"
     "flan_bits": 32,  # precision can be set to 32 (float), 16 (float) or 8 (int) bits. 8 bits is the fastest but least precise
     "flan_device": "cpu",  # can be "cpu", "cuda" or "auto". ("cuda" and "auto" doing the same)
@@ -71,7 +71,7 @@ TRANSLATE_SETTINGS = {
     "flan_process_only_questions": True,  # if True, the FLAN A.I. will only answer to questions.
     "flan_osc_prefix": "AI: ",  # prefix for OSC messages.
     "flan_translate_to_speaker_language": False,  # Translate from english to speaker language
-    "flan_prompt": "",  # text for prompts or wraps prompt around input text if ?? (two question-marks) is present in the string. Otherwise, it is added to the end of the string.
+    "flan_prompt": "This is a discussion between a [human] and a [AI]. \nThe [AI] is very nice and empathetic.\n\n[human]: Hello nice to meet you.\n[AI]: Nice to meet you too.\n###\n[human]: How is it going today?\n[AI]: Not so bad, thank you! How about you?\n###\n[human]: I am okay too. \n[AI]: Oh that's good.\n###\n[human]: ??\n[AI]: ",  # text for prompts or wraps prompt around input text if ?? (two question-marks) is present in the string. Otherwise, it is added to the end of the string.
     "flan_memory": "",  # longer term memory for FLAN A.I.
     "flan_conditioning_history": 0  # Number of previous messages to condition on. 0 for no conditioning.
 }

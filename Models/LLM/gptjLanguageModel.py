@@ -1,9 +1,8 @@
 # pip install accelerate
-from transformers import T5Tokenizer, T5ForConditionalGeneration
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 from pathlib import Path
 import os
-from time import gmtime, strftime
 
 import loading_state
 import settings
@@ -27,46 +26,15 @@ MODEL_LINKS = {
         ],
         "checksum": "34415fe1e13813e5e3037b950794197870deb5573b0de899d785a1094c1a5e0e"
     },
-    "base": {
-        "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/base.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/base.zip",
-            "https://s3.libs.space:9000/ai-models/FLAN-T5/base.zip",
-         ],
-        "checksum": "577e84801ac0a0dac18a8c66962a688b828f3a567546e988879ae5279d51fcbe"
-     },
-    "large": {
-        "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/large.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/large.zip",
-            "https://s3.libs.space:9000/ai-models/FLAN-T5/large.zip",
-        ],
-        "checksum": "8a713559ffc9ba6ac1af3d8d24478261a085cac3d5448a934596379cb0420518"
-    },
-    "xl": {
-        "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/xl.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/xl.zip",
-            "https://s3.libs.space:9000/ai-models/FLAN-T5/xl.zip",
-        ],
-        "checksum": "15c85799f083b284c73e724068a7ff95c901cd7b55a206a49661940ae5bd4778"
-    },
-    "xxl": {
-        "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/xxl.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/xxl.zip",
-            "https://s3.libs.space:9000/ai-models/FLAN-T5/xxl.zip",
-        ],
-        "checksum": "66c221e46e230714675ae2f1af86852d886ddb2b26ba9ca7f73acd6ed27160dc"
-    }
 }
+TMP_CHECKPOINT = "EleutherAI/gpt-j-6B"
 
-cache_path = Path(Path.cwd() / ".cache" / "flan-t5-cache")
+cache_path = Path(Path.cwd() / ".cache" / "gptj-cache")
 os.makedirs(cache_path, exist_ok=True)
 weight_offload_folder = Path(cache_path / "weight_offload")
 os.makedirs(weight_offload_folder, exist_ok=True)
 
-flan = None
+model = None
 
 PROMPT_FORMATTING = {
     "question": ["about ", "across ", "after ", "against ", "along ", "am ", "amn't ", "among ", "are ", "aren't ", "around ", "at ", "before ", "behind ", "between ",
@@ -90,12 +58,12 @@ PROMPT_FORMATTING = {
 }
 
 
-class FlanLanguageModel:
+class GPTJLanguageModel:
     tokenizer = None
     model = None
     model_size = "large"
-    max_length = 80  # max result token length. default is 20
-    bit_length = 32  # can be 32 = 32 float, 16 = 16 float or 8 = 8 int
+    max_length = 20  # max result token length. default is 20
+    bit_length = 16  # can be 32 = 32 float, 16 = 16 float or 8 = 8 int
     device_map = "auto"  # can be "auto" or None
     low_cpu_mem_usage = True
 
@@ -109,24 +77,21 @@ class FlanLanguageModel:
 
         model_path = Path(cache_path / model_size)
 
-        if not model_path.exists():
-            print(f"Downloading {model_size} FLAN-T5 model...")
-            downloader.download_extract(MODEL_LINKS[model_size]["urls"], str(cache_path.resolve()), MODEL_LINKS[model_size]["checksum"])
+        #if not model_path.exists():
+        #    print(f"Downloading {model_size} BLOOMZ model...")
+        #    downloader.download_extract(MODEL_LINKS[model_size]["urls"], str(cache_path.resolve()), MODEL_LINKS[model_size]["checksum"])
 
-        model_path_string = str(model_path.resolve())
+        # model_path_string = str(model_path.resolve())
 
-        self.tokenizer = T5Tokenizer.from_pretrained(model_path_string, cache_dir=str(cache_path.resolve()))
+        self.tokenizer = AutoTokenizer.from_pretrained(TMP_CHECKPOINT)
 
         match self.bit_length:
             case 16:  # 16 bit float
-                self.model = T5ForConditionalGeneration.from_pretrained(model_path_string, device_map=self.device_map, torch_dtype=torch.float16,
-                                                                        offload_folder=str(weight_offload_folder.resolve()))
+                self.model = AutoModelForCausalLM.from_pretrained(TMP_CHECKPOINT, cache_dir=str(cache_path.resolve()), revision="float16", device_map=self.device_map, torch_dtype=torch.float16, low_cpu_mem_usage=self.low_cpu_mem_usage)
             case 8:  # 8 bit int
-                self.model = T5ForConditionalGeneration.from_pretrained(model_path_string, device_map=self.device_map, load_in_8bit=True,
-                                                                        offload_folder=str(weight_offload_folder.resolve()))
+                self.model = AutoModelForCausalLM.from_pretrained(TMP_CHECKPOINT, cache_dir=str(cache_path.resolve()), device_map=self.device_map, load_in_8bit=True, low_cpu_mem_usage=self.low_cpu_mem_usage)
             case _:  # 32 bit float
-                self.model = T5ForConditionalGeneration.from_pretrained(model_path_string, device_map=self.device_map,
-                                                                        offload_folder=str(weight_offload_folder.resolve()))
+                self.model = AutoModelForCausalLM.from_pretrained(TMP_CHECKPOINT, cache_dir=str(cache_path.resolve()), device_map=self.device_map, low_cpu_mem_usage=self.low_cpu_mem_usage)
 
     # Try to modify prompts to get better results
     @staticmethod
@@ -150,6 +115,10 @@ class FlanLanguageModel:
         return question_prompt, prompt_change
 
     def encode(self, input_text, token_length=max_length):
+        # make sure input has an end token
+        if not input_text.endswith(".") and not input_text.endswith("!") and not input_text.endswith("?") and not input_text.endswith(",") and not input_text.endswith(";") and not input_text.endswith(":"):
+            input_text += "."
+
         # Add flan prompt prefix
         if settings.GetOption("flan_prompt") != "":
             flan_prompt = settings.GetOption("flan_prompt")
@@ -159,9 +128,6 @@ class FlanLanguageModel:
                 input_text = flan_prompt + input_text
         conditioning_input_text = input_text
 
-        # add current time infos
-        input_text = strftime("It is %A the %d %B %Y and the time is %H:%M.") + "\n" + input_text
-
         # Add conditioning lines
         if settings.GetOption("flan_conditioning_history") > 0 and len(self.conditioning_lines) > 0:
             input_text = "\n".join(self.conditioning_lines) + "\n" + input_text
@@ -169,6 +135,7 @@ class FlanLanguageModel:
         # Add flan long-term memory
         if settings.GetOption("flan_memory") != "":
             input_text = settings.GetOption("flan_memory") + "\n" + input_text
+
 
         if self.device_map == "auto":
             input_ids = self.tokenizer(input_text, return_tensors="pt").input_ids.to("cuda")
@@ -189,6 +156,10 @@ class FlanLanguageModel:
             self.conditioning_lines.clear()
 
         # remove some common prefixes from the start of the result (@todo: make this configurable)
+        result = result.strip().removeprefix(settings.GetOption("flan_memory"))
+        result = result.strip().removeprefix("\n".join(self.conditioning_lines) + "\n")
+        result = result.strip().removeprefix(conditioning_input_text)
+
         result = result.removeprefix("A: ")
         result = result.removeprefix("AI: ")
         result = result.removeprefix("Human: ")
@@ -197,20 +168,20 @@ class FlanLanguageModel:
 
 
 def init():
-    global flan
-    if settings.GetOption("flan_enabled") and flan is None:
-        loading_state.set_loading_state("flan_loading", False)
+    global model
+    if settings.GetOption("flan_enabled") and model is None:
+        loading_state.set_loading_state("gpt-j_loading", False)
         model_size = settings.GetOption("flan_size")
         flan_bits = settings.GetOption("flan_bits")
         flan_device = "auto" if settings.GetOption("flan_device") == "cuda" or settings.GetOption("flan_device") == "auto" else None
-        print(f"Flan {model_size} is Loading to {('GPU' if flan_device == 'auto' else 'CPU')} using {flan_bits} bit {('INT' if flan_bits == 8 else 'float')} precision...")
+        print(f"GPT-J {model_size} is Loading to {('GPU' if flan_device == 'auto' else 'CPU')} using {flan_bits} bit {('INT' if flan_bits == 8 else 'float')} precision...")
 
-        flan = FlanLanguageModel(model_size, bit_length=flan_bits, device=flan_device)
-        print("Flan loaded.")
-        loading_state.set_loading_state("flan_loading", False)
+        model = GPTJLanguageModel(model_size, bit_length=flan_bits, device=flan_device)
+        print("GPT-J loaded.")
+        loading_state.set_loading_state("gpt-j_loading", False)
         return True
     else:
-        if flan is not None:
+        if model is not None:
             return True
         else:
             return False

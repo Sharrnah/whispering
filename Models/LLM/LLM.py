@@ -15,6 +15,10 @@ class LargeLanguageModel:
                 from Models.LLM import bloomzLanguageModel
                 bloomzLanguageModel.init()
                 self.model = bloomzLanguageModel.bloomz
+            case "gptj":
+                from Models.LLM import gptjLanguageModel
+                gptjLanguageModel.init()
+                self.model = gptjLanguageModel.model
 
     @staticmethod
     def get_current_model():
