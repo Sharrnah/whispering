@@ -171,7 +171,7 @@ class BloomzLanguageModel:
 def init():
     global bloomz
     if settings.GetOption("flan_enabled") and bloomz is None:
-        loading_state.set_loading_state("bloomz_loading", False)
+        loading_state.set_loading_state("bloomz_loading", True)
         model_size = settings.GetOption("flan_size")
         flan_bits = settings.GetOption("flan_bits")
         flan_device = "auto" if settings.GetOption("flan_device") == "cuda" or settings.GetOption("flan_device") == "auto" else None

@@ -504,7 +504,10 @@ def translate_language(text, from_code, to_code, as_iso1=False):
         print(f"error translating. {to_code} not supported.")
         language_unsupported = True
     if language_unsupported:
-        return text
+        return text, from_code, to_code
+
+    if from_code == to_code:
+        return text, from_code, to_code
 
     tokenizer.src_lang = from_code
     inputs = tokenizer(text, return_tensors="pt").to(torch_device)

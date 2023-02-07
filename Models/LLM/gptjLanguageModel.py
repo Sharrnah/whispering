@@ -170,7 +170,7 @@ class GPTJLanguageModel:
 def init():
     global model
     if settings.GetOption("flan_enabled") and model is None:
-        loading_state.set_loading_state("gpt-j_loading", False)
+        loading_state.set_loading_state("gpt-j_loading", True)
         model_size = settings.GetOption("flan_size")
         flan_bits = settings.GetOption("flan_bits")
         flan_device = "auto" if settings.GetOption("flan_device") == "cuda" or settings.GetOption("flan_device") == "auto" else None

@@ -199,7 +199,7 @@ class FlanLanguageModel:
 def init():
     global flan
     if settings.GetOption("flan_enabled") and flan is None:
-        loading_state.set_loading_state("flan_loading", False)
+        loading_state.set_loading_state("flan_loading", True)
         model_size = settings.GetOption("flan_size")
         flan_bits = settings.GetOption("flan_bits")
         flan_device = "auto" if settings.GetOption("flan_device") == "cuda" or settings.GetOption("flan_device") == "auto" else None
