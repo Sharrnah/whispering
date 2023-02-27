@@ -104,6 +104,7 @@ def int2float(sound):
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 @click.pass_context
 def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, config, verbose, **kwargs):
+
     # Load settings from file
     if config is not None:
         settings.SETTINGS_PATH = Path(Path.cwd() / config)
@@ -283,25 +284,37 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
                 wavefiledata = b''.join(clip)
 
-                finalwavfile = io.BytesIO()
-                wavefile = wave.open(finalwavfile, 'wb')
-                wavefile.setnchannels(CHANNELS)
-                wavefile.setsampwidth(2)
-                wavefile.setframerate(SAMPLE_RATE)
-                wavefile.writeframes(wavefiledata)
+                # check if the full audio clip is above the confidence threshold
+                vad_clip_test = settings.GetOption("vad_on_full_clip")
+                full_audio_confidence = 0.
+                if vad_clip_test:
+                    audio_full_int16 = np.frombuffer(wavefiledata, np.int16)
+                    audio_full_float32 = int2float(audio_full_int16)
+                    full_audio_confidence = vad_model(torch.from_numpy(audio_full_float32), SAMPLE_RATE).item()
+                    print(full_audio_confidence)
 
-                finalwavfile.seek(0)
-                audioprocessor.q.put(finalwavfile.read())
+                if (not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold):
+                    finalwavfile = io.BytesIO()
+                    wavefile = wave.open(finalwavfile, 'wb')
+                    wavefile.setnchannels(CHANNELS)
+                    wavefile.setsampwidth(2)
+                    wavefile.setframerate(SAMPLE_RATE)
+                    wavefile.writeframes(wavefiledata)
 
-                wavefile.close()
+                    finalwavfile.seek(0)
+                    audioprocessor.q.put(finalwavfile.read())
+                    # vad_iterator.reset_states()  # reset model states after each audio
+
+                    wavefile.close()
+
+                    # set typing indicator for VRChat
+                    if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption("osc_typing_indicator"):
+                        VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
+                    # send start info for processing indicator in websocket client
+                    websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
+
                 frames = []
                 start_time = time.time()
-
-                # set typing indicator for VRChat
-                if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption("osc_typing_indicator"):
-                    VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
-                # send start info for processing indicator in websocket client
-                websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
 
             # set start recording variable to true if the volume and voice confidence is above the threshold
             if peak_amplitude >= energy and new_confidence >= confidence_threshold:

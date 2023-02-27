@@ -14,6 +14,13 @@ from Models.LLM import LLM
 from Models.TTS import silero
 import loading_state
 
+# Plugins
+from Plugins import Base
+
+# load plugins into array
+plugins = []
+for plugin in Base.plugins:
+    plugins.append(plugin())
 # some regular mistakenly recognized words/sentences on mostly silence audio, which are ignored in processing
 blacklist = [
     "",
@@ -129,11 +136,19 @@ def whisper_result_handling(result):
             send_message(predicted_text, result)
 
 
+def plugin_process(predicted_text, result_obj):
+    for plugin_inst in plugins:
+        plugin_inst.stt(predicted_text, result_obj)
+
 def send_message(predicted_text, result_obj):
     osc_ip = settings.GetOption("osc_ip")
     osc_address = settings.GetOption("osc_address")
     osc_port = settings.GetOption("osc_port")
     websocket_ip = settings.GetOption("websocket_ip")
+
+    # process plugins
+    plugin_thread = threading.Thread(target=plugin_process, args=(predicted_text, result_obj))
+    plugin_thread.start()
 
     # Send over OSC
     if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and predicted_text != "":

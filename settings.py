@@ -34,7 +34,8 @@ TRANSLATE_SETTINGS = {
     "logprob_threshold": "-1.0",
     "no_speech_threshold": "0.6",
     "vad_enabled": True,  # Enable Voice activity detection (VAD)
-    "vad_confidence_threshold": "0.6",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
+    "vad_on_full_clip": True,  # Make an additional VAD check on the full clip (Not only on each frame).
+    "vad_confidence_threshold": "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
     "vad_num_samples": 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
     "vad_thread_num": 1,  # number of threads to use for VAD.
     "fp16": False,  # Set to True to use FP16 instead of FP32.
@@ -73,7 +74,11 @@ TRANSLATE_SETTINGS = {
     "flan_translate_to_speaker_language": False,  # Translate from english to speaker language
     "flan_prompt": "This is a discussion between a [human] and a [AI]. \nThe [AI] is very nice and empathetic.\n\n[human]: Hello nice to meet you.\n[AI]: Nice to meet you too.\n###\n[human]: How is it going today?\n[AI]: Not so bad, thank you! How about you?\n###\n[human]: I am okay too. \n[AI]: Oh that's good.\n###\n[human]: ??\n[AI]: ",  # text for prompts or wraps prompt around input text if ?? (two question-marks) is present in the string. Otherwise, it is added to the end of the string.
     "flan_memory": "",  # longer term memory for FLAN A.I.
-    "flan_conditioning_history": 0  # Number of previous messages to condition on. 0 for no conditioning.
+    "flan_conditioning_history": 0,  # Number of previous messages to condition on. 0 for no conditioning.
+
+    # Plugins
+    "plugins": {},  # active plugins
+    "plugin_settings": {}  # plugin settings
 }
 
 

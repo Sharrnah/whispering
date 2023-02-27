@@ -5,11 +5,13 @@ transformers>=4.24.0
 ffmpeg-python==0.2.0
 click>=8.1.3
 PyAudio
+PyAudioWPatch
 SpeechRecognition
 pydub>=0.25.1
 git+https://github.com/openai/whisper.git
---extra-index-url https://download.pytorch.org/whl/cu113
-torch==1.12.1+cu113
+--extra-index-url https://download.pytorch.org/whl/cu117
+torch==1.13.1+cu117
+soundfile
 python-osc>=1.8.0
 websockets>=10.4
 argostranslate>=1.7.0
