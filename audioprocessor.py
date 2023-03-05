@@ -67,7 +67,9 @@ def whisper_result_handling(result):
     if not predicted_text.lower() in blacklist:
         if not verbose:
             try:
-                print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": " + predicted_text.encode('utf-8', 'ignore').decode('utf-8', 'ignore'))
+                print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": " + predicted_text.encode('utf-8',
+                                                                                                        'ignore').decode(
+                    'utf-8', 'ignore'))
             except:
                 print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": ???")
 
@@ -83,7 +85,8 @@ def whisper_result_handling(result):
             from_lang = settings.GetOption("src_lang")
             to_lang = settings.GetOption("trg_lang")
             to_romaji = settings.GetOption("txt_ascii")
-            predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, from_lang, to_lang, to_romaji)
+            predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, from_lang,
+                                                                                         to_lang, to_romaji)
             result["txt_translation"] = predicted_text
             result["txt_translation_source"] = txt_from_lang
             result["txt_translation_target"] = to_lang
@@ -103,7 +106,10 @@ def whisper_result_handling(result):
 
                     # translate from auto-detected language to speaker language
                     if settings.GetOption("flan_translate_to_speaker_language"):
-                        predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, "auto", result['language'], False, True)
+                        predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text,
+                                                                                                     "auto",
+                                                                                                     result['language'],
+                                                                                                     False, True)
                     result['flan_answer'] = predicted_text
                     try:
                         print("FLAN question: " + prompted_text)
@@ -121,7 +127,9 @@ def whisper_result_handling(result):
                 predicted_text = LLM.llm.encode(predicted_text)
                 # translate from auto-detected language to speaker language
                 if settings.GetOption("flan_translate_to_speaker_language"):
-                    predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, "auto", result['language'], False, True)
+                    predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, "auto",
+                                                                                                 result['language'],
+                                                                                                 False, True)
                 result['flan_answer'] = predicted_text
                 try:
                     print("FLAN result: " + predicted_text)
@@ -140,6 +148,7 @@ def plugin_process(predicted_text, result_obj):
     for plugin_inst in plugins:
         plugin_inst.stt(predicted_text, result_obj)
 
+
 def send_message(predicted_text, result_obj):
     osc_ip = settings.GetOption("osc_ip")
     osc_address = settings.GetOption("osc_address")
@@ -154,6 +163,8 @@ def send_message(predicted_text, result_obj):
     if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and predicted_text != "":
         VRC_OSCLib.Chat(predicted_text, True, True, osc_address, IP=osc_ip, PORT=osc_port,
                         convert_ascii=settings.GetOption("osc_convert_ascii"))
+        settings.SetOption("plugin_timer_stopped", True)
+
     # Send to Websocket
     if websocket_ip != "0":
         websocket.BroadcastMessage(json.dumps(result_obj))

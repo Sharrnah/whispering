@@ -3,6 +3,7 @@ import json
 import signal
 import sys
 import time
+import threading
 
 # import speech_recognition_patch as sr  # this is a patched version of speech_recognition. (disabled for now because of freeze issues)
 import speech_recognition as sr
@@ -65,46 +66,90 @@ def int2float(sound):
     return sound
 
 
+# load plugins into array
+# Plugins
+from Plugins import Base
+
+plugins = []
+for plugin in Base.plugins:
+    plugins.append(plugin())
+
+
+def call_plugin_timer():
+    # Call the method every x seconds
+    timer = threading.Timer(settings.GetOption("plugin_timer"), call_plugin_timer)
+    timer.start()
+    if not settings.GetOption("plugin_timer_stopped"):
+        for plugin_inst in plugins:
+            plugin_inst.timer()
+    else:
+        if settings.GetOption("plugin_current_timer") <= 0.0:
+            settings.SetOption("plugin_current_timer", settings.GetOption("plugin_timer_timeout"))
+        else:
+            settings.SetOption("plugin_current_timer",
+                               settings.GetOption("plugin_current_timer") - settings.GetOption("plugin_timer"))
+            if settings.GetOption("plugin_current_timer") <= 0.0:
+                settings.SetOption("plugin_timer_stopped", False)
+                settings.SetOption("plugin_current_timer", 0.0)
+
+
 @click.command()
 @click.option('--devices', default='False', help='print all available devices id', type=str)
 @click.option('--device_index', default=-1, help='the id of the input device (-1 = default active Mic)', type=int)
-@click.option('--device_out_index', default=-1, help='the id of the output device (-1 = default active Speaker)', type=int)
+@click.option('--device_out_index', default=-1, help='the id of the output device (-1 = default active Speaker)',
+              type=int)
 @click.option('--sample_rate', default=whisper_audio.SAMPLE_RATE, help='sample rate of recording', type=int)
-@click.option("--task", default="transcribe", help="task for the model whether to only transcribe the audio or translate the audio to english",
+@click.option("--task", default="transcribe",
+              help="task for the model whether to only transcribe the audio or translate the audio to english",
               type=click.Choice(["transcribe", "translate"]))
 @click.option("--model", default="small", help="Model to use", type=click.Choice(available_models()))
-@click.option("--language", default=None, help="language spoken in the audio, specify None to perform language detection",
+@click.option("--language", default=None,
+              help="language spoken in the audio, specify None to perform language detection",
               type=click.Choice(audioprocessor.whisper_get_languages_list_keys()))
 @click.option("--condition_on_previous_text", default=False,
-              help="Feed it the previous result to keep it consistent across recognition windows, but makes it more prone to getting stuck in a failure loop", is_flag=True,
+              help="Feed it the previous result to keep it consistent across recognition windows, but makes it more prone to getting stuck in a failure loop",
+              is_flag=True,
               type=bool)
 @click.option("--energy", default=300, help="Energy level for mic to detect", type=int)
 @click.option("--dynamic_energy", default=False, is_flag=True, help="Flag to enable dynamic engergy", type=bool)
 @click.option("--pause", default=0.8, help="Pause time before entry ends", type=float)
-@click.option("--phrase_time_limit", default=None, help="phrase time limit before entry ends to break up long recognitions.", type=float)
+@click.option("--phrase_time_limit", default=None,
+              help="phrase time limit before entry ends to break up long recognitions.", type=float)
 @click.option("--osc_ip", default="127.0.0.1", help="IP to send OSC message to. Set to '0' to disable", type=str)
 @click.option("--osc_port", default=9000, help="Port to send OSC message to. ('9000' as default for VRChat)", type=int)
-@click.option("--osc_address", default="/chatbox/input", help="The Address the OSC messages are send to. ('/chatbox/input' as default for VRChat)", type=str)
-@click.option("--osc_convert_ascii", default='False', help="Convert Text to ASCII compatible when sending over OSC.", type=str)
-@click.option("--websocket_ip", default="0", help="IP where Websocket Server listens on. Set to '0' to disable", type=str)
-@click.option("--websocket_port", default=5000, help="Port where Websocket Server listens on. ('5000' as default)", type=int)
-@click.option("--ai_device", default=None, help="The Device the AI is loaded on. can be 'cuda' or 'cpu'. default does autodetect", type=click.Choice(["cuda", "cpu"]))
-@click.option("--txt_translator", default="NLLB200", help="The Model the AI is loading for text translations. can be 'NLLB200', 'M2M100', 'ARGOS' or 'None'. default is M2M100",
+@click.option("--osc_address", default="/chatbox/input",
+              help="The Address the OSC messages are send to. ('/chatbox/input' as default for VRChat)", type=str)
+@click.option("--osc_convert_ascii", default='False', help="Convert Text to ASCII compatible when sending over OSC.",
+              type=str)
+@click.option("--websocket_ip", default="0", help="IP where Websocket Server listens on. Set to '0' to disable",
+              type=str)
+@click.option("--websocket_port", default=5000, help="Port where Websocket Server listens on. ('5000' as default)",
+              type=int)
+@click.option("--ai_device", default=None,
+              help="The Device the AI is loaded on. can be 'cuda' or 'cpu'. default does autodetect",
+              type=click.Choice(["cuda", "cpu"]))
+@click.option("--txt_translator", default="NLLB200",
+              help="The Model the AI is loading for text translations. can be 'NLLB200', 'M2M100', 'ARGOS' or 'None'. default is M2M100",
               type=click.Choice(["NLLB200", "M2M100", "ARGOS"]))
 @click.option("--txt_translator_size", default="small",
               help="The Model size if M2M100 or NLLB200 text translator is used. can be 'small', 'medium' or 'large' for NLLB200 or 'small' or 'large' for M2M100. default is small. (has no effect with ARGOS)",
               type=click.Choice(["small", "medium", "large"]))
-@click.option("--txt_translator_device", default="auto", help="The device used for M2M100 translation. (has no effect with ARGOS or NLLB200)",
+@click.option("--txt_translator_device", default="auto",
+              help="The device used for M2M100 translation. (has no effect with ARGOS or NLLB200)",
               type=click.Choice(["auto", "cuda", "cpu"]))
-@click.option("--ocr_window_name", default="VRChat", help="Window name of the application for OCR translations. (Default: 'VRChat')", type=str)
-@click.option("--flan_enabled", default=False, help="Enable FLAN-T5 A.I. (General A.I. which can be used for Question Answering.)", type=bool)
-@click.option("--open_browser", default=False, help="Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)", is_flag=True, type=bool)
-@click.option("--config", default=None, help="Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]",
+@click.option("--ocr_window_name", default="VRChat",
+              help="Window name of the application for OCR translations. (Default: 'VRChat')", type=str)
+@click.option("--flan_enabled", default=False,
+              help="Enable FLAN-T5 A.I. (General A.I. which can be used for Question Answering.)", type=bool)
+@click.option("--open_browser", default=False,
+              help="Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)",
+              is_flag=True, type=bool)
+@click.option("--config", default=None,
+              help="Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]",
               type=str)
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 @click.pass_context
 def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, config, verbose, **kwargs):
-
     # Load settings from file
     if config is not None:
         settings.SETTINGS_PATH = Path(Path.cwd() / config)
@@ -144,14 +189,20 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     # set initial settings
     settings.SetOption("whisper_task", settings.GetArgumentSettingFallback(ctx, "task", "whisper_task"))
     device_out_index = settings.GetArgumentSettingFallback(ctx, "device_out_index", "device_out_index")
-    settings.SetOption("device_out_index", (device_out_index if device_out_index is None or device_out_index > -1 else None))
+    settings.SetOption("device_out_index",
+                       (device_out_index if device_out_index is None or device_out_index > -1 else None))
 
-    settings.SetOption("condition_on_previous_text", settings.GetArgumentSettingFallback(ctx, "condition_on_previous_text", "condition_on_previous_text"))
+    settings.SetOption("condition_on_previous_text",
+                       settings.GetArgumentSettingFallback(ctx, "condition_on_previous_text",
+                                                           "condition_on_previous_text"))
     model = settings.SetOption("model", settings.GetArgumentSettingFallback(ctx, "model", "model"))
 
-    language = settings.SetOption("current_language", settings.GetArgumentSettingFallback(ctx, "language", "current_language"))
+    language = settings.SetOption("current_language",
+                                  settings.GetArgumentSettingFallback(ctx, "language", "current_language"))
 
-    phrase_time_limit = settings.SetOption("phrase_time_limit", settings.GetArgumentSettingFallback(ctx, "phrase_time_limit", "phrase_time_limit"))
+    phrase_time_limit = settings.SetOption("phrase_time_limit",
+                                           settings.GetArgumentSettingFallback(ctx, "phrase_time_limit",
+                                                                               "phrase_time_limit"))
     if phrase_time_limit == 0:
         phrase_time_limit = None
 
@@ -176,18 +227,26 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     osc_ip = settings.SetOption("osc_ip", settings.GetArgumentSettingFallback(ctx, "osc_ip", "osc_ip"))
     osc_port = settings.SetOption("osc_port", settings.GetArgumentSettingFallback(ctx, "osc_port", "osc_port"))
     settings.SetOption("osc_address", settings.GetArgumentSettingFallback(ctx, "osc_address", "osc_address"))
-    settings.SetOption("osc_convert_ascii", str2bool(settings.GetArgumentSettingFallback(ctx, "osc_convert_ascii", "osc_convert_ascii")))
+    settings.SetOption("osc_convert_ascii",
+                       str2bool(settings.GetArgumentSettingFallback(ctx, "osc_convert_ascii", "osc_convert_ascii")))
 
-    websocket_ip = settings.SetOption("websocket_ip", settings.GetArgumentSettingFallback(ctx, "websocket_ip", "websocket_ip"))
-    websocket_port = settings.SetOption("websocket_port", settings.GetArgumentSettingFallback(ctx, "websocket_port", "websocket_port"))
+    websocket_ip = settings.SetOption("websocket_ip",
+                                      settings.GetArgumentSettingFallback(ctx, "websocket_ip", "websocket_ip"))
+    websocket_port = settings.SetOption("websocket_port",
+                                        settings.GetArgumentSettingFallback(ctx, "websocket_port", "websocket_port"))
 
-    txt_translator = settings.SetOption("txt_translator", settings.GetArgumentSettingFallback(ctx, "txt_translator", "txt_translator"))
-    settings.SetOption("txt_translator_size", settings.GetArgumentSettingFallback(ctx, "txt_translator_size", "txt_translator_size"))
+    txt_translator = settings.SetOption("txt_translator",
+                                        settings.GetArgumentSettingFallback(ctx, "txt_translator", "txt_translator"))
+    settings.SetOption("txt_translator_size",
+                       settings.GetArgumentSettingFallback(ctx, "txt_translator_size", "txt_translator_size"))
 
-    txt_translator_device = settings.SetOption("txt_translator_device", settings.GetArgumentSettingFallback(ctx, "txt_translator_device", "txt_translator_device"))
+    txt_translator_device = settings.SetOption("txt_translator_device",
+                                               settings.GetArgumentSettingFallback(ctx, "txt_translator_device",
+                                                                                   "txt_translator_device"))
     texttranslate.SetDevice(txt_translator_device)
 
-    settings.SetOption("ocr_window_name", settings.GetArgumentSettingFallback(ctx, "ocr_window_name", "ocr_window_name"))
+    settings.SetOption("ocr_window_name",
+                       settings.GetArgumentSettingFallback(ctx, "ocr_window_name", "ocr_window_name"))
 
     settings.SetOption("flan_enabled", settings.GetArgumentSettingFallback(ctx, "flan_enabled", "flan_enabled"))
 
@@ -217,8 +276,14 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     # Load FLAN-T5 dependencies
     LLM.init()
 
-    vad_enabled = settings.SetOption("vad_enabled", settings.GetArgumentSettingFallback(ctx, "vad_enabled", "vad_enabled"))
-    vad_thread_num = settings.SetOption("vad_thread_num", settings.GetArgumentSettingFallback(ctx, "vad_thread_num", "vad_thread_num"))
+    # prepare the plugin timer calls
+    plugin_thread = threading.Thread(target=call_plugin_timer)
+    plugin_thread.start()
+
+    vad_enabled = settings.SetOption("vad_enabled",
+                                     settings.GetArgumentSettingFallback(ctx, "vad_enabled", "vad_enabled"))
+    vad_thread_num = settings.SetOption("vad_thread_num",
+                                        settings.GetArgumentSettingFallback(ctx, "vad_thread_num", "vad_thread_num"))
 
     if vad_enabled:
         torch.hub.set_dir(str(Path(cache_vad_path).resolve()))
@@ -228,7 +293,9 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                                               )
 
         # num_samples = 1536
-        num_samples = int(settings.SetOption("vad_num_samples", settings.GetArgumentSettingFallback(ctx, "vad_num_samples", "vad_num_samples")))
+        num_samples = int(settings.SetOption("vad_num_samples",
+                                             settings.GetArgumentSettingFallback(ctx, "vad_num_samples",
+                                                                                 "vad_num_samples")))
         # clip_duration = 4
         clip_duration = phrase_time_limit
 
@@ -308,7 +375,8 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                     wavefile.close()
 
                     # set typing indicator for VRChat
-                    if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption("osc_typing_indicator"):
+                    if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption(
+                            "osc_typing_indicator"):
                         VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
                     # send start info for processing indicator in websocket client
                     websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
@@ -331,12 +399,14 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                 start_time = time.time()
 
             # stop recording if no speech is detected for pause seconds
-            if start_rec_on_volume_threshold and (new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (
+            if start_rec_on_volume_threshold and (
+                    new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (
                     time.time() - pause_time) > pause:
                 start_rec_on_volume_threshold = False
 
             # save chunk as previous audio chunk to reuse later
-            if not start_rec_on_volume_threshold and (new_confidence < confidence_threshold or confidence_threshold == 0.0):
+            if not start_rec_on_volume_threshold and (
+                    new_confidence < confidence_threshold or confidence_threshold == 0.0):
                 previous_audio_chunk = audio_chunk
             else:
                 previous_audio_chunk = None
@@ -348,7 +418,8 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
         r.pause_threshold = pause
         r.dynamic_energy_threshold = dynamic_energy
 
-        with sr.Microphone(sample_rate=sample_rate, device_index=(device_index if device_index > -1 else None)) as source:
+        with sr.Microphone(sample_rate=sample_rate,
+                           device_index=(device_index if device_index > -1 else None)) as source:
 
             audioprocessor.start_whisper_thread()
 
@@ -362,7 +433,8 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                 audioprocessor.q.put(audio_data)
 
                 # set typing indicator for VRChat
-                if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption("osc_typing_indicator"):
+                if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption(
+                        "osc_typing_indicator"):
                     VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
                 # send start info for processing indicator in websocket client
                 websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))

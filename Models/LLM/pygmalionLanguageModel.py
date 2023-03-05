@@ -28,39 +28,54 @@ MODEL_LINKS = {
         "checksum": "34415fe1e13813e5e3037b950794197870deb5573b0de899d785a1094c1a5e0e"
     },
 }
-TMP_CHECKPOINT = "bigscience/bloomz-7b1"
-#TMP_CHECKPOINT = "bigscience/bloomz"
+TMP_CHECKPOINT = "PygmalionAI/pygmalion-6b"
 
-cache_path = Path(Path.cwd() / ".cache" / "bloomz-cache")
+cache_path = Path(Path.cwd() / ".cache" / "pygmalion-cache")
 os.makedirs(cache_path, exist_ok=True)
 weight_offload_folder = Path(cache_path / "weight_offload")
 os.makedirs(weight_offload_folder, exist_ok=True)
 
-bloomz = None
+model = None
 
 PROMPT_FORMATTING = {
-    "question": ["about ", "across ", "after ", "against ", "along ", "am ", "amn't ", "among ", "are ", "aren't ", "around ", "at ", "before ", "behind ", "between ",
-                 "beyond ", "but ", "by ", "can ", "can't ", "concerning ", "could ", "couldn't ", "despite ", "did ", "didn't ", "do ", "does ", "doesn't ", "don't ",
-                 "down ", "during ", "except ", "following ", "for ", "from ", "had ", "hadn't ", "has ", "hasn't ", "have ", "haven't ", "how ", "how's ", "in ",
-                 "including ", "into ", "is ", "isn't ", "like ", "may ", "mayn't ", "might ", "mightn't ", "must ", "mustn't ", "near ", "of ", "off ", "on ", "out ",
-                 "over ", "plus ", "shall ", "shan't ", "should ", "shouldn't ", "since ", "through ", "throughout ", "to ", "towards ", "under ", "until ", "up ", "upon ",
-                 "was ", "wasn't ", "were ", "weren't ", "what ", "what's ", "when ", "when's ", "where ", "where's ", "which ", "which's ", "who ", "who's ", "why ",
+    "question": ["about ", "across ", "after ", "against ", "along ", "am ", "amn't ", "among ", "are ", "aren't ",
+                 "around ", "at ", "before ", "behind ", "between ",
+                 "beyond ", "but ", "by ", "can ", "can't ", "concerning ", "could ", "couldn't ", "despite ", "did ",
+                 "didn't ", "do ", "does ", "doesn't ", "don't ",
+                 "down ", "during ", "except ", "following ", "for ", "from ", "had ", "hadn't ", "has ", "hasn't ",
+                 "have ", "haven't ", "how ", "how's ", "in ",
+                 "including ", "into ", "is ", "isn't ", "like ", "may ", "mayn't ", "might ", "mightn't ", "must ",
+                 "mustn't ", "near ", "of ", "off ", "on ", "out ",
+                 "over ", "plus ", "shall ", "shan't ", "should ", "shouldn't ", "since ", "through ", "throughout ",
+                 "to ", "towards ", "under ", "until ", "up ", "upon ",
+                 "was ", "wasn't ", "were ", "weren't ", "what ", "what's ", "when ", "when's ", "where ", "where's ",
+                 "which ", "which's ", "who ", "who's ", "why ",
                  "why's ", "will ", "with ", "within ", "without ", "won't ", "would ", "wouldn't "],
-    "statement": ["i ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ",
-                  "i can ", "i want ", "i need ", "i like ", "i love ", "i hate ", "i don't like ", "i don't love ", "i don't hate ", "i don't want ", "i don't need ", "i don't ",
-                  "i do ", "i do not ", "i did ", "i did not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ", "i can ",
-                  "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ",
-                  "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ",
-                  "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ",
-                  "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ",
-                  "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ",
-                  "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ",
-                  "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was "],
-    "command": ["you have ", "you should ", "you do ", "ai ", "artificial intelligence"],
+    "statement": ["i ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ",
+                  "i would not ", "i have ", "i have not ", "i had ", "i had not ",
+                  "i can ", "i want ", "i need ", "i like ", "i love ", "i hate ", "i don't like ", "i don't love ",
+                  "i don't hate ", "i don't want ", "i don't need ", "i don't ",
+                  "i do ", "i do not ", "i did ", "i did not ", "i will ", "i will not ", "i would ", "i would not ",
+                  "i have ", "i have not ", "i had ", "i had not ", "i can ",
+                  "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ",
+                  "i will not ", "i would ", "i would not ", "i have ",
+                  "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ",
+                  "i am not ", "i was ", "i was not ", "i will ", "i will not ",
+                  "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ", "i can ", "i can not ",
+                  "i cannot ", "i am not ", "i am ", "i am not ", "i was ",
+                  "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ",
+                  "i had ", "i had not ", "i can ", "i can not ", "i cannot ",
+                  "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ",
+                  "i would not ", "i have ", "i have not ", "i had ", "i had not ",
+                  "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ",
+                  "i will ", "i will not ", "i would ", "i would not ", "i have ",
+                  "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ",
+                  "i am not ", "i was "],
+    "command": ["ai? ", "ai. ", "ai ", "a.i. ", "ai, ", "ai! ", "artificial intelligence", "tiger"],
 }
 
 
-class BloomzLanguageModel:
+class PygmalionLanguageModel:
     tokenizer = None
     model = None
     model_size = "large"
@@ -108,7 +123,7 @@ class BloomzLanguageModel:
         # looks like a question
         #if "?" in question and any(ele in question for ele in PROMPT_FORMATTING['question']):
         if ("?" in question and any(ele in question for ele in PROMPT_FORMATTING['question'])) or any(ele in question for ele in PROMPT_FORMATTING['command']):
-            #if any(ele in question for ele in PROMPT_FORMATTING['command']):
+        #if any(ele in question for ele in PROMPT_FORMATTING['command']):
             # possible_prompt_prefixes.append("Answer the following question by reasoning step-by-step. ")
             #possible_prompt_prefixes.append("Answer the following question. ")
             #possible_prompt_prefixes.append("Question: ")
@@ -137,9 +152,6 @@ class BloomzLanguageModel:
                 input_text = flan_prompt + input_text
         conditioning_input_text = input_text
 
-        # add current time infos
-        input_text = strftime("It is %A the %d %B %Y and the time is %H:%M.") + "\n" + input_text
-
         # Add conditioning lines
         if settings.GetOption("flan_conditioning_history") > 0 and len(self.conditioning_lines) > 0:
             input_text = "\n".join(self.conditioning_lines) + "\n" + input_text
@@ -147,6 +159,9 @@ class BloomzLanguageModel:
         # Add flan long-term memory
         if settings.GetOption("flan_memory") != "":
             input_text = settings.GetOption("flan_memory") + "\n" + input_text
+
+        # add current time infos
+        input_text = strftime("It is %A the %d %B %Y and the time is %H:%M.") + "\n" + input_text
 
         if self.device_map == "auto":
             input_ids = self.tokenizer(input_text, return_tensors="pt")['input_ids'].cuda(0)
@@ -200,7 +215,7 @@ class BloomzLanguageModel:
         result = result.removeprefix(":")
 
         if result.strip() == "":
-            if retry < 3:
+            if retry < 5:
                 return self.encode(original_input_text, token_length, retry + 1)
             else:
                 result = "hmm..."
@@ -209,9 +224,17 @@ class BloomzLanguageModel:
         if settings.GetOption("flan_conditioning_history") > 0:
             if len(self.conditioning_lines) >= settings.GetOption("flan_conditioning_history"):
                 difference = len(self.conditioning_lines) - settings.GetOption("flan_conditioning_history")
-                del self.conditioning_lines[0:difference - 1]
 
-            self.conditioning_lines.append(conditioning_input_text + result)
+                if settings.GetOption("flan_prompt") != "":
+                    del self.conditioning_lines[1:difference - 1]
+                else:
+                    del self.conditioning_lines[0:difference - 1]
+                #self.conditioning_lines.insert(0, conditioning_input_text + result)
+
+            if len(self.conditioning_lines) == 0:
+                self.conditioning_lines.append(conditioning_input_text + result)
+            else:
+                self.conditioning_lines.append("[human]: " + original_input_text + "\n[Tiger]: " + result)
         else:
             self.conditioning_lines.clear()
 
@@ -219,20 +242,22 @@ class BloomzLanguageModel:
 
 
 def init():
-    global bloomz
-    if settings.GetOption("flan_enabled") and bloomz is None:
-        loading_state.set_loading_state("bloomz_loading", True)
+    global model
+    if settings.GetOption("flan_enabled") and model is None:
+        loading_state.set_loading_state("pygmalion_loading", True)
         model_size = settings.GetOption("flan_size")
         flan_bits = settings.GetOption("flan_bits")
-        flan_device = "auto" if settings.GetOption("flan_device") == "cuda" or settings.GetOption("flan_device") == "auto" else None
-        print(f"Bloomz {model_size} is Loading to {('GPU' if flan_device == 'auto' else 'CPU')} using {flan_bits} bit {('INT' if flan_bits == 8 else 'float')} precision...")
+        flan_device = "auto" if settings.GetOption("flan_device") == "cuda" or settings.GetOption(
+            "flan_device") == "auto" else None
+        print(
+            f"pygmalion {model_size} is Loading to {('GPU' if flan_device == 'auto' else 'CPU')} using {flan_bits} bit {('INT' if flan_bits == 8 else 'float')} precision...")
 
-        bloomz = BloomzLanguageModel(model_size, bit_length=flan_bits, device=flan_device)
-        print("Bloomz loaded.")
-        loading_state.set_loading_state("bloomz_loading", False)
+        model = PygmalionLanguageModel(model_size, bit_length=flan_bits, device=flan_device)
+        print("pygmalion loaded.")
+        loading_state.set_loading_state("pygmalion_loading", False)
         return True
     else:
-        if bloomz is not None:
+        if model is not None:
             return True
         else:
             return False

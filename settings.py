@@ -34,7 +34,7 @@ TRANSLATE_SETTINGS = {
     "logprob_threshold": "-1.0",
     "no_speech_threshold": "0.6",
     "vad_enabled": True,  # Enable Voice activity detection (VAD)
-    "vad_on_full_clip": True,  # Make an additional VAD check on the full clip (Not only on each frame).
+    "vad_on_full_clip": False,  # Make an additional VAD check on the full clip (Not only on each frame).
     "vad_confidence_threshold": "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
     "vad_num_samples": 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
     "vad_thread_num": 1,  # number of threads to use for VAD.
@@ -64,7 +64,7 @@ TRANSLATE_SETTINGS = {
 
     # FLAN settings
     "flan_enabled": False,  # Enable FLAN A.I.
-    "llm_model": "flan",  # LLM model to use. Can be "flan", "bloomz" or "gptj"
+    "llm_model": "gptj",  # LLM model to use. Can be "flan", "bloomz" or "gptj"
     "flan_size": "large",  # FLAN model size. Can be "small", "base", "large", "xl" or "xxl"
     "flan_bits": 32,  # precision can be set to 32 (float), 16 (float) or 8 (int) bits. 8 bits is the fastest but least precise
     "flan_device": "cpu",  # can be "cpu", "cuda" or "auto". ("cuda" and "auto" doing the same)
@@ -78,7 +78,11 @@ TRANSLATE_SETTINGS = {
 
     # Plugins
     "plugins": {},  # active plugins
-    "plugin_settings": {}  # plugin settings
+    "plugin_settings": {},  # plugin settings
+    "plugin_timer_timeout": 15.0,  # Timer timeout for plugins
+    "plugin_timer": 2.0,  # Timer for plugins
+    "plugin_timer_stopped": False,
+    "plugin_current_timer": 0.0
 }
 
 
@@ -119,6 +123,10 @@ def SaveYaml(path):
         del to_save_settings['transl_result_textarea_savetts_voice']
     if "transl_result_textarea_sendtts_download" in to_save_settings:
         del to_save_settings['transl_result_textarea_sendtts_download']
+    if "plugin_timer_stopped" in to_save_settings:
+        del to_save_settings['plugin_timer_stopped']
+    if "plugin_current_timer" in to_save_settings:
+        del to_save_settings['plugin_current_timer']
 
     with open(path, "w") as f:
         yaml.dump(to_save_settings, f)

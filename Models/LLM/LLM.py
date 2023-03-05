@@ -19,6 +19,10 @@ class LargeLanguageModel:
                 from Models.LLM import gptjLanguageModel
                 gptjLanguageModel.init()
                 self.model = gptjLanguageModel.model
+            case "pygmalion":
+                from Models.LLM import pygmalionLanguageModel
+                pygmalionLanguageModel.init()
+                self.model = pygmalionLanguageModel.model
 
     @staticmethod
     def get_current_model():

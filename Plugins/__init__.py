@@ -1,7 +1,9 @@
 import os
 import traceback
 from importlib import util
+from pathlib import Path
 
+import settings
 
 class Base:
     """Basic resource class. Concrete resources will inherit from this one
@@ -25,13 +27,17 @@ def load_module(path):
 
 
 # Get current path
-path = os.path.abspath(__file__)
-dirpath = os.path.dirname(path)
+plugin_path = Path(Path.cwd() / "Plugins")
+os.makedirs(plugin_path, exist_ok=True)
+
+#path = os.path.abspath(__file__)
+#dirpath = os.path.dirname(path)
+dirpath = str(plugin_path.resolve())
 
 for fname in os.listdir(dirpath):
     # Load only "real modules"
     if not fname.startswith('.') and \
-       not fname.startswith('__') and fname.endswith('.py'):
+            not fname.startswith('__') and fname.endswith('.py'):
         try:
             load_module(os.path.join(dirpath, fname))
         except Exception:
