@@ -156,6 +156,7 @@ def GetAvailableSettingValues():
         "flan_device": ["cpu", "cuda"],
         "flan_bits": ["32", "16", "8"],
         "flan_size": ["small", "base", "large", "xl", "xxl"],
+        "llm_model": ["flan", "bloomz", "gptj", "pygmalion"],
         "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
         "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
     }

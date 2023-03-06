@@ -1,6 +1,10 @@
 pip install -U pyinstaller
+
+rem install plugin dependencies (also added in pyinstaller)
+pip install winsdk
+
 pyinstaller audioWhisper.py -y ^
-            --python-option=-u ^
+            --python-option=u ^
             --hidden-import=pytorch --collect-data torch --copy-metadata torch ^
             --hidden-import=torchaudio.lib.libtorchaudio ^
             --copy-metadata tqdm ^
@@ -13,4 +17,5 @@ pyinstaller audioWhisper.py -y ^
             --collect-data whisper ^
             --collect-data pykakasi ^
             --collect-all easyocr ^
+            --collect-all winsdk ^
             -i app-icon.ico
