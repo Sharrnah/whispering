@@ -59,9 +59,11 @@ initial_prompt: ""  # initial prompt for Whisper to try to follow its style. for
 logprob_threshold: "-1.0",  # log probability threshold for Whisper to treat as failed. (can be negative or positive).
 no_speech_threshold: "0.6",  # If the no_speech probability is higher than this value AND the average log probability over sampled tokens is below `logprob_threshold`, consider the segment as silent
 vad_enabled: True,  # Enable Voice activity detection (VAD)
-vad_confidence_threshold: "0.6",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
+vad_on_full_clip: False,  # If enabled,  an additional VAD check will be applied to the full clip, not just the frames.
+vad_confidence_threshold: "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
 vad_num_samples: 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
 vad_thread_num: 1,  # number of threads to use for VAD.
+fp16: false  # Set to true to use FP16 instead of FP32.
 
 # text translate settings
 txt_translate: false  # if enabled, pipes whisper A.I. results through text translator.
@@ -97,7 +99,8 @@ tts_voice: "en_0",  # TTS voice (one of silero tts voices, or "last" to use last
 
 # FLAN-T5 settings
 flan_enabled: false  # Enable FLAN A.I.
-flan_size: large  # FLAN model size. Can be "small", "base", "large", "xl" or "xxl"
+llm_model: ''  # LLM model to use. Can be "flan", "bloomz" or "gptj"
+flan_size: large  # LLM model size. Can be "small", "base", "large", "xl" or "xxl"
 flan_bits: 32  # precision can be set to 32 (float), 16 (float) or 8 (int) bits. 8 bits is the fastest but least precise
 flan_device: cpu  # can be "cpu", "cuda" or "auto". ("cuda" and "auto" doing the same)
 flan_whisper_answer: true  # if True, the FLAN A.I. will answer to results from the Whisper A.I.
@@ -107,4 +110,10 @@ flan_translate_to_speaker_language: false  # Translate from english to speaker l
 flan_prompt: ''  # text for prompts or wraps prompt around input text if ?? (two question-marks) is present in the string. Otherwise, it is added to the end of the string.
 flan_memory: ''  # longer term memory for FLAN A.I.
 flan_conditioning_history: 0  # Number of previous messages to condition on. 0 for no conditioning.
+
+# plugin settings
+plugins: {}  # list of plugins to load.
+plugin_settings: {}  # settings for plugins.
+plugin_timer_timeout: 15.0  # timeout for plugin timer in seconds. (Timer pause time after whisper event)
+plugin_timer: 2.0  # time between plugin timer events in seconds.
 ```

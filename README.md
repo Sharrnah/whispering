@@ -8,6 +8,8 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
 
 ## Content:
 - [Features](#features)
+  - [Plugins](documentation/plugins.md)
+    - [Plugin-Creation](documentation/plugin-creation.md)
 - [Quickstart](#quickstart)
 - [Release Downloads](#release-downloads)
 - [Usage](documentation/usage.md)
@@ -37,8 +39,10 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
   - EasyOCR (Supports 80+ languages)
 - **TTS** _[Text-to-Speech]_ (Read out transcriptions/translations)
   - Silero
-- **LLM** _[Large language model]_ (Continuation of text. automatic answer generation etc.)
-  - FLAN-T5
+- **VAD** _[Voice Activity Detection]_
+  - Silero-VAD
+- **LLM** _[Large language model]_ (Continuation of text. automatic answer generation etc.) **Proof of concept**
+  - FLAN-T5, GPT-J, Bloomz etc.
 
 ## Quickstart
 For a quick and easy start, download the latest Whispering Tiger UI from here: [https://github.com/Sharrnah/whispering-ui](https://github.com/Sharrnah/whispering-ui#readme)
@@ -70,5 +74,4 @@ A thanks goes to
 - Meta AI (LID, NLLB-200, M2M-100) https://ai.facebook.com/blog/nllb-200-high-quality-machine-translation/
 - Argos Translate https://github.com/argosopentech/argos-translate
 - EasyOCR https://github.com/jaidedai/easyocr
-- Google Research (FLAN-T5) https://ai.googleblog.com/2021/10/introducing-flan-more-generalizable.html
-- Silero (TTS) https://github.com/snakers4/silero-models
+- Silero (TTS, VAD) https://github.com/snakers4/silero-models

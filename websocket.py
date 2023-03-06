@@ -97,6 +97,7 @@ def websocketMessageHandler(msgObj, websocket):
         osc_port = settings.GetOption("osc_port")
         if osc_ip != "0":
             VRC_OSCLib.Chat(msgObj["value"], True, osc_address, IP=osc_ip, PORT=osc_port)
+            settings.SetOption("plugin_timer_stopped", True)
 
 
 async def handler(websocket):

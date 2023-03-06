@@ -5,6 +5,7 @@ from pathlib import Path
 
 import settings
 
+
 class Base:
     """Basic resource class. Concrete resources will inherit from this one
     """
@@ -15,6 +16,26 @@ class Base:
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.plugins.append(cls)
+
+    def is_enabled(self, default=True):
+        if self.__class__.__name__ not in settings.GetOption("plugins"):
+            settings.SetOption("plugins", {self.__class__.__name__: default})
+
+        return settings.GetOption("plugins")[self.__class__.__name__]
+
+    def get_plugin_setting(self, settings_name, default=None):
+        if self.__class__.__name__ in settings.GetOption("plugin_settings") and \
+                settings_name in settings.GetOption("plugin_settings")[self.__class__.__name__]:
+            return settings.GetOption("plugin_settings")[self.__class__.__name__][settings_name]
+        else:
+            settings.SetOption("plugin_settings", {self.__class__.__name__: {settings_name: default}})
+            return default
+
+    def set_plugin_setting(self, settings_name, value):
+        if self.__class__.__name__ not in settings.GetOption("plugin_settings"):
+            settings.SetOption("plugin_settings", {self.__class__.__name__: {settings_name: value}})
+        else:
+            settings.GetOption("plugin_settings")[self.__class__.__name__][settings_name] = value
 
 
 # Small utility to automatically load modules
@@ -30,8 +51,8 @@ def load_module(path):
 plugin_path = Path(Path.cwd() / "Plugins")
 os.makedirs(plugin_path, exist_ok=True)
 
-#path = os.path.abspath(__file__)
-#dirpath = os.path.dirname(path)
+# path = os.path.abspath(__file__)
+# dirpath = os.path.dirname(path)
 dirpath = str(plugin_path.resolve())
 
 for fname in os.listdir(dirpath):
@@ -42,3 +63,8 @@ for fname in os.listdir(dirpath):
             load_module(os.path.join(dirpath, fname))
         except Exception:
             traceback.print_exc()
+
+# load plugins into array
+plugins = []
+for plugin in Base.plugins:
+    plugins.append(plugin())

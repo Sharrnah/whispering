@@ -15,12 +15,8 @@ from Models.TTS import silero
 import loading_state
 
 # Plugins
-from Plugins import Base
+import Plugins
 
-# load plugins into array
-plugins = []
-for plugin in Base.plugins:
-    plugins.append(plugin())
 # some regular mistakenly recognized words/sentences on mostly silence audio, which are ignored in processing
 blacklist = [
     "",
@@ -145,7 +141,7 @@ def whisper_result_handling(result):
 
 
 def plugin_process(predicted_text, result_obj):
-    for plugin_inst in plugins:
+    for plugin_inst in Plugins.plugins:
         plugin_inst.stt(predicted_text, result_obj)
 
 

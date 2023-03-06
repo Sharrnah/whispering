@@ -27,6 +27,8 @@ import torch
 import torchaudio
 import wave
 
+import Plugins
+
 torchaudio.set_audio_backend("soundfile")
 py_audio = pyaudio.PyAudio()
 FORMAT = pyaudio.paInt16
@@ -66,21 +68,12 @@ def int2float(sound):
     return sound
 
 
-# load plugins into array
-# Plugins
-from Plugins import Base
-
-plugins = []
-for plugin in Base.plugins:
-    plugins.append(plugin())
-
-
 def call_plugin_timer():
     # Call the method every x seconds
     timer = threading.Timer(settings.GetOption("plugin_timer"), call_plugin_timer)
     timer.start()
     if not settings.GetOption("plugin_timer_stopped"):
-        for plugin_inst in plugins:
+        for plugin_inst in Plugins.plugins:
             plugin_inst.timer()
     else:
         if settings.GetOption("plugin_current_timer") <= 0.0:
@@ -288,9 +281,20 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     if vad_enabled:
         torch.hub.set_dir(str(Path(cache_vad_path).resolve()))
         torch.set_num_threads(vad_thread_num)
-        vad_model, vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
-                                              repo_or_dir="snakers4/silero-vad", model="silero_vad", onnx=False
-                                              )
+        try:
+            vad_model, vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
+                                                  repo_or_dir="snakers4/silero-vad", model="silero_vad", onnx=False
+                                                  )
+        except:
+            try:
+                vad_model, vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
+                                                      source="local", model="silero_vad", onnx=False,
+                                                      repo_or_dir=str(Path(
+                                                          cache_vad_path / "snakers4_silero-vad_master").resolve())
+                                                      )
+            except:
+                print("Error loading vad model")
+                return False
 
         # num_samples = 1536
         num_samples = int(settings.SetOption("vad_num_samples",

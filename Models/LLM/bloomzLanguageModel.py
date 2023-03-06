@@ -10,26 +10,8 @@ import settings
 import random
 import downloader
 
-# MODEL_LINKS = {
-#     "small": "google/flan-t5-small",
-#     "base": "google/flan-t5-base",
-#     "large": "google/flan-t5-large",
-#     "xl": "google/flan-t5-xl",
-#     "xxl": "google/flan-t5-xxl"
-# }
 
-MODEL_LINKS = {
-    "small": {
-        "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/small.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/small.zip",
-            "https://s3.libs.space:9000/ai-models/FLAN-T5/small.zip",
-        ],
-        "checksum": "34415fe1e13813e5e3037b950794197870deb5573b0de899d785a1094c1a5e0e"
-    },
-}
 TMP_CHECKPOINT = "bigscience/bloomz-7b1"
-#TMP_CHECKPOINT = "bigscience/bloomz"
 
 cache_path = Path(Path.cwd() / ".cache" / "bloomz-cache")
 os.makedirs(cache_path, exist_ok=True)
