@@ -12,7 +12,7 @@ Copy the plugin file to the `Plugins` directory in the root of the project.
 Consider reading the plugin file to see if there are any dependencies that need to be installed.
 
 ## List
-- **Show currentply playing song over OSC**
+- **Show currently playing song over OSC**
 
   <img src=https://user-images.githubusercontent.com/55756126/223178202-ef31fb96-6fa8-4427-9f5e-b4dd587f07ab.png width=250>
   
