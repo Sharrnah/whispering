@@ -270,8 +270,7 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     LLM.init()
 
     # prepare the plugin timer calls
-    plugin_thread = threading.Thread(target=call_plugin_timer)
-    plugin_thread.start()
+    call_plugin_timer()
 
     vad_enabled = settings.SetOption("vad_enabled",
                                      settings.GetArgumentSettingFallback(ctx, "vad_enabled", "vad_enabled"))

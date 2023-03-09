@@ -151,6 +151,13 @@ def send_message(predicted_text, result_obj):
     osc_port = settings.GetOption("osc_port")
     websocket_ip = settings.GetOption("websocket_ip")
 
+    # WORKAROUND: check if the string is recognized twice and remove the duplication
+    middle = len(predicted_text) // 2  # integer division to get the middle index
+    first_half = predicted_text[:middle]
+    second_half = predicted_text[middle:]
+    if first_half.strip() == second_half.strip():
+        predicted_text = first_half.strip()
+
     # process plugins
     plugin_thread = threading.Thread(target=plugin_process, args=(predicted_text, result_obj))
     plugin_thread.start()
