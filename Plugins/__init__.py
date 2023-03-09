@@ -19,7 +19,9 @@ class Base:
 
     def is_enabled(self, default=True):
         if self.__class__.__name__ not in settings.GetOption("plugins"):
-            settings.SetOption("plugins", {self.__class__.__name__: default})
+            setting = settings.GetOption("plugins")
+            setting[self.__class__.__name__] = default
+            settings.SetOption("plugins", setting)
 
         return settings.GetOption("plugins")[self.__class__.__name__]
 
@@ -28,12 +30,18 @@ class Base:
                 settings_name in settings.GetOption("plugin_settings")[self.__class__.__name__]:
             return settings.GetOption("plugin_settings")[self.__class__.__name__][settings_name]
         else:
-            settings.SetOption("plugin_settings", {self.__class__.__name__: {settings_name: default}})
+            setting = settings.GetOption("plugin_settings")
+            if self.__class__.__name__ not in setting:
+                setting[self.__class__.__name__] = {}
+            setting[self.__class__.__name__][settings_name] = default
+            settings.SetOption("plugin_settings", setting)
             return default
 
     def set_plugin_setting(self, settings_name, value):
         if self.__class__.__name__ not in settings.GetOption("plugin_settings"):
-            settings.SetOption("plugin_settings", {self.__class__.__name__: {settings_name: value}})
+            setting = settings.GetOption("plugin_settings")
+            setting[self.__class__.__name__][settings_name] = value
+            settings.SetOption("plugin_settings", setting)
         else:
             settings.GetOption("plugin_settings")[self.__class__.__name__][settings_name] = value
 
