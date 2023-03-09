@@ -13,6 +13,9 @@ import VRC_OSCLib
 from Models.LLM import LLM
 from Models.TTS import silero
 
+# Plugins
+import Plugins
+
 WS_CLIENTS = set()
 
 
@@ -25,13 +28,27 @@ def tts_request(msgObj, websocket):
             else:
                 silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
         else:
-            AnswerMessage(websocket, json.dumps({"type": "tts_result", "wav_data": silero_wav.tolist(), "sample_rate": sample_rate}))
+            AnswerMessage(websocket, json.dumps(
+                {"type": "tts_result", "wav_data": silero_wav.tolist(), "sample_rate": sample_rate}))
             if msgObj["value"]["download"]:
                 wav_data = silero.tts.return_wav_file_binary(silero_wav)
                 wav_data = base64.b64encode(wav_data).decode('utf-8')
                 AnswerMessage(websocket, json.dumps({"type": "tts_save", "wav_data": wav_data}))
     else:
         print("TTS failed")
+
+
+def tts_plugin_process(msgObj, websocket):
+    text = msgObj["value"]["text"]
+    device = None
+    if msgObj["value"]["to_device"]:
+        if "device_index" in msgObj["value"]:
+            device = msgObj["value"]["device_index"]
+        else:
+            device = settings.GetOption("device_out_index")
+
+    for plugin_inst in Plugins.plugins:
+        plugin_inst.tts(text, device)
 
 
 def flan_req(text, websocket):
@@ -44,9 +61,12 @@ def ocr_req(msgObj, websocket):
     ocr_result, image, bounding_boxes = easyocr.run_image_processing(window_name, ['en', msgObj["value"]["ocr_lang"]])
     if len(ocr_result) > 0:
         image_data = base64.b64encode(image).decode('utf-8')
-        translate_result, txt_from_lang, txt_to_lang = (texttranslate.TranslateLanguage(" -- ".join(ocr_result), msgObj["value"]["from_lang"], msgObj["value"]["to_lang"]))
+        translate_result, txt_from_lang, txt_to_lang = (
+            texttranslate.TranslateLanguage(" -- ".join(ocr_result), msgObj["value"]["from_lang"],
+                                            msgObj["value"]["to_lang"]))
         AnswerMessage(websocket, json.dumps(
-            {"type": "translate_result", "original_text": "\n".join(ocr_result), "translate_result": "\n".join(translate_result.split(" -- ")), "txt_from_lang": txt_from_lang,
+            {"type": "translate_result", "original_text": "\n".join(ocr_result),
+             "translate_result": "\n".join(translate_result.split(" -- ")), "txt_from_lang": txt_from_lang,
              "txt_to_lang": txt_to_lang}))
         AnswerMessage(websocket, json.dumps(
             {"type": "ocr_result", "data": {"bounding_boxes": bounding_boxes, "image_data": image_data}}))
@@ -55,7 +75,8 @@ def ocr_req(msgObj, websocket):
 def websocketMessageHandler(msgObj, websocket):
     if msgObj["type"] == "setting_change":
         settings.SetOption(msgObj["name"], msgObj["value"])
-        BroadcastMessage(json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}), exclude_client=websocket)  # broadcast updated settings to all clients
+        BroadcastMessage(json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}),
+                         exclude_client=websocket)  # broadcast updated settings to all clients
         # reload tts voices if tts model changed
         if msgObj["name"] == "tts_model":
             silero.tts.load()
@@ -66,8 +87,12 @@ def websocketMessageHandler(msgObj, websocket):
 
     if msgObj["type"] == "translate_req":
         if msgObj["value"]["to_lang"] != "":  # if to_lang is empty, don't translate
-            translate_result, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(msgObj["value"]["text"], msgObj["value"]["from_lang"], msgObj["value"]["to_lang"])
-            AnswerMessage(websocket, json.dumps({"type": "translate_result", "translate_result": translate_result, "txt_from_lang": txt_from_lang, "txt_to_lang": txt_to_lang}))
+            translate_result, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(msgObj["value"]["text"],
+                                                                                           msgObj["value"]["from_lang"],
+                                                                                           msgObj["value"]["to_lang"])
+            AnswerMessage(websocket, json.dumps(
+                {"type": "translate_result", "translate_result": translate_result, "txt_from_lang": txt_from_lang,
+                 "txt_to_lang": txt_to_lang}))
 
     if msgObj["type"] == "ocr_req":
         ocr_thread = threading.Thread(target=ocr_req, args=(msgObj, websocket))
@@ -76,6 +101,9 @@ def websocketMessageHandler(msgObj, websocket):
     if msgObj["type"] == "tts_req":
         if silero.init():
             tts_thread = threading.Thread(target=tts_request, args=(msgObj, websocket))
+            tts_thread.start()
+        else:
+            tts_thread = threading.Thread(target=tts_plugin_process, args=(msgObj, websocket))
             tts_thread.start()
 
     if msgObj["type"] == "tts_voice_save_req":

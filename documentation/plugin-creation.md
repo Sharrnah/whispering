@@ -8,7 +8,7 @@ Plugins are loaded from the `Plugins` directory in the root of the project. The 
 
 ## How to write
 
-Plugins are written as Python classes. The class must inherit from `Plugins.Base` and implement the `timer` and `stt` methods. The `__init__` method is called once when the plugin is loaded.
+Plugins are written as Python classes. The class must inherit from `Plugins.Base` and implement the `timer`, `stt` and `tts` methods. The `__init__` method is called once when the plugin is loaded.
 
 Settings are __not__ available in the `__init__` method.
 
@@ -57,5 +57,8 @@ class ExamplePlugin(Plugins.Base):
         if self.is_enabled():
             print("Plugin Example")
             print(result_obj['language'])
+        return
+
+    def tts(self, text, device_index):
         return
 ```
