@@ -6,7 +6,6 @@ import base64
 
 from Models.TextTranslation import texttranslate
 from Models.OCR import easyocr
-from loading_state import LOADING_QUEUE
 from windowcapture import WindowCapture
 import settings
 import VRC_OSCLib
@@ -17,6 +16,8 @@ from Models.TTS import silero
 import Plugins
 
 WS_CLIENTS = set()
+
+LOADING_QUEUE = {}
 
 
 def tts_request(msgObj, websocket):
@@ -238,3 +239,15 @@ class SocketServerThread(object):
     def run(ip, port):
         while True:
             asyncio.run(server_program(ip, port))
+
+
+def set_loading_state(key, value):
+    LOADING_QUEUE[key] = value
+    BroadcastMessage(json.dumps({"type": "loading_state", "data": LOADING_QUEUE}))
+
+
+def get_loading_state(key):
+    if key in LOADING_QUEUE:
+        return LOADING_QUEUE[key]
+    else:
+        return None

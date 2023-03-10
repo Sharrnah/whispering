@@ -5,7 +5,7 @@ from pathlib import Path
 import os
 from time import gmtime, strftime
 
-import loading_state
+import websocket
 import settings
 import random
 import downloader
@@ -199,7 +199,7 @@ class FlanLanguageModel:
 def init():
     global flan
     if settings.GetOption("flan_enabled") and flan is None:
-        loading_state.set_loading_state("flan_loading", True)
+        websocket.set_loading_state("flan_loading", True)
         model_size = settings.GetOption("flan_size")
         flan_bits = settings.GetOption("flan_bits")
         flan_device = "auto" if settings.GetOption("flan_device") == "cuda" or settings.GetOption("flan_device") == "auto" else None
@@ -207,7 +207,7 @@ def init():
 
         flan = FlanLanguageModel(model_size, bit_length=flan_bits, device=flan_device)
         print("Flan loaded.")
-        loading_state.set_loading_state("flan_loading", False)
+        websocket.set_loading_state("flan_loading", False)
         return True
     else:
         if flan is not None:

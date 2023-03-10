@@ -133,7 +133,7 @@ MODEL_LINKS = {
 device = "auto"  # "cpu" or "cuda" for GPU, auto = automatic
 beam_size = 5
 
-# [Modify] Set paths to the CTranslate2 and SentencePiece models
+# [Modify] Set paths to the models
 ct_model_path = Path(Path.cwd() / ".cache" / "m2m100_ct2")
 os.makedirs(ct_model_path, exist_ok=True)
 

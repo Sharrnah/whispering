@@ -1,6 +1,7 @@
 import threading
 import queue
 import whisper
+import os
 import settings
 import VRC_OSCLib
 from Models.TextTranslation import texttranslate
@@ -12,7 +13,9 @@ from whisper.tokenizer import LANGUAGES, TO_LANGUAGE_CODE
 import io
 from Models.LLM import LLM
 from Models.TTS import silero
-import loading_state
+
+# from faster_whisper import WhisperModel
+import Models.STT.faster_whisper as faster_whisper
 
 # Plugins
 import Plugins
@@ -151,12 +154,9 @@ def send_message(predicted_text, result_obj):
     osc_port = settings.GetOption("osc_port")
     websocket_ip = settings.GetOption("websocket_ip")
 
-    # WORKAROUND: check if the string is recognized twice and remove the duplication
-    middle = len(predicted_text) // 2  # integer division to get the middle index
-    first_half = predicted_text[:middle]
-    second_half = predicted_text[middle:]
-    if first_half.strip() == second_half.strip():
-        predicted_text = first_half.strip()
+    # WORKAROUND: prevent it from outputting the initial prompt.
+    if predicted_text == settings.GetOption("initial_prompt"):
+        return
 
     # process plugins
     plugin_thread = threading.Thread(target=plugin_process, args=(predicted_text, result_obj))
@@ -185,7 +185,18 @@ def send_message(predicted_text, result_obj):
 
 
 def load_whisper(model, ai_device):
-    return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
+    if not settings.GetOption("faster_whisper"):
+        return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
+    else:
+        path = os.path.join(".cache/whisper", model + "-ct2")
+        if settings.GetOption("fp16"):
+            path = os.path.join(".cache/whisper", model + "-ct2-fp16")
+            compute_dtype = "float16"
+        else:
+            compute_dtype = "float32"
+
+        # return WhisperModel(path, device=ai_device, compute_type=compute_dtype)
+        return faster_whisper.FasterWhisper(path, device=ai_device, compute_type=compute_dtype)
 
 
 def convert_audio(audio_bytes: bytes):
@@ -202,9 +213,9 @@ def whisper_worker():
     whisper_model = settings.GetOption("model")
 
     whisper_ai_device = settings.GetOption("ai_device")
-    loading_state.set_loading_state("whisper_loading", True)
+    websocket.set_loading_state("whisper_loading", True)
     audio_model = load_whisper(whisper_model, whisper_ai_device)
-    loading_state.set_loading_state("whisper_loading", False)
+    websocket.set_loading_state("whisper_loading", False)
 
     print("Whisper AI Ready. You can now say something!")
 
@@ -223,14 +234,17 @@ def whisper_worker():
             q.task_done()
             continue
 
-        audio_sample = convert_audio(audio)
-
         whisper_task = settings.GetOption("whisper_task")
         whisper_language = settings.GetOption("current_language")
         whisper_condition_on_previous_text = settings.GetOption("condition_on_previous_text")
         whisper_logprob_threshold = settings.GetOption("logprob_threshold")
         whisper_no_speech_threshold = settings.GetOption("no_speech_threshold")
         whisper_fp16 = settings.GetOption("fp16")
+
+        whisper_temperature_fallback = settings.GetOption("temperature_fallback")
+        whisper_temperature_fallback_option = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
+        if not whisper_temperature_fallback:
+            whisper_temperature_fallback_option = 0
 
         whisper_initial_prompt = settings.GetOption("initial_prompt").strip()
         if whisper_initial_prompt is None or whisper_initial_prompt == "" or whisper_initial_prompt.lower() == "none":
@@ -250,15 +264,28 @@ def whisper_worker():
         else:
             whisper_no_speech_threshold = float(whisper_no_speech_threshold)
 
+        audio_sample = convert_audio(audio)
         try:
 
-            result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
-                                            condition_on_previous_text=whisper_condition_on_previous_text,
-                                            initial_prompt=whisper_initial_prompt,
-                                            logprob_threshold=whisper_logprob_threshold,
-                                            no_speech_threshold=whisper_no_speech_threshold,
-                                            fp16=whisper_fp16
-                                            )
+            if not settings.GetOption("faster_whisper"):
+                # official whisper model
+                result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
+                                                condition_on_previous_text=whisper_condition_on_previous_text,
+                                                initial_prompt=whisper_initial_prompt,
+                                                logprob_threshold=whisper_logprob_threshold,
+                                                no_speech_threshold=whisper_no_speech_threshold,
+                                                fp16=whisper_fp16,
+                                                temperature=whisper_temperature_fallback_option
+                                                )
+            else:
+                # faster whisper
+                result = audio_model.transcribe(audio_sample, task=whisper_task,
+                                                language=whisper_language,
+                                                condition_on_previous_text=whisper_condition_on_previous_text,
+                                                initial_prompt=whisper_initial_prompt,
+                                                logprob_threshold=whisper_logprob_threshold,
+                                                no_speech_threshold=whisper_no_speech_threshold,
+                                                temperature=whisper_temperature_fallback_option)
 
             whisper_result_handling(result)
         except Exception as e:

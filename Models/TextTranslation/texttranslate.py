@@ -1,6 +1,5 @@
 import settings
 import pykakasi
-from Models.TextTranslation import texttranslateARGOS
 # import texttranslateM2M100
 from Models.TextTranslation import texttranslateM2M100_CTranslate2
 from Models.TextTranslation import texttranslateNLLB200
@@ -23,8 +22,6 @@ def convert_to_romaji(text):
 # Download and install Translate packages
 def InstallLanguages():
     match get_current_translator():
-        case "ARGOS":
-            texttranslateARGOS.InstallLanguages()
         case "M2M100":
             texttranslateM2M100_CTranslate2.load_model(settings.GetOption("txt_translator_size"))
         case "NLLB200":
@@ -33,8 +30,6 @@ def InstallLanguages():
 
 def GetInstalledLanguageNames():
     match get_current_translator():
-        case "ARGOS":
-            return texttranslateARGOS.GetInstalledLanguageNames()
         case "M2M100":
             return texttranslateM2M100_CTranslate2.get_installed_language_names()
         case "NLLB200":
@@ -44,11 +39,6 @@ def GetInstalledLanguageNames():
 def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
     translation_text = ""
     match get_current_translator():
-        case "ARGOS":
-            try:
-                translation_text = texttranslateARGOS.TranslateLanguage(text, from_code, to_code)
-            except Exception as e:
-                print("Error: " + str(e))
         case "M2M100":
             try:
                 translation_text = texttranslateM2M100_CTranslate2.translate_language(text, from_code, to_code)

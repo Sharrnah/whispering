@@ -5,7 +5,7 @@ from pathlib import Path
 import os
 from time import strftime
 
-import loading_state
+import websocket
 import settings
 import random
 import downloader
@@ -203,7 +203,7 @@ class BloomzLanguageModel:
 def init():
     global bloomz
     if settings.GetOption("flan_enabled") and bloomz is None:
-        loading_state.set_loading_state("bloomz_loading", True)
+        websocket.set_loading_state("bloomz_loading", True)
         model_size = settings.GetOption("flan_size")
         flan_bits = settings.GetOption("flan_bits")
         flan_device = "auto" if settings.GetOption("flan_device") == "cuda" or settings.GetOption("flan_device") == "auto" else None
@@ -211,7 +211,7 @@ def init():
 
         bloomz = BloomzLanguageModel(model_size, bit_length=flan_bits, device=flan_device)
         print("Bloomz loaded.")
-        loading_state.set_loading_state("bloomz_loading", False)
+        websocket.set_loading_state("bloomz_loading", False)
         return True
     else:
         if bloomz is not None:

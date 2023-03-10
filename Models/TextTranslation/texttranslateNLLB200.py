@@ -444,7 +444,7 @@ MODEL_LINKS = {
     }
 }
 
-# [Modify] Set paths to the CTranslate2 and SentencePiece models
+# [Modify] Set paths to the models
 ct_model_path = Path(Path.cwd() / ".cache" / "nllb200")
 os.makedirs(ct_model_path, exist_ok=True)
 

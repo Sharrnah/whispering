@@ -1,4 +1,4 @@
-import loading_state
+import websocket
 from windowcapture import WindowCapture
 import easyocr
 from easyocr import config
@@ -106,15 +106,15 @@ def init_reader(languages):
     global reader, CURRENT_LANGUAGES
 
     if reader is None or CURRENT_LANGUAGES != languages:
-        loading_state.set_loading_state("ocr_loading", True)
+        websocket.set_loading_state("ocr_loading", True)
         CURRENT_LANGUAGES = languages
         try:
             reader = easyocr.Reader(CURRENT_LANGUAGES, model_storage_directory=str(model_path.resolve()))
         except Exception as e:
             print(e)
-            loading_state.set_loading_state("ocr_loading", False)
+            websocket.set_loading_state("ocr_loading", False)
             return False
-        loading_state.set_loading_state("ocr_loading", False)
+        websocket.set_loading_state("ocr_loading", False)
 
 
 def get_installed_language_names():
