@@ -2,19 +2,24 @@
 
 Plugins are a way to extend the functionality of Whispering Tiger.
 
+There mignt still be changes to the plugin system in the future.
+
 ## How to use
 
 Plugins are loaded from the `Plugins` directory in the root of the project. The directory is scanned for `.py` files and each file is loaded as a plugin.
 
 ## How to write
 
-Plugins are written as Python classes. The class must inherit from `Plugins.Base` and implement the `timer`, `stt` and `tts` methods. The `__init__` method is called once when the plugin is loaded.
+Plugins are written as Python classes. The class must inherit from `Plugins.Base` and implement the `init`, `timer`, `stt` and `tts` methods.
 
-Settings are __not__ available in the `__init__` method.
+The `timer` method is called every x seconds (defined in `plugin_timer`) and is paused for x seconds (defined in `plugin_timer_timeout`) when the STT engine returned a result.
 
-The `timer` method is called every x seconds (defined in `plugin_timer`). The `stt` method is called when the STT engine returns a result.
+The `stt` method is called when the STT engine returns a result.
 
-The `timer` method is paused for x seconds (defined in `plugin_timer_timeout`) when the STT engine returned a result.
+The `tts` method is called when the TTS engine is about to play a result, except when called by the sst engine.
+So if you want to play a sound when the STT engine returns a result, you should do it in the `stt` method as well.
+
+The `init` method is called at the initialization of whispering tiger, right after the settings file is loaded.
 
 ## Helper methods
 
@@ -26,7 +31,7 @@ The `Base` class provides some helper methods to make it easier to write plugins
 
 __Note:__ _When using the *_plugin_setting methods, the settings are saved with the class name as the section name. So if you have a plugin called `ExamplePlugin`, the settings will be saved in the `ExamplePlugin` section._
 
-`is_enabled(self, default=True)` - Check if the plugin is enabled. If the plugin is not yet in the settings file, the default value is used. So by default, plugins will be enabled.
+`is_enabled(self, default=True)` - Check if the plugin is enabled. If the plugin is not yet in the settings file, the default value is used. So by default, plugins will be enabled. Use this around your main functionality to allow enabling/disabling of your plugin even at runtime.
 
 
 ## Example plugin
@@ -36,9 +41,11 @@ import settings
 import VRC_OSCLib
 
 class ExamplePlugin(Plugins.Base):
-    # No settings are available in __init__
-    def __init__(self):
-        print(self.__class__.__name__ + " loaded")
+    def init(self):
+        if self.is_enabled():
+            print(self.__class__.__name__ + " is enabled")
+        else:
+            print(self.__class__.__name__ + " is disabled")
         pass
 
     def timer(self):
@@ -61,4 +68,5 @@ class ExamplePlugin(Plugins.Base):
 
     def tts(self, text, device_index):
         return
+
 ```
