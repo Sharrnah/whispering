@@ -193,6 +193,7 @@ class FasterWhisper:
 
     def __init__(self, model: str, device: str = "cpu", compute_type: str = "float32"):
         model_cache_path = Path(".cache/whisper")
+        os.makedirs(model_cache_path, exist_ok=True)
         model_path = os.path.join(".cache/whisper", model + "-ct2")
         if compute_type == "float16":
             model_path = os.path.join(".cache/whisper", model + "-ct2-fp16")
