@@ -147,6 +147,9 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
         settings.SETTINGS_PATH = Path(Path.cwd() / config)
     settings.LoadYaml(settings.SETTINGS_PATH)
 
+    for plugin_inst in Plugins.plugins:
+        plugin_inst.init()
+
     if str2bool(devices):
         audio = pyaudio.PyAudio()
         print("-------------------------------------------------------------------")

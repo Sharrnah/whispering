@@ -27,6 +27,8 @@ blacklist = [
     "Thank you for watching!",
     "Thanks for watching.",
     "Thank you for watching.",
+    "Please subscribe to my channel!",
+    "Please subscribe to my channel.",
     "you"
 ]
 # make all list entries lowercase for later comparison
@@ -188,15 +190,12 @@ def load_whisper(model, ai_device):
     if not settings.GetOption("faster_whisper"):
         return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
     else:
-        path = os.path.join(".cache/whisper", model + "-ct2")
         if settings.GetOption("fp16"):
-            path = os.path.join(".cache/whisper", model + "-ct2-fp16")
             compute_dtype = "float16"
         else:
             compute_dtype = "float32"
 
-        # return WhisperModel(path, device=ai_device, compute_type=compute_dtype)
-        return faster_whisper.FasterWhisper(path, device=ai_device, compute_type=compute_dtype)
+        return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype)
 
 
 def convert_audio(audio_bytes: bytes):

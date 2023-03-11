@@ -1,5 +1,6 @@
 import os
 import traceback
+from abc import abstractmethod
 from importlib import util
 from pathlib import Path
 
@@ -16,6 +17,9 @@ class Base:
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         cls.plugins.append(cls)
+
+    def __init__(self):
+        print(self.__class__.__name__ + " initialized")
 
     def is_enabled(self, default=True):
         if self.__class__.__name__ not in settings.GetOption("plugins"):
@@ -44,6 +48,22 @@ class Base:
             settings.SetOption("plugin_settings", setting)
         else:
             settings.GetOption("plugin_settings")[self.__class__.__name__][settings_name] = value
+
+    @abstractmethod
+    def init(self):
+        pass
+
+    @abstractmethod
+    def stt(self, text, result_obj):
+        pass
+
+    @abstractmethod
+    def tts(self, text, device_index):
+        pass
+
+    @abstractmethod
+    def timer(self):
+        pass
 
 
 # Small utility to automatically load modules
