@@ -34,7 +34,6 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
   - LID _[Language Identification]_ (Supports 200 languages)
   - NLLB-200 (single model, Supporting 200 languages, high accuracy)
   - M2M-100 (single model, Supporting 100 languages, high accuracy)
-  - ARGOS (multiple models, Supporting 56 languages, depending on the language, low accuracy)
 - **OCR** _[Optical Character Recognition]_ (to capture game images and translate in-game text)
   - EasyOCR (Supports 80+ languages)
 - **TTS** _[Text-to-Speech]_ (Read out transcriptions/translations)
@@ -72,6 +71,6 @@ A thanks goes to
 - Awexander https://github.com/Awexander/audioWhisper
 - Blake https://github.com/mallorbc/whisper_mic
 - Meta AI (LID, NLLB-200, M2M-100) https://ai.facebook.com/blog/nllb-200-high-quality-machine-translation/
-- Argos Translate https://github.com/argosopentech/argos-translate
+- faster-whisper https://github.com/guillaumekln/faster-whisper
 - EasyOCR https://github.com/jaidedai/easyocr
 - Silero (TTS, VAD) https://github.com/snakers4/silero-models
