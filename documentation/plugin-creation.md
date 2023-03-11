@@ -47,6 +47,9 @@ class ExamplePlugin(Plugins.Base):
         else:
             print(self.__class__.__name__ + " is disabled")
         pass
+        # prepare all possible plugin settings and their default values
+        # (make sure to use get_plugin_setting() to not overwrite user changed settings)
+        self.get_plugin_setting("hello_world", "default foo bar")
 
     def timer(self):
         osc_ip = settings.GetOption("osc_ip")
@@ -57,7 +60,7 @@ class ExamplePlugin(Plugins.Base):
 
         if self.is_enabled():
             VRC_OSCLib.Chat(hello_world, True, False, osc_address, IP=osc_ip, PORT=osc_port,
-                                            convert_ascii=False)
+                            convert_ascii=False)
         pass
 
     def stt(self, text, result_obj):

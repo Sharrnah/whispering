@@ -18,4 +18,5 @@ pyinstaller audioWhisper.py -y ^
             --collect-data pykakasi ^
             --collect-all easyocr ^
             --collect-all winsdk ^
+            --collect-all ctranslate2 ^
             -i app-icon.ico

@@ -31,13 +31,15 @@ class Base:
 
     def get_plugin_setting(self, settings_name, default=None):
         if self.__class__.__name__ in settings.GetOption("plugin_settings") and \
+                settings.GetOption("plugin_settings")[self.__class__.__name__] is not None and \
                 settings_name in settings.GetOption("plugin_settings")[self.__class__.__name__]:
             return settings.GetOption("plugin_settings")[self.__class__.__name__][settings_name]
         else:
             setting = settings.GetOption("plugin_settings")
-            if self.__class__.__name__ not in setting:
-                setting[self.__class__.__name__] = {}
-            setting[self.__class__.__name__][settings_name] = default
+            if self.__class__.__name__ not in setting or setting[self.__class__.__name__] is None:
+                setting[self.__class__.__name__] = {settings_name: default}
+            elif settings_name not in setting[self.__class__.__name__]:
+                setting[self.__class__.__name__][settings_name] = default
             settings.SetOption("plugin_settings", setting)
             return default
 
@@ -48,6 +50,7 @@ class Base:
             settings.SetOption("plugin_settings", setting)
         else:
             settings.GetOption("plugin_settings")[self.__class__.__name__][settings_name] = value
+            settings.SetOption("plugin_settings", settings.GetOption("plugin_settings"))
 
     @abstractmethod
     def init(self):
