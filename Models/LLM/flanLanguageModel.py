@@ -32,9 +32,9 @@ MODEL_LINKS = {
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/base.zip",
             "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/base.zip",
             "https://s3.libs.space:9000/ai-models/FLAN-T5/base.zip",
-         ],
+        ],
         "checksum": "577e84801ac0a0dac18a8c66962a688b828f3a567546e988879ae5279d51fcbe"
-     },
+    },
     "large": {
         "urls": [
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/large.zip",
@@ -51,14 +51,14 @@ MODEL_LINKS = {
         ],
         "checksum": "15c85799f083b284c73e724068a7ff95c901cd7b55a206a49661940ae5bd4778"
     },
-    "xxl": {
-        "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/xxl.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/xxl.zip",
-            "https://s3.libs.space:9000/ai-models/FLAN-T5/xxl.zip",
-        ],
-        "checksum": "66c221e46e230714675ae2f1af86852d886ddb2b26ba9ca7f73acd6ed27160dc"
-    }
+    # "xxl": {
+    #    "urls": [
+    #        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/FLAN-T5/xxl.zip",
+    #        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/FLAN-T5/xxl.zip",
+    #        "https://s3.libs.space:9000/ai-models/FLAN-T5/xxl.zip",
+    #    ],
+    #    "checksum": "66c221e46e230714675ae2f1af86852d886ddb2b26ba9ca7f73acd6ed27160dc"
+    # }
 }
 
 cache_path = Path(Path.cwd() / ".cache" / "flan-t5-cache")
@@ -69,23 +69,39 @@ os.makedirs(weight_offload_folder, exist_ok=True)
 flan = None
 
 PROMPT_FORMATTING = {
-    "question": ["about ", "across ", "after ", "against ", "along ", "am ", "amn't ", "among ", "are ", "aren't ", "around ", "at ", "before ", "behind ", "between ",
-                 "beyond ", "but ", "by ", "can ", "can't ", "concerning ", "could ", "couldn't ", "despite ", "did ", "didn't ", "do ", "does ", "doesn't ", "don't ",
-                 "down ", "during ", "except ", "following ", "for ", "from ", "had ", "hadn't ", "has ", "hasn't ", "have ", "haven't ", "how ", "how's ", "in ",
-                 "including ", "into ", "is ", "isn't ", "like ", "may ", "mayn't ", "might ", "mightn't ", "must ", "mustn't ", "near ", "of ", "off ", "on ", "out ",
-                 "over ", "plus ", "shall ", "shan't ", "should ", "shouldn't ", "since ", "through ", "throughout ", "to ", "towards ", "under ", "until ", "up ", "upon ",
-                 "was ", "wasn't ", "were ", "weren't ", "what ", "what's ", "when ", "when's ", "where ", "where's ", "which ", "which's ", "who ", "who's ", "why ",
+    "question": ["about ", "across ", "after ", "against ", "along ", "am ", "amn't ", "among ", "are ", "aren't ",
+                 "around ", "at ", "before ", "behind ", "between ",
+                 "beyond ", "but ", "by ", "can ", "can't ", "concerning ", "could ", "couldn't ", "despite ", "did ",
+                 "didn't ", "do ", "does ", "doesn't ", "don't ",
+                 "down ", "during ", "except ", "following ", "for ", "from ", "had ", "hadn't ", "has ", "hasn't ",
+                 "have ", "haven't ", "how ", "how's ", "in ",
+                 "including ", "into ", "is ", "isn't ", "like ", "may ", "mayn't ", "might ", "mightn't ", "must ",
+                 "mustn't ", "near ", "of ", "off ", "on ", "out ",
+                 "over ", "plus ", "shall ", "shan't ", "should ", "shouldn't ", "since ", "through ", "throughout ",
+                 "to ", "towards ", "under ", "until ", "up ", "upon ",
+                 "was ", "wasn't ", "were ", "weren't ", "what ", "what's ", "when ", "when's ", "where ", "where's ",
+                 "which ", "which's ", "who ", "who's ", "why ",
                  "why's ", "will ", "with ", "within ", "without ", "won't ", "would ", "wouldn't "],
-    "statement": ["i ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ",
-                  "i can ", "i want ", "i need ", "i like ", "i love ", "i hate ", "i don't like ", "i don't love ", "i don't hate ", "i don't want ", "i don't need ", "i don't ",
-                  "i do ", "i do not ", "i did ", "i did not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ", "i can ",
-                  "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ",
-                  "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ",
-                  "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ",
-                  "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ",
-                  "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ",
-                  "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ",
-                  "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was "],
+    "statement": ["i ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ",
+                  "i would not ", "i have ", "i have not ", "i had ", "i had not ",
+                  "i can ", "i want ", "i need ", "i like ", "i love ", "i hate ", "i don't like ", "i don't love ",
+                  "i don't hate ", "i don't want ", "i don't need ", "i don't ",
+                  "i do ", "i do not ", "i did ", "i did not ", "i will ", "i will not ", "i would ", "i would not ",
+                  "i have ", "i have not ", "i had ", "i had not ", "i can ",
+                  "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ",
+                  "i will not ", "i would ", "i would not ", "i have ",
+                  "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ",
+                  "i am not ", "i was ", "i was not ", "i will ", "i will not ",
+                  "i would ", "i would not ", "i have ", "i have not ", "i had ", "i had not ", "i can ", "i can not ",
+                  "i cannot ", "i am not ", "i am ", "i am not ", "i was ",
+                  "i was not ", "i will ", "i will not ", "i would ", "i would not ", "i have ", "i have not ",
+                  "i had ", "i had not ", "i can ", "i can not ", "i cannot ",
+                  "i am not ", "i am ", "i am not ", "i was ", "i was not ", "i will ", "i will not ", "i would ",
+                  "i would not ", "i have ", "i have not ", "i had ", "i had not ",
+                  "i can ", "i can not ", "i cannot ", "i am not ", "i am ", "i am not ", "i was ", "i was not ",
+                  "i will ", "i will not ", "i would ", "i would not ", "i have ",
+                  "i have not ", "i had ", "i had not ", "i can ", "i can not ", "i cannot ", "i am not ", "i am ",
+                  "i am not ", "i was "],
     "command": ["you have ", "you should ", "you do ", "ai ", "artificial intelligence"],
 }
 
@@ -111,7 +127,8 @@ class FlanLanguageModel:
 
         if not model_path.exists():
             print(f"Downloading {model_size} FLAN-T5 model...")
-            downloader.download_extract(MODEL_LINKS[model_size]["urls"], str(cache_path.resolve()), MODEL_LINKS[model_size]["checksum"])
+            downloader.download_extract(MODEL_LINKS[model_size]["urls"], str(cache_path.resolve()),
+                                        MODEL_LINKS[model_size]["checksum"])
 
         model_path_string = str(model_path.resolve())
 
@@ -119,14 +136,19 @@ class FlanLanguageModel:
 
         match self.bit_length:
             case 16:  # 16 bit float
-                self.model = T5ForConditionalGeneration.from_pretrained(model_path_string, device_map=self.device_map, torch_dtype=torch.float16,
-                                                                        offload_folder=str(weight_offload_folder.resolve()))
+                self.model = T5ForConditionalGeneration.from_pretrained(model_path_string, device_map=self.device_map,
+                                                                        torch_dtype=torch.float16,
+                                                                        offload_folder=str(
+                                                                            weight_offload_folder.resolve()))
             case 8:  # 8 bit int
-                self.model = T5ForConditionalGeneration.from_pretrained(model_path_string, device_map=self.device_map, load_in_8bit=True,
-                                                                        offload_folder=str(weight_offload_folder.resolve()))
+                self.model = T5ForConditionalGeneration.from_pretrained(model_path_string, device_map=self.device_map,
+                                                                        load_in_8bit=True,
+                                                                        offload_folder=str(
+                                                                            weight_offload_folder.resolve()))
             case _:  # 32 bit float
                 self.model = T5ForConditionalGeneration.from_pretrained(model_path_string, device_map=self.device_map,
-                                                                        offload_folder=str(weight_offload_folder.resolve()))
+                                                                        offload_folder=str(
+                                                                            weight_offload_folder.resolve()))
 
     # Try to modify prompts to get better results
     @staticmethod
@@ -202,8 +224,10 @@ def init():
         websocket.set_loading_state("flan_loading", True)
         model_size = settings.GetOption("flan_size")
         flan_bits = settings.GetOption("flan_bits")
-        flan_device = "auto" if settings.GetOption("flan_device") == "cuda" or settings.GetOption("flan_device") == "auto" else None
-        print(f"Flan {model_size} is Loading to {('GPU' if flan_device == 'auto' else 'CPU')} using {flan_bits} bit {('INT' if flan_bits == 8 else 'float')} precision...")
+        flan_device = "auto" if settings.GetOption("flan_device") == "cuda" or settings.GetOption(
+            "flan_device") == "auto" else None
+        print(
+            f"Flan {model_size} is Loading to {('GPU' if flan_device == 'auto' else 'CPU')} using {flan_bits} bit {('INT' if flan_bits == 8 else 'float')} precision...")
 
         flan = FlanLanguageModel(model_size, bit_length=flan_bits, device=flan_device)
         print("Flan loaded.")

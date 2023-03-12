@@ -188,23 +188,39 @@ MODEL_LINKS = {
 }
 
 
+def download_model(model: str, compute_type: str = "float32"):
+    model_cache_path = Path(".cache/whisper")
+    os.makedirs(model_cache_path, exist_ok=True)
+    model_path = Path(model_cache_path / (model + "-ct2"))
+    if compute_type == "float16":
+        model_path = Path(model_cache_path / (model + "-ct2-fp16"))
+
+    pretrained_lang_model_file = Path(model_path / "model.bin")
+
+    if not Path(model_path).exists() or pretrained_lang_model_file.is_file():
+        print("downloading faster-whisper...")
+        if not downloader.download_extract(MODEL_LINKS[model][compute_type]["urls"],
+                                           str(model_cache_path.resolve()),
+                                           MODEL_LINKS[model][compute_type]["checksum"]):
+            print("Model download failed")
+
+
 class FasterWhisper:
     model = None
 
     def __init__(self, model: str, device: str = "cpu", compute_type: str = "float32"):
+        if self.model is None:
+            self.load_model(model, device, compute_type)
+
+    def load_model(self, model: str, device: str = "cpu", compute_type: str = "float32"):
         model_cache_path = Path(".cache/whisper")
         os.makedirs(model_cache_path, exist_ok=True)
-        model_path = os.path.join(".cache/whisper", model + "-ct2")
+        model_path = Path(model_cache_path / (model + "-ct2"))
         if compute_type == "float16":
-            model_path = os.path.join(".cache/whisper", model + "-ct2-fp16")
-
-        if not Path(model_path).exists():
-            downloader.download_extract(MODEL_LINKS[model][compute_type]["urls"], str(model_cache_path.resolve()),
-                                        MODEL_LINKS[model][compute_type]["checksum"])
+            model_path = Path(model_cache_path / (model + "-ct2-fp16"))
 
         print("loading faster-whisper...")
-
-        self.model = WhisperModel(model_path, device=device, compute_type=compute_type)
+        self.model = WhisperModel(str(Path(model_path).resolve()), device=device, compute_type=compute_type)
 
     def transcribe(self, audio_sample, task, language, condition_on_previous_text,
                    initial_prompt, logprob_threshold, no_speech_threshold,

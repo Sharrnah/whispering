@@ -15,6 +15,7 @@ import VRC_OSCLib
 import websocket
 import settings
 import remote_opener
+from Models.STT import faster_whisper
 from Models.TextTranslation import texttranslate
 from Models import languageClassification
 from Models.LLM import LLM
@@ -270,6 +271,16 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
     # Load FLAN-T5 dependencies
     LLM.init()
+
+    # Load faster-whisper model
+    if settings.GetOption("faster_whisper"):
+        whisper_model = settings.GetOption("model")
+        if settings.GetOption("fp16"):
+            compute_dtype = "float16"
+        else:
+            compute_dtype = "float32"
+        # download the model here since its only possible in the main thread
+        faster_whisper.download_model(whisper_model, compute_dtype)
 
     # prepare the plugin timer calls
     call_plugin_timer()

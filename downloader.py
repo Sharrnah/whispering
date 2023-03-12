@@ -3,6 +3,10 @@ import os
 from best_download import download_file
 
 
+# import logging
+# logging.basicConfig(filename="download.log", level=logging.INFO)
+
+
 def download_extract(urls, extract_dir, checksum):
     local_dl_file = os.path.join(extract_dir, os.path.basename(urls[0]))
 
@@ -12,3 +16,5 @@ def download_extract(urls, extract_dir, checksum):
             f.extractall(extract_dir)
         # remove the zip file after extraction
         os.remove(local_dl_file)
+
+    return success
