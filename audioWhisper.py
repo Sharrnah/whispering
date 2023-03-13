@@ -196,11 +196,8 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     language = settings.SetOption("current_language",
                                   settings.GetArgumentSettingFallback(ctx, "language", "current_language"))
 
-    phrase_time_limit = settings.SetOption("phrase_time_limit",
-                                           settings.GetArgumentSettingFallback(ctx, "phrase_time_limit",
-                                                                               "phrase_time_limit"))
-    if phrase_time_limit == 0:
-        phrase_time_limit = None
+    settings.SetOption("phrase_time_limit", settings.GetArgumentSettingFallback(ctx, "phrase_time_limit",
+                                                                                "phrase_time_limit"))
 
     pause = settings.SetOption("pause", settings.GetArgumentSettingFallback(ctx, "pause", "pause"))
 
@@ -272,7 +269,7 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     # Load FLAN-T5 dependencies
     LLM.init()
 
-    # Load faster-whisper model
+    # Download faster-whisper model
     if settings.GetOption("faster_whisper"):
         whisper_model = settings.GetOption("model")
         whisper_precision = settings.GetOption("whisper_precision")
@@ -311,8 +308,6 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
         num_samples = int(settings.SetOption("vad_num_samples",
                                              settings.GetArgumentSettingFallback(ctx, "vad_num_samples",
                                                                                  "vad_num_samples")))
-        # clip_duration = 4
-        clip_duration = phrase_time_limit
 
         frames = []
         stream = py_audio.open(format=FORMAT,
@@ -324,10 +319,6 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
         audioprocessor.start_whisper_thread()
 
-        fps = 0
-        if clip_duration is not None:
-            fps = int(SAMPLE_RATE / CHUNK * clip_duration)
-
         start_time = time.time()
         pause_time = time.time()
         previous_audio_chunk = None
@@ -336,6 +327,17 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
         continue_recording = True
         while continue_recording:
+            phrase_time_limit = settings.GetArgumentSettingFallback(ctx, "phrase_time_limit", "phrase_time_limit")
+            pause = settings.GetArgumentSettingFallback(ctx, "pause", "pause")
+            energy = settings.GetArgumentSettingFallback(ctx, "energy", "energy")
+            if phrase_time_limit == 0:
+                phrase_time_limit = None
+
+            clip_duration = phrase_time_limit
+            fps = 0
+            if clip_duration is not None:
+                fps = int(SAMPLE_RATE / CHUNK * clip_duration)
+
             audio_chunk = stream.read(num_samples)
 
             audio_int16 = np.frombuffer(audio_chunk, np.int16)
@@ -439,6 +441,14 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
             audioprocessor.start_whisper_thread()
 
             while True:
+                phrase_time_limit = settings.GetArgumentSettingFallback(ctx, "phrase_time_limit", "phrase_time_limit")
+                if phrase_time_limit == 0:
+                    phrase_time_limit = None
+                pause = settings.GetArgumentSettingFallback(ctx, "pause", "pause")
+                energy = settings.GetArgumentSettingFallback(ctx, "energy", "energy")
+                r.energy_threshold = energy
+                r.pause_threshold = pause
+
                 # get and save audio to wav file
                 audio = r.listen(source, phrase_time_limit=phrase_time_limit)
 
