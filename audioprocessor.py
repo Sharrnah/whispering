@@ -187,15 +187,15 @@ def send_message(predicted_text, result_obj):
 
 
 def load_whisper(model, ai_device):
+    cpu_threads = settings.GetOption("whisper_cpu_threads")
+    num_workers = settings.GetOption("whisper_num_workers")
     if not settings.GetOption("faster_whisper"):
         return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
     else:
-        if settings.GetOption("fp16"):
-            compute_dtype = "float16"
-        else:
-            compute_dtype = "float32"
+        compute_dtype = settings.GetOption("whisper_precision")
 
-        return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype)
+        return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype,
+                                            cpu_threads=cpu_threads, num_workers=num_workers)
 
 
 def convert_audio(audio_bytes: bytes):
@@ -238,7 +238,7 @@ def whisper_worker():
         whisper_condition_on_previous_text = settings.GetOption("condition_on_previous_text")
         whisper_logprob_threshold = settings.GetOption("logprob_threshold")
         whisper_no_speech_threshold = settings.GetOption("no_speech_threshold")
-        whisper_fp16 = settings.GetOption("fp16")
+        whisper_beam_size = settings.GetOption("beam_size")
 
         whisper_temperature_fallback = settings.GetOption("temperature_fallback")
         whisper_temperature_fallback_option = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
@@ -268,13 +268,17 @@ def whisper_worker():
 
             if not settings.GetOption("faster_whisper"):
                 # official whisper model
+                whisper_fp16 = False
+                if settings.GetOption("whisper_precision") == "float16":  # set precision
+                    whisper_fp16 = True
                 result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
                                                 condition_on_previous_text=whisper_condition_on_previous_text,
                                                 initial_prompt=whisper_initial_prompt,
                                                 logprob_threshold=whisper_logprob_threshold,
                                                 no_speech_threshold=whisper_no_speech_threshold,
                                                 fp16=whisper_fp16,
-                                                temperature=whisper_temperature_fallback_option
+                                                temperature=whisper_temperature_fallback_option,
+                                                beam_size=whisper_beam_size
                                                 )
             else:
                 # faster whisper
@@ -284,7 +288,8 @@ def whisper_worker():
                                                 initial_prompt=whisper_initial_prompt,
                                                 logprob_threshold=whisper_logprob_threshold,
                                                 no_speech_threshold=whisper_no_speech_threshold,
-                                                temperature=whisper_temperature_fallback_option)
+                                                temperature=whisper_temperature_fallback_option,
+                                                beam_size=whisper_beam_size)
 
             whisper_result_handling(result)
         except Exception as e:

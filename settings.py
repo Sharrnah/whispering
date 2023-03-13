@@ -33,14 +33,17 @@ TRANSLATE_SETTINGS = {
     "initial_prompt": "",  # initial prompt for Whisper. for example "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking." will give more filler words.
     "logprob_threshold": "-1.0",
     "no_speech_threshold": "0.6",
+    "whisper_precision": "float32",  # for original Whisper can be "float16" or "float32", for faster-whisper "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
+    "faster_whisper": False,  # Set to True to use faster whisper.
+    "temperature_fallback": True,  # Set to False to disable temperature fallback which is the reason for some slowdowns, but decreases quality.
+    "beam_size": 5,  # Beam size for beam search. (higher = more accurate, but slower)
+    "whisper_cpu_threads": 0,  # Number of threads to use when running on CPU (4 by default)
+    "whisper_num_workers": 1,  # When transcribe() is called from multiple Python threads
     "vad_enabled": True,  # Enable Voice activity detection (VAD)
     "vad_on_full_clip": False,  # Make an additional VAD check on the full clip (Not only on each frame).
     "vad_confidence_threshold": "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
     "vad_num_samples": 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
     "vad_thread_num": 1,  # number of threads to use for VAD.
-    "fp16": False,  # Set to True to use FP16 instead of FP32.
-    "faster_whisper": False,  # Set to True to use faster whisper.
-    "temperature_fallback": True,  # Set to False to disable temperature fallback which is the reason for some slowdowns, but decreases quality.
 
     # OSC settings
     "osc_ip": "127.0.0.1",  # OSC IP address. set to "0" to disable.
@@ -161,6 +164,7 @@ def GetAvailableSettingValues():
         "llm_model": ["flan", "bloomz", "gptj", "pygmalion"],
         "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
         "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
+        "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
     }
 
     return possible_settings

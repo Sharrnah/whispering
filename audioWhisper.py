@@ -275,12 +275,11 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     # Load faster-whisper model
     if settings.GetOption("faster_whisper"):
         whisper_model = settings.GetOption("model")
-        if settings.GetOption("fp16"):
-            compute_dtype = "float16"
-        else:
-            compute_dtype = "float32"
+        whisper_precision = settings.GetOption("whisper_precision")
         # download the model here since its only possible in the main thread
-        faster_whisper.download_model(whisper_model, compute_dtype)
+        websocket.set_loading_state("downloading_whisper_model", True)
+        faster_whisper.download_model(whisper_model, whisper_precision)
+        websocket.set_loading_state("downloading_whisper_model", False)
 
     # prepare the plugin timer calls
     call_plugin_timer()

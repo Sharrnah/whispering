@@ -192,12 +192,12 @@ def download_model(model: str, compute_type: str = "float32"):
     model_cache_path = Path(".cache/whisper")
     os.makedirs(model_cache_path, exist_ok=True)
     model_path = Path(model_cache_path / (model + "-ct2"))
-    if compute_type == "float16":
+    if compute_type == "float16" or compute_type == "int8_float16" or compute_type == "int16" or compute_type == "int8":
         model_path = Path(model_cache_path / (model + "-ct2-fp16"))
 
     pretrained_lang_model_file = Path(model_path / "model.bin")
 
-    if not Path(model_path).exists() or pretrained_lang_model_file.is_file():
+    if not Path(model_path).exists() or not pretrained_lang_model_file.is_file():
         print("downloading faster-whisper...")
         if not downloader.download_extract(MODEL_LINKS[model][compute_type]["urls"],
                                            str(model_cache_path.resolve()),
@@ -208,23 +208,26 @@ def download_model(model: str, compute_type: str = "float32"):
 class FasterWhisper:
     model = None
 
-    def __init__(self, model: str, device: str = "cpu", compute_type: str = "float32"):
+    def __init__(self, model: str, device: str = "cpu", compute_type: str = "float32", cpu_threads: int = 0,
+                 num_workers: int = 1):
         if self.model is None:
-            self.load_model(model, device, compute_type)
+            self.load_model(model, device, compute_type, cpu_threads, num_workers)
 
-    def load_model(self, model: str, device: str = "cpu", compute_type: str = "float32"):
+    def load_model(self, model: str, device: str = "cpu", compute_type: str = "float32", cpu_threads: int = 0,
+                   num_workers: int = 1):
         model_cache_path = Path(".cache/whisper")
         os.makedirs(model_cache_path, exist_ok=True)
         model_path = Path(model_cache_path / (model + "-ct2"))
-        if compute_type == "float16":
+        if compute_type == "float16" or compute_type == "int8_float16":
             model_path = Path(model_cache_path / (model + "-ct2-fp16"))
 
         print("loading faster-whisper...")
-        self.model = WhisperModel(str(Path(model_path).resolve()), device=device, compute_type=compute_type)
+        self.model = WhisperModel(str(Path(model_path).resolve()), device=device, compute_type=compute_type,
+                                  cpu_threads=cpu_threads, num_workers=num_workers)
 
     def transcribe(self, audio_sample, task, language, condition_on_previous_text,
                    initial_prompt, logprob_threshold, no_speech_threshold,
-                   temperature) -> dict:
+                   temperature, beam_size) -> dict:
 
         result_segments, audio_info = self.model.transcribe(audio_sample, task=task,
                                                             language=language,
@@ -233,6 +236,7 @@ class FasterWhisper:
                                                             log_prob_threshold=logprob_threshold,
                                                             no_speech_threshold=no_speech_threshold,
                                                             temperature=temperature,
+                                                            beam_size=beam_size,
                                                             without_timestamps=True
                                                             )
 
