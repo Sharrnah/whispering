@@ -301,6 +301,13 @@ body.noscroll {
 }
 
 /* loader animation */
+#loader #live-data {
+  position: absolute;
+  color: white;
+  white-space: normal;
+  padding: 5px 5px;
+  font-size: 1.3rem;
+}
 #loader .center {
   display: flex;
   justify-content: center;
@@ -312,10 +319,11 @@ body.noscroll {
 
   white-space:nowrap;
   overflow:hidden;
-  margin: 0 20vw;
+  margin: 0 0.1vw;
   min-width: 250px;
 
   animation: appear-box-animation 1s cubic-bezier(0.16, 1, 0.3, 1) 0s 1 forwards;
+  position: relative;
 }
 #loader .wave {
   width: 5px;
@@ -324,6 +332,8 @@ body.noscroll {
   margin: 10px;
   animation: wave 1s linear infinite;
   border-radius: 20px;
+
+  opacity: 0.2;
 }
 #loader .wave:nth-child(2) {
   animation-delay: 0.1s;

@@ -16,6 +16,7 @@ TRANSLATE_SETTINGS = {
     "txt_ascii": False,  # if enabled, text translator will convert text to romaji.
     "txt_translator": "NLLB200",  # can be "NLLB200", "M2M100" or "ARGOS"
     "txt_translator_size": "small",  # for M2M100 model size: Can be "small" or "large", for NLLB200 model size: Can be "small", "medium", "large".
+    "txt_translate_realtime": True,  # use text translator in realtime mode
 
     # ocr settings
     "ocr_lang": "en",  # language for OCR image to text recognition.
@@ -44,6 +45,11 @@ TRANSLATE_SETTINGS = {
     "vad_confidence_threshold": "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
     "vad_num_samples": 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
     "vad_thread_num": 1,  # number of threads to use for VAD.
+    "realtime": False,  # if enabled, Whisper will process audio in realtime.
+    "realtime_whisper_model": "",  # model used for realtime transcription. (empty for using same model as model setting)
+    "realtime_whisper_precision": "float16",  # precision used for realtime transcription model.
+    "realtime_whisper_beam_size": 1,  # beam size used for realtime transcription model.
+    "realtime_frame_multiply": 10,  # Only sends the audio clip to Whisper every X frames. (higher = less whisper updates and less processing time)
 
     # OSC settings
     "osc_ip": "127.0.0.1",  # OSC IP address. set to "0" to disable.
@@ -69,10 +75,10 @@ TRANSLATE_SETTINGS = {
 
     # FLAN settings
     "flan_enabled": False,  # Enable FLAN A.I.
-    "llm_model": "flan",  # LLM model to use. Can be "flan", "bloomz" or "gptj"
+    "llm_model": "gptj",  # LLM model to use. Can be "flan", "bloomz" or "gptj"
     "flan_size": "large",  # FLAN model size. Can be "small", "base", "large", "xl" or "xxl"
     "flan_bits": 32,  # precision can be set to 32 (float), 16 (float) or 8 (int) bits. 8 bits is the fastest but least precise
-    "flan_device": "cpu",  # can be "cpu", "cuda" or "auto". ("cuda" and "auto" doing the same)
+    "flan_device": "cuda",  # can be "cpu", "cuda" or "auto". ("cuda" and "auto" doing the same)
     "flan_whisper_answer": True,  # if True, the FLAN A.I. will answer to results from the Whisper A.I.
     "flan_process_only_questions": True,  # if True, the FLAN A.I. will only answer to questions.
     "flan_osc_prefix": "AI: ",  # prefix for OSC messages.
@@ -165,6 +171,8 @@ def GetAvailableSettingValues():
         "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
         "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
         "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
+        "realtime_whisper_model": [""] + available_models(),
+        "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
     }
 
     return possible_settings

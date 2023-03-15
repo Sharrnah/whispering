@@ -86,6 +86,28 @@ def call_plugin_timer():
                 settings.SetOption("plugin_current_timer", 0.0)
 
 
+def audio_bytes_to_wav(audio_bytes):
+    final_wavfile = io.BytesIO()
+    wavefile = wave.open(final_wavfile, 'wb')
+    wavefile.setnchannels(CHANNELS)
+    wavefile.setsampwidth(2)
+    wavefile.setframerate(SAMPLE_RATE)
+    wavefile.writeframes(audio_bytes)
+
+    final_wavfile.seek(0)
+    return_data = final_wavfile.read()
+    wavefile.close()
+    return return_data
+
+
+def typing_indicator_function(osc_ip, osc_port, send_websocket=True):
+    if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption(
+            "osc_typing_indicator"):
+        VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
+    if send_websocket:
+        websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
+
+
 @click.command()
 @click.option('--devices', default='False', help='print all available devices id', type=str)
 @click.option('--device_index', default=-1, help='the id of the input device (-1 = default active Mic)', type=int)
@@ -378,31 +400,26 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                     print(full_audio_confidence)
 
                 if (not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold):
-                    finalwavfile = io.BytesIO()
-                    wavefile = wave.open(finalwavfile, 'wb')
-                    wavefile.setnchannels(CHANNELS)
-                    wavefile.setsampwidth(2)
-                    wavefile.setframerate(SAMPLE_RATE)
-                    wavefile.writeframes(wavefiledata)
-
-                    finalwavfile.seek(0)
-                    audioprocessor.q.put(finalwavfile.read())
+                    audioprocessor.q.put(
+                        {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': True})
                     # vad_iterator.reset_states()  # reset model states after each audio
 
-                    wavefile.close()
-
-                    # set typing indicator for VRChat
-                    if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption(
-                            "osc_typing_indicator"):
-                        VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
-                    # send start info for processing indicator in websocket client
-                    websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
+                    # set typing indicator for VRChat and Websocket clients
+                    typing_indicator_thread = threading.Thread(target=typing_indicator_function,
+                                                               args=(osc_ip, osc_port, True))
+                    typing_indicator_thread.start()
 
                 frames = []
                 start_time = time.time()
 
             # set start recording variable to true if the volume and voice confidence is above the threshold
             if peak_amplitude >= energy and new_confidence >= confidence_threshold:
+                if not start_rec_on_volume_threshold:
+                    # start processing_start event if realtime is enabled
+                    if settings.GetOption("realtime"):
+                        typing_indicator_thread = threading.Thread(target=typing_indicator_function,
+                                                                   args=(osc_ip, osc_port, True))
+                        typing_indicator_thread.start()
                 start_rec_on_volume_threshold = True
                 pause_time = time.time()
 
@@ -414,6 +431,20 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
                 frames.append(audio_chunk)
                 start_time = time.time()
+                if settings.GetOption("realtime"):
+                    clip = []
+                    frame_count = len(frames)
+                    if frame_count % settings.GetOption("realtime_frame_multiply") == 0:
+                        # set typing indicator for VRChat but not websocket
+                        typing_indicator_thread = threading.Thread(target=typing_indicator_function,
+                                                                   args=(osc_ip, osc_port, False))
+                        typing_indicator_thread.start()
+                        # for i in range(0, fps):
+                        for i in range(0, len(frames)):
+                            clip.append(frames[i])
+                        wavefiledata = b''.join(clip)
+                        audioprocessor.q.put(
+                            {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': False})
 
             # stop recording if no speech is detected for pause seconds
             if start_rec_on_volume_threshold and (
@@ -455,14 +486,12 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                 audio_data = audio.get_wav_data()
 
                 # add audio data to the queue
-                audioprocessor.q.put(audio_data)
+                audioprocessor.q.put({'time': time.time_ns(), 'data': audio_data, 'final': True})
 
-                # set typing indicator for VRChat
-                if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption(
-                        "osc_typing_indicator"):
-                    VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
-                # send start info for processing indicator in websocket client
-                websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
+                # set typing indicator for VRChat and websocket clients
+                typing_indicator_thread = threading.Thread(target=typing_indicator_function,
+                                                           args=(osc_ip, osc_port, True))
+                typing_indicator_thread.start()
 
 
 def str2bool(string):

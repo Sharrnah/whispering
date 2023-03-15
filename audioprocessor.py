@@ -57,7 +57,7 @@ def whisper_get_languages():
     return tuple([{"code": code, "name": language} for code, language in languages.items()])
 
 
-def whisper_result_handling(result):
+def whisper_result_handling(result, final_audio):
     verbose = settings.GetOption("verbose")
     osc_ip = settings.GetOption("osc_ip")
     flan_whisper_answer = settings.GetOption("flan_whisper_answer")
@@ -66,23 +66,26 @@ def whisper_result_handling(result):
     result["type"] = "transcript"
 
     if not predicted_text.lower() in blacklist:
-        if not verbose:
-            try:
-                print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": " + predicted_text.encode('utf-8',
-                                                                                                        'ignore').decode(
-                    'utf-8', 'ignore'))
-            except:
-                print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": ???")
+        if final_audio:
+            if not verbose:
+                try:
+                    print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": " + predicted_text.encode('utf-8',
+                                                                                                            'ignore').decode(
+                        'utf-8', 'ignore'))
+                except:
+                    print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": ???")
 
-        else:
-            try:
-                print(result.encode('utf-8', 'ignore').decode('utf-8', 'ignore'))
-            except:
-                print("???")
+            else:
+                try:
+                    print(result.encode('utf-8', 'ignore').decode('utf-8', 'ignore'))
+                except:
+                    print("???")
 
         # translate using text translator if enabled
         do_txt_translate = settings.GetOption("txt_translate")
-        if do_txt_translate:
+        # translate text realtime or after audio is finished
+        if do_txt_translate and settings.GetOption("txt_translate_realtime") or \
+                do_txt_translate and not settings.GetOption("txt_translate_realtime") and final_audio:
             from_lang = settings.GetOption("src_lang")
             to_lang = settings.GetOption("trg_lang")
             to_romaji = settings.GetOption("txt_ascii")
@@ -95,7 +98,7 @@ def whisper_result_handling(result):
         # replace predicted_text with FLAN response
         flan_loaded = False
         # check if FLAN is enabled
-        if flan_whisper_answer and LLM.init():
+        if final_audio and flan_whisper_answer and LLM.init():
             flan_osc_prefix = settings.GetOption("flan_osc_prefix")
             flan_loaded = True
             result["type"] = "flan_answer"
@@ -142,7 +145,7 @@ def whisper_result_handling(result):
 
         # send regular message if flan was not loaded
         if not flan_loaded:
-            send_message(predicted_text, result)
+            send_message(predicted_text, result, final_audio)
 
 
 def plugin_process(predicted_text, result_obj):
@@ -150,7 +153,7 @@ def plugin_process(predicted_text, result_obj):
         plugin_inst.stt(predicted_text, result_obj)
 
 
-def send_message(predicted_text, result_obj):
+def send_message(predicted_text, result_obj, final_audio):
     osc_ip = settings.GetOption("osc_ip")
     osc_address = settings.GetOption("osc_address")
     osc_port = settings.GetOption("osc_port")
@@ -160,30 +163,33 @@ def send_message(predicted_text, result_obj):
     if predicted_text == settings.GetOption("initial_prompt"):
         return
 
-    # process plugins
-    plugin_thread = threading.Thread(target=plugin_process, args=(predicted_text, result_obj))
-    plugin_thread.start()
+    # process plugins (only on final audio)
+    if final_audio:
+        plugin_thread = threading.Thread(target=plugin_process, args=(predicted_text, result_obj))
+        plugin_thread.start()
 
     # Send over OSC
     if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and predicted_text != "":
-        VRC_OSCLib.Chat(predicted_text, True, True, osc_address, IP=osc_ip, PORT=osc_port,
+        osc_notify = final_audio and settings.GetOption("osc_typing_indicator")
+        VRC_OSCLib.Chat(predicted_text, True, osc_notify, osc_address, IP=osc_ip, PORT=osc_port,
                         convert_ascii=settings.GetOption("osc_convert_ascii"))
         settings.SetOption("plugin_timer_stopped", True)
 
     # Send to Websocket
-    if websocket_ip != "0":
+    if websocket_ip != "0" and final_audio:
         websocket.BroadcastMessage(json.dumps(result_obj))
 
-    # Send to TTS
-    if settings.GetOption("flan_whisper_answer"):
-        # remove osc prefix from message
-        predicted_text = predicted_text.removeprefix(settings.GetOption("flan_osc_prefix")).strip()
-    if settings.GetOption("tts_answer") and predicted_text != "" and silero.init():
-        try:
-            silero_wav, sample_rate = silero.tts.tts(predicted_text)
-            silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
-        except Exception as e:
-            print("Error while playing TTS audio: " + str(e))
+    # Send to TTS on final audio
+    if final_audio:
+        if settings.GetOption("flan_whisper_answer"):
+            # remove osc prefix from message
+            predicted_text = predicted_text.removeprefix(settings.GetOption("flan_osc_prefix")).strip()
+        if settings.GetOption("tts_answer") and predicted_text != "" and silero.init():
+            try:
+                silero_wav, sample_rate = silero.tts.tts(predicted_text)
+                silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
+            except Exception as e:
+                print("Error while playing TTS audio: " + str(e))
 
 
 def load_whisper(model, ai_device):
@@ -193,6 +199,18 @@ def load_whisper(model, ai_device):
         return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
     else:
         compute_dtype = settings.GetOption("whisper_precision")
+
+        return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype,
+                                            cpu_threads=cpu_threads, num_workers=num_workers)
+
+
+def load_realtime_whisper(model, ai_device):
+    cpu_threads = settings.GetOption("whisper_cpu_threads")
+    num_workers = settings.GetOption("whisper_num_workers")
+    if not settings.GetOption("faster_whisper"):
+        return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
+    else:
+        compute_dtype = settings.GetOption("realtime_whisper_precision")
 
         return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype,
                                             cpu_threads=cpu_threads, num_workers=num_workers)
@@ -208,19 +226,40 @@ def convert_audio(audio_bytes: bytes):
     return np.frombuffer(audio_clip.get_array_of_samples(), np.int16).flatten().astype(np.float32) / 32768.0
 
 
+def whisper_result_thread(whisper_result_text, result, final_audio):
+    websocket.BroadcastMessage(json.dumps({"type": "processing_data", "data": whisper_result_text}))
+    whisper_result_handling(result, final_audio)
+
+    # send stop info for processing indicator in websocket client
+    if final_audio:
+        websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": False}))
+
+
 def whisper_worker():
     whisper_model = settings.GetOption("model")
 
     whisper_ai_device = settings.GetOption("ai_device")
     websocket.set_loading_state("whisper_loading", True)
     audio_model = load_whisper(whisper_model, whisper_ai_device)
+    # load realtime whisper model
+    audio_model_realtime = None
+    if settings.GetOption("realtime") and settings.GetOption("realtime_whisper_model") != "":
+        audio_model_realtime = load_realtime_whisper(settings.GetOption("realtime_whisper_model"), whisper_ai_device)
     websocket.set_loading_state("whisper_loading", False)
+
+    last_audio_time = 0
+
+    last_whisper_result = ""
 
     print("Whisper AI Ready. You can now say something!")
 
     while True:
+        final_audio = False
         try:
-            audio = q.get(timeout=queue_timeout)
+            queue_data = q.get(timeout=queue_timeout)
+            audio = queue_data["data"]
+            final_audio = queue_data["final"]
+            audio_timestamp = queue_data["time"]
         except queue.Empty:
             # print("Queue processing timed out. Skipping...")
             continue
@@ -229,7 +268,13 @@ def whisper_worker():
             continue
 
         # skip if queue is full
-        if q.qsize() >= max_queue_size:
+        if settings.GetOption("realtime") and q.qsize() >= max_queue_size and not final_audio or \
+                not settings.GetOption("realtime") and q.qsize() >= max_queue_size:
+            q.task_done()
+            continue
+
+        # skip if audio is too old, except if it's the final audio
+        if audio_timestamp < last_audio_time and not final_audio:
             q.task_done()
             continue
 
@@ -239,6 +284,7 @@ def whisper_worker():
         whisper_logprob_threshold = settings.GetOption("logprob_threshold")
         whisper_no_speech_threshold = settings.GetOption("no_speech_threshold")
         whisper_beam_size = settings.GetOption("beam_size")
+        whisper_beam_size_realtime = settings.GetOption("realtime_whisper_beam_size")
 
         whisper_temperature_fallback = settings.GetOption("temperature_fallback")
         whisper_temperature_fallback_option = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
@@ -271,33 +317,67 @@ def whisper_worker():
                 whisper_fp16 = False
                 if settings.GetOption("whisper_precision") == "float16":  # set precision
                     whisper_fp16 = True
-                result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
-                                                condition_on_previous_text=whisper_condition_on_previous_text,
-                                                initial_prompt=whisper_initial_prompt,
-                                                logprob_threshold=whisper_logprob_threshold,
-                                                no_speech_threshold=whisper_no_speech_threshold,
-                                                fp16=whisper_fp16,
-                                                temperature=whisper_temperature_fallback_option,
-                                                beam_size=whisper_beam_size
-                                                )
+
+                if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
+                    print("Using realtime whisper model")
+                    realtime_whisper_fp16 = False
+                    if settings.GetOption("realtime_whisper_precision") == "float16":  # set precision
+                        realtime_whisper_fp16 = True
+                    result = audio_model_realtime.transcribe(audio_sample, task=whisper_task,
+                                                             language=whisper_language,
+                                                             condition_on_previous_text=whisper_condition_on_previous_text,
+                                                             initial_prompt=whisper_initial_prompt,
+                                                             logprob_threshold=whisper_logprob_threshold,
+                                                             no_speech_threshold=whisper_no_speech_threshold,
+                                                             fp16=realtime_whisper_fp16,
+                                                             temperature=0,
+                                                             beam_size=whisper_beam_size_realtime
+                                                             )
+                else:
+                    result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
+                                                    condition_on_previous_text=whisper_condition_on_previous_text,
+                                                    initial_prompt=whisper_initial_prompt,
+                                                    logprob_threshold=whisper_logprob_threshold,
+                                                    no_speech_threshold=whisper_no_speech_threshold,
+                                                    fp16=whisper_fp16,
+                                                    temperature=whisper_temperature_fallback_option,
+                                                    beam_size=whisper_beam_size
+                                                    )
             else:
                 # faster whisper
-                result = audio_model.transcribe(audio_sample, task=whisper_task,
-                                                language=whisper_language,
-                                                condition_on_previous_text=whisper_condition_on_previous_text,
-                                                initial_prompt=whisper_initial_prompt,
-                                                logprob_threshold=whisper_logprob_threshold,
-                                                no_speech_threshold=whisper_no_speech_threshold,
-                                                temperature=whisper_temperature_fallback_option,
-                                                beam_size=whisper_beam_size)
+                if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
+                    print("Using realtime whisper model")
+                    result = audio_model_realtime.transcribe(audio_sample, task=whisper_task,
+                                                             language=whisper_language,
+                                                             condition_on_previous_text=whisper_condition_on_previous_text,
+                                                             initial_prompt=whisper_initial_prompt,
+                                                             logprob_threshold=whisper_logprob_threshold,
+                                                             no_speech_threshold=whisper_no_speech_threshold,
+                                                             temperature=0,
+                                                             beam_size=whisper_beam_size_realtime
+                                                             )
 
-            whisper_result_handling(result)
+                else:
+                    result = audio_model.transcribe(audio_sample, task=whisper_task,
+                                                    language=whisper_language,
+                                                    condition_on_previous_text=whisper_condition_on_previous_text,
+                                                    initial_prompt=whisper_initial_prompt,
+                                                    logprob_threshold=whisper_logprob_threshold,
+                                                    no_speech_threshold=whisper_no_speech_threshold,
+                                                    temperature=whisper_temperature_fallback_option,
+                                                    beam_size=whisper_beam_size)
+
+            if last_whisper_result == result.get('text').strip() and not final_audio:
+                q.task_done()
+                continue
+            last_whisper_result = result.get('text').strip()
+            result_thread = threading.Thread(target=whisper_result_thread,
+                                             args=(last_whisper_result, result, final_audio))
+            result_thread.start()
         except Exception as e:
             print("Error while processing audio: " + str(e))
 
         q.task_done()
-        # send stop info for processing indicator in websocket client
-        websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": False}))
 
 
 def start_whisper_thread():

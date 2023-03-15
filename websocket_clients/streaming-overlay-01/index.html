@@ -78,7 +78,7 @@
             }
 
             // loader animation
-            function showLoader(hideTime = 5) {
+            function showLoader(hideTime = 10) {
                document.querySelector('#loader').classList.remove("hidden");
                loaderTimeouts.push(
                   setTimeout(() => {
@@ -177,6 +177,9 @@
                      if (typeof received_msg.type != 'undefined' && received_msg.type === "transcript" && typeof received_msg.text != 'undefined') {
                         console.log(received_msg);
 
+                         // clear realtime translation
+                         document.querySelector('#loader #live-data').textContent = "";
+
                         let message_text = received_msg.text.trim();
                         let txt_translation_html = "";
                         // use argos translate text result if received
@@ -234,10 +237,18 @@
                          clearAllTimeouts(loaderTimeouts);
                          // show loader for 5 seconds
                          if (received_msg.data) {
-                            showLoader(5);
+                            showLoader(10);
                          } else {
                             hideLoader();
                          }
+                      }
+                      // update live translation text
+                      if (typeof received_msg.type != 'undefined' && received_msg.type === "processing_data") {
+                          if (received_msg.data) {
+                              document.querySelector('#loader #live-data').textContent = received_msg.data;
+                              clearAllTimeouts(loaderTimeouts);
+                              showLoader(10);
+                          }
                       }
                   };
                
@@ -270,6 +281,7 @@
             <section>
                 <div class="container mt-2">
                     <div class="row center">
+                        <div id="live-data"></div>
                         <div class="wave"></div>
                         <div class="wave"></div>
                         <div class="wave"></div>
