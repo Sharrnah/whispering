@@ -104,7 +104,7 @@ def typing_indicator_function(osc_ip, osc_port, send_websocket=True):
     if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption(
             "osc_typing_indicator"):
         VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
-    if send_websocket:
+    if send_websocket and settings.GetOption("websocket_ip") != "0":
         websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
 
 
