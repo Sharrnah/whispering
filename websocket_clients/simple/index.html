@@ -32,11 +32,18 @@
          }
 
          document.addEventListener("DOMContentLoaded", () => {
-            function addMessage(message) {
+            function addMessage(message, deleteTime = 0) {
                var elemDiv = document.createElement('p');
                elemDiv.style.cssText = 'width:100%;z-index:100;background:#fff;color:#000;';
                elemDiv.innerHTML = message;
+               // if deleteTime is set, delete the message
+               if (deleteTime > 0) {
+                  setTimeout(() => {
+                     elemDiv.parentNode.removeChild(elemDiv);
+                  }, deleteTime * 1000);
+               }
                el.appendChild(elemDiv);
+
             }
 
             function WebSocketStart() {
@@ -62,6 +69,14 @@
                         }
 
                         addMessage("<sup>["+received_msg.language+"]</sup> " + message_text);
+                        document.querySelector('#live-data').textContent = "";
+                     }
+
+                     // update live translation text
+                     if (typeof received_msg.type != 'undefined' && received_msg.type === "processing_data") {
+                        if (received_msg.data) {
+                           document.querySelector('#live-data').textContent = received_msg.data;
+                        }
                      }
                   };
                
@@ -85,5 +100,6 @@
    <body>
       <div id="sse">
       </div>
+      <div id="live-data"></div>
    </body>
 </html>
