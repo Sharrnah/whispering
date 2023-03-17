@@ -143,13 +143,13 @@ def typing_indicator_function(osc_ip, osc_port, send_websocket=True):
               help="The Device the AI is loaded on. can be 'cuda' or 'cpu'. default does autodetect",
               type=click.Choice(["cuda", "cpu"]))
 @click.option("--txt_translator", default="NLLB200",
-              help="The Model the AI is loading for text translations. can be 'NLLB200', 'M2M100', 'ARGOS' or 'None'. default is M2M100",
-              type=click.Choice(["NLLB200", "M2M100", "ARGOS"]))
+              help="The Model the AI is loading for text translations. can be 'NLLB200', 'M2M100' or 'None'. default is NLLB200",
+              type=click.Choice(["NLLB200", "M2M100"]))
 @click.option("--txt_translator_size", default="small",
-              help="The Model size if M2M100 or NLLB200 text translator is used. can be 'small', 'medium' or 'large' for NLLB200 or 'small' or 'large' for M2M100. default is small. (has no effect with ARGOS)",
+              help="The Model size if M2M100 or NLLB200 text translator is used. can be 'small', 'medium' or 'large' for NLLB200 or 'small' or 'large' for M2M100. default is small.",
               type=click.Choice(["small", "medium", "large"]))
 @click.option("--txt_translator_device", default="auto",
-              help="The device used for M2M100 translation. (has no effect with ARGOS or NLLB200)",
+              help="The device used for text translation.",
               type=click.Choice(["auto", "cuda", "cpu"]))
 @click.option("--ocr_window_name", default="VRChat",
               help="Window name of the application for OCR translations. (Default: 'VRChat')", type=str)

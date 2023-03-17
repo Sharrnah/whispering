@@ -73,6 +73,8 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
     if not predicted_text.lower() in blacklist and \
             (final_audio or (not final_audio and audio_timestamp > last_audio_timestamp)):
 
+        last_audio_timestamp = audio_timestamp
+
         if final_audio:
             if not verbose:
                 try:
@@ -108,8 +110,6 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
 
         # send regular message
         send_message(predicted_text, result, final_audio)
-
-        last_audio_timestamp = audio_timestamp
 
 
 def plugin_process(predicted_text, result_obj):

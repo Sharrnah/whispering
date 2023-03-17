@@ -14,7 +14,7 @@ TRANSLATE_SETTINGS = {
     "src_lang": "auto",  # source language for text translator (Whisper A.I. in translation mode always translates to "en")
     "trg_lang": "fra_Latn",  # target language for text translator
     "txt_ascii": False,  # if enabled, text translator will convert text to romaji.
-    "txt_translator": "NLLB200",  # can be "NLLB200", "M2M100" or "ARGOS"
+    "txt_translator": "NLLB200",  # can be "NLLB200" or "M2M100"
     "txt_translator_size": "small",  # for M2M100 model size: Can be "small" or "large", for NLLB200 model size: Can be "small", "medium", "large".
     "txt_translate_realtime": True,  # use text translator in realtime mode
 
@@ -66,7 +66,7 @@ TRANSLATE_SETTINGS = {
 
     # TTS settings
     "tts_enabled": True,  # enable TTS
-    "tts_ai_device": "cuda",  # can be "cuda" or "cpu".
+    "tts_ai_device": "cuda",  # can be "auto", "cuda" or "cpu".
     "tts_answer": True,  # answer to whisper results
     "device_out_index": None,  # output device index for TTS
     "tts_model": ["en", "v3_en"],  # TTS language and model to use
@@ -150,8 +150,8 @@ def GetAvailableSettingValues():
         "model": available_models(),
         "whisper_task": ["transcribe", "translate"],
         "tts_ai_device": ["cuda", "cpu"],
-        "txt_translator_device": ["cpu", "cuda"],
-        "txt_translator": ["NLLB200", "M2M100", "ARGOS"],
+        "txt_translator_device": ["cuda", "cpu"],
+        "txt_translator": ["NLLB200", "M2M100"],
         "txt_translator_size": ["small", "medium", "large"],
         "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
         "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
