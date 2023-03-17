@@ -9,7 +9,6 @@ from Models.OCR import easyocr
 from windowcapture import WindowCapture
 import settings
 import VRC_OSCLib
-from Models.LLM import LLM
 from Models.TTS import silero
 
 # Plugins
@@ -50,12 +49,6 @@ def tts_plugin_process(msgObj, websocket):
 
     for plugin_inst in Plugins.plugins:
         plugin_inst.tts(text, device)
-
-
-def flan_req(text, websocket):
-    flan_result = LLM.llm.encode(text)
-    AnswerMessage(websocket, json.dumps({"type": "flan_result", "flan_result": flan_result}))
-
 
 def ocr_req(msgObj, websocket):
     window_name = settings.GetOption("ocr_window_name")
@@ -110,11 +103,6 @@ def websocketMessageHandler(msgObj, websocket):
     if msgObj["type"] == "tts_voice_save_req":
         if silero.init():
             silero.tts.save_voice()
-
-    if msgObj["type"] == "flan_req":
-        if LLM.init():
-            flan_thread = threading.Thread(target=flan_req, args=(msgObj["text"], websocket))
-            flan_thread.start()
 
     if msgObj["type"] == "get_windows_list":
         windows_list = WindowCapture.list_window_names()

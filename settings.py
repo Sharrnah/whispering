@@ -57,11 +57,12 @@ TRANSLATE_SETTINGS = {
     "osc_address": "/chatbox/input",
     "osc_typing_indicator": True,
     "osc_convert_ascii": False,
-    "osc_auto_processing_enabled": True,  # Toggle auto sending of OSC messages on WhisperAI or Flan results. (not saved)
+    "osc_auto_processing_enabled": True,  # Toggle auto sending of OSC messages on WhisperAI results. (not saved)
 
     # websocket settings
     "websocket_ip": "127.0.0.1",
     "websocket_port": 5000,
+    "websocket_final_messages": True,  # if enabled, websocket will send final messages. (internal use)
 
     # TTS settings
     "tts_enabled": True,  # enable TTS
@@ -72,20 +73,6 @@ TRANSLATE_SETTINGS = {
     "tts_voice": "en_0",  # TTS voice (one of silero tts voices, or "last" to use last used voice)
     "tts_prosody_rate": "",  # TTS voice speed. Can be "x-slow", "slow", "medium", "fast", "x-fast" or "" for default.
     "tts_prosody_pitch": "",  # TTS voice pitch. Can be "x-low", "low", "medium", "high", "x-high" or "" for default.
-
-    # FLAN settings
-    "flan_enabled": False,  # Enable FLAN A.I.
-    "llm_model": "gptj",  # LLM model to use. Can be "flan", "bloomz" or "gptj"
-    "flan_size": "large",  # FLAN model size. Can be "small", "base", "large", "xl" or "xxl"
-    "flan_bits": 32,  # precision can be set to 32 (float), 16 (float) or 8 (int) bits. 8 bits is the fastest but least precise
-    "flan_device": "cuda",  # can be "cpu", "cuda" or "auto". ("cuda" and "auto" doing the same)
-    "flan_whisper_answer": True,  # if True, the FLAN A.I. will answer to results from the Whisper A.I.
-    "flan_process_only_questions": True,  # if True, the FLAN A.I. will only answer to questions.
-    "flan_osc_prefix": "AI: ",  # prefix for OSC messages.
-    "flan_translate_to_speaker_language": False,  # Translate from english to speaker language
-    "flan_prompt": "This is a discussion between a [human] and a [AI]. \nThe [AI] is very nice and empathetic.\n\n[human]: Hello nice to meet you.\n[AI]: Nice to meet you too.\n###\n[human]: How is it going today?\n[AI]: Not so bad, thank you! How about you?\n###\n[human]: I am okay too. \n[AI]: Oh that's good.\n###\n[human]: ??\n[AI]: ",  # text for prompts or wraps prompt around input text if ?? (two question-marks) is present in the string. Otherwise, it is added to the end of the string.
-    "flan_memory": "",  # longer term memory for FLAN A.I.
-    "flan_conditioning_history": 0,  # Number of previous messages to condition on. 0 for no conditioning.
 
     # Plugins
     "plugins": {},  # active plugins
@@ -138,6 +125,8 @@ def SaveYaml(path):
         del to_save_settings['plugin_timer_stopped']
     if "plugin_current_timer" in to_save_settings:
         del to_save_settings['plugin_current_timer']
+    if "websocket_final_messages" in to_save_settings:
+        del to_save_settings['websocket_final_messages']
 
     with open(path, "w") as f:
         yaml.dump(to_save_settings, f)
@@ -164,10 +153,6 @@ def GetAvailableSettingValues():
         "txt_translator_device": ["cpu", "cuda"],
         "txt_translator": ["NLLB200", "M2M100", "ARGOS"],
         "txt_translator_size": ["small", "medium", "large"],
-        "flan_device": ["cpu", "cuda"],
-        "flan_bits": ["32", "16", "8"],
-        "flan_size": ["small", "base", "large", "xl", "xxl"],
-        "llm_model": ["flan", "bloomz", "gptj", "pygmalion"],
         "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
         "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
         "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],

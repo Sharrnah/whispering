@@ -18,3 +18,10 @@ Consider reading the plugin file to see if there are any dependencies that need 
   
   https://gist.github.com/Sharrnah/802ab486374c69a183c85d5846100232
 
+
+- **Large Language Model Answering**
+
+  <img src=https://user-images.githubusercontent.com/55756126/225940740-f5e44911-9836-4b26-ab6e-a32676ddd27e.png width=250>
+
+  https://gist.github.com/Sharrnah/eeaf2acda3e92d8eed1747f05a3f4102
+

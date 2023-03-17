@@ -212,14 +212,14 @@
                      }
 
 
-                      // receiving a flan answer
-                      if (typeof received_msg.type != 'undefined' && received_msg.type === "flan_answer") {
+                      // receiving a llm answer
+                      if (typeof received_msg.type != 'undefined' && received_msg.type === "llm_answer") {
                          let message_text = received_msg.text.trim();
                          if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation !== '') {
                             message_text = received_msg.txt_translation;
                          }
                          let question = message_text;
-                         let answer = received_msg.flan_answer;
+                         let answer = received_msg.llm_answer;
 
                          let messageHtml = "<small>Q: " + question + "</small><br /><sup class=\"mainsup\">[" + received_msg.language + "]</sup>A: " + answer;
 

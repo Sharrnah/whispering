@@ -41,7 +41,7 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
 - **VAD** _[Voice Activity Detection]_
   - Silero-VAD
 - **LLM** _[Large language model]_ (Continuation of text. automatic answer generation etc.) **Proof of concept**
-  - FLAN-T5, GPT-J, Bloomz etc.
+  - FLAN-T5, GPT-J, Bloomz etc. (Using the [Whispering TIger Plugin for LLM](https://gist.github.com/Sharrnah/eeaf2acda3e92d8eed1747f05a3f4102))
 
 ## Quickstart
 For a quick and easy start, download the latest Whispering Tiger UI from here: [https://github.com/Sharrnah/whispering-ui](https://github.com/Sharrnah/whispering-ui#readme)

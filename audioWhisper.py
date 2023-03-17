@@ -18,7 +18,6 @@ import remote_opener
 from Models.STT import faster_whisper
 from Models.TextTranslation import texttranslate
 from Models import languageClassification
-from Models.LLM import LLM
 import pyaudiowpatch as pyaudio
 from whisper import available_models, audio as whisper_audio
 
@@ -154,8 +153,6 @@ def typing_indicator_function(osc_ip, osc_port, send_websocket=True):
               type=click.Choice(["auto", "cuda", "cpu"]))
 @click.option("--ocr_window_name", default="VRChat",
               help="Window name of the application for OCR translations. (Default: 'VRChat')", type=str)
-@click.option("--flan_enabled", default=False,
-              help="Enable FLAN-T5 A.I. (General A.I. which can be used for Question Answering.)", type=bool)
 @click.option("--open_browser", default=False,
               help="Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)",
               is_flag=True, type=bool)
@@ -263,8 +260,6 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     settings.SetOption("ocr_window_name",
                        settings.GetArgumentSettingFallback(ctx, "ocr_window_name", "ocr_window_name"))
 
-    settings.SetOption("flan_enabled", settings.GetArgumentSettingFallback(ctx, "flan_enabled", "flan_enabled"))
-
     if websocket_ip != "0":
         websocket.StartWebsocketServer(websocket_ip, websocket_port)
         if open_browser:
@@ -287,9 +282,6 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
     # Load language identification dependencies
     languageClassification.download_model()
-
-    # Load FLAN-T5 dependencies
-    LLM.init()
 
     # Download faster-whisper model
     if settings.GetOption("faster_whisper"):

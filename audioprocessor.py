@@ -1,9 +1,7 @@
 import threading
 import queue
-import time
 
 import whisper
-import os
 import settings
 import VRC_OSCLib
 from Models.TextTranslation import texttranslate
@@ -13,7 +11,6 @@ import numpy as np
 from pydub import AudioSegment
 from whisper.tokenizer import LANGUAGES, TO_LANGUAGE_CODE
 import io
-from Models.LLM import LLM
 from Models.TTS import silero
 
 # from faster_whisper import WhisperModel
@@ -34,7 +31,8 @@ blacklist = [
     "Please search TongTongTV online.",
     "Please search TongTongTV online!",
     "Please search TongTongTV online",
-    "you"
+    "you",
+    "Go to Beadaholique.com for all of your beading supply needs!"
 ]
 # make all list entries lowercase for later comparison
 blacklist = list((map(lambda x: x.lower(), blacklist)))
@@ -68,13 +66,12 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
     global last_audio_timestamp
     verbose = settings.GetOption("verbose")
     osc_ip = settings.GetOption("osc_ip")
-    flan_whisper_answer = settings.GetOption("flan_whisper_answer")
 
     predicted_text = result.get('text').strip()
     result["type"] = "transcript"
 
-    if not predicted_text.lower() in blacklist or \
-            final_audio or not final_audio and audio_timestamp > last_audio_timestamp:
+    if not predicted_text.lower() in blacklist and \
+            (final_audio or (not final_audio and audio_timestamp > last_audio_timestamp)):
 
         if final_audio:
             if not verbose:
@@ -105,59 +102,12 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
             result["txt_translation_source"] = txt_from_lang
             result["txt_translation_target"] = to_lang
 
-        websocket.BroadcastMessage(json.dumps({"type": "processing_data", "data": predicted_text}))
+        # send realtime processing data to websocket
+        if not final_audio and predicted_text.strip() != "":
+            websocket.BroadcastMessage(json.dumps({"type": "processing_data", "data": predicted_text}))
 
-        # replace predicted_text with FLAN response
-        flan_loaded = False
-        # check if FLAN is enabled
-        if final_audio and flan_whisper_answer and LLM.init():
-            flan_osc_prefix = settings.GetOption("flan_osc_prefix")
-            flan_loaded = True
-            result["type"] = "flan_answer"
-            # Only process using FLAN if question is asked
-            if settings.GetOption("flan_process_only_questions"):
-                prompted_text, prompt_change = LLM.llm.whisper_result_prompter(predicted_text)
-                if prompt_change:
-                    predicted_text = LLM.llm.encode(prompted_text)
-
-                    # translate from auto-detected language to speaker language
-                    if settings.GetOption("flan_translate_to_speaker_language"):
-                        predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text,
-                                                                                                     "auto",
-                                                                                                     result['language'],
-                                                                                                     False, True)
-                    result['flan_answer'] = predicted_text
-                    try:
-                        print("FLAN question: " + prompted_text)
-                        print("FLAN result: " + predicted_text)
-                    except:
-                        print("FLAN question: ???")
-                        print("FLAN result: ???")
-
-                    if predicted_text != prompted_text:
-                        send_message(flan_osc_prefix + predicted_text, result)
-
-            # otherwise process every text with FLAN
-            else:
-                orig_predicted_text = predicted_text
-                predicted_text = LLM.llm.encode(predicted_text)
-                # translate from auto-detected language to speaker language
-                if settings.GetOption("flan_translate_to_speaker_language"):
-                    predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, "auto",
-                                                                                                 result['language'],
-                                                                                                 False, True)
-                result['flan_answer'] = predicted_text
-                try:
-                    print("FLAN result: " + predicted_text)
-                except:
-                    print("FLAN result: ???")
-
-                if predicted_text != orig_predicted_text:
-                    send_message(flan_osc_prefix + predicted_text, result)
-
-        # send regular message if flan was not loaded
-        if not flan_loaded:
-            send_message(predicted_text, result, final_audio)
+        # send regular message
+        send_message(predicted_text, result, final_audio)
 
         last_audio_timestamp = audio_timestamp
 
@@ -190,14 +140,11 @@ def send_message(predicted_text, result_obj, final_audio):
         settings.SetOption("plugin_timer_stopped", True)
 
     # Send to Websocket
-    if websocket_ip != "0" and final_audio:
+    if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and final_audio:
         websocket.BroadcastMessage(json.dumps(result_obj))
 
     # Send to TTS on final audio
     if final_audio:
-        if settings.GetOption("flan_whisper_answer"):
-            # remove osc prefix from message
-            predicted_text = predicted_text.removeprefix(settings.GetOption("flan_osc_prefix")).strip()
         if settings.GetOption("tts_answer") and predicted_text != "" and silero.init():
             try:
                 silero_wav, sample_rate = silero.tts.tts(predicted_text)

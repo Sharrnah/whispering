@@ -37,7 +37,6 @@ _These take precedence to the [settings file](#settings-file). But not all optio
 |    `--txt_translator_size`     |     small      | The Model size of M2M100 or NLLB200 text translator is used. can be 'small', 'medium', 'large' for NLLB200, or 'small' or 'large' for M2M100. (has no effect with --txt_translator ARGOS) |
 |   `--txt_translator_device`    |      auto      |                                    The device used for M2M100 translation. can be 'auto', 'cuda' or 'cpu' (has no effect with --txt_translator ARGOS)                                     |
 |      `--ocr_window_name`       |     VRChat     |                                                                   Window name of the application for OCR translations.                                                                    |
-|        `--flan_enabled`        |     False      |                                                       Enable FLAN-T5 A.I. (General A.I. which can be used for Question Answering.)                                                        |
 |        `--open_browser`        |     False      |                                             Open default Browser with websocket-remote on start. (requires --websocket_ip to be set as well)                                              |
 |           `--config`           |      None      |                            Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]                             |
 |          `--verbose`           |     False      |                                                                             Whether to print verbose output.                                                                              |
@@ -96,20 +95,6 @@ tts_answer: True,  # answer to whisper results
 device_out_index: None,  # output device index for TTS
 tts_model: ["en", "v3_en"],  # TTS language and model to use
 tts_voice: "en_0",  # TTS voice (one of silero tts voices, or "last" to use last used voice)
-
-# FLAN-T5 settings
-flan_enabled: false  # Enable FLAN A.I.
-llm_model: ''  # LLM model to use. Can be "flan", "bloomz" or "gptj"
-flan_size: large  # LLM model size. Can be "small", "base", "large", "xl" or "xxl"
-flan_bits: 32  # precision can be set to 32 (float), 16 (float) or 8 (int) bits. 8 bits is the fastest but least precise
-flan_device: cpu  # can be "cpu", "cuda" or "auto". ("cuda" and "auto" doing the same)
-flan_whisper_answer: true  # if True, the FLAN A.I. will answer to results from the Whisper A.I.
-flan_process_only_questions: true  # if True, the FLAN A.I. will only answer to questions
-flan_osc_prefix: 'AI: '  # prefix for OSC messages
-flan_translate_to_speaker_language: false  # Translate from english to speaker language
-flan_prompt: ''  # text for prompts or wraps prompt around input text if ?? (two question-marks) is present in the string. Otherwise, it is added to the end of the string.
-flan_memory: ''  # longer term memory for FLAN A.I.
-flan_conditioning_history: 0  # Number of previous messages to condition on. 0 for no conditioning.
 
 # plugin settings
 plugins: {}  # list of plugins to load.

@@ -370,15 +370,6 @@
                   ws.send(JSON.stringify(sendData));
                }
 
-               // send FLAN request
-               document.querySelector("button#flan_do").addEventListener("click", sendFlanTask);
-               function sendFlanTask() {
-                  let src_text = document.querySelector('#translate_textarea').value;
-
-                  let sendData = { type: "flan_req", text: src_text};
-                  ws.send(JSON.stringify(sendData));
-               }
-
                // send OCR message
                document.querySelector("button#transl_result_textarea_sendosc").addEventListener("click", sendOSCTask);
                function sendOSCTask() {
@@ -472,14 +463,14 @@
                      );
                   }
 
-                  // receiving a flan answer
-                  if (typeof received_msg.type != 'undefined' && received_msg.type === "flan_answer") {
+                  // receiving a llm answer
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "llm_answer") {
                      let message_text = received_msg.text.trim();
                      if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation !== '') {
                         message_text = received_msg.txt_translation;
                      }
                      let question = message_text;
-                     let answer = received_msg.flan_answer;
+                     let answer = received_msg.llm_answer;
 
                      let messageHtml = "<small>Q: " + question + "</small><br /><sup class=\"mainsup\">[" + received_msg.language + "]</sup>A: " + answer;
 
@@ -658,14 +649,6 @@
                         document.querySelector('#osc_auto_processing_enabled').disabled = true;
                         document.querySelector('#osc_auto_processing_enabled').parentNode.classList.add('disabled');
                      }
-
-                     // disable flan button if flan is disabled
-                     let flan_enabled = received_msg.data.flan_enabled;
-                     if (!flan_enabled) {
-                        document.querySelector('button#flan_do').disabled = true;
-                        document.querySelector('button#flan_do').style.display = "none";
-                        document.querySelector('#settings .flan-settings').style.display = "none";
-                     }
                   }
                   // receive translation result
                   if (typeof received_msg.type != 'undefined' && received_msg.type === "translate_result") {
@@ -720,9 +703,9 @@
                      saveWave(received_msg.wav_data);
                   }
 
-                  // get flan result
-                  if (typeof received_msg.type != 'undefined' && received_msg.type === "flan_result") {
-                     document.querySelector('#transl_result_textarea').value = received_msg.flan_result;
+                  // get llm result
+                  if (typeof received_msg.type != 'undefined' && received_msg.type === "llm_answer") {
+                     document.querySelector('#transl_result_textarea').value = received_msg.llm_answer;
                   }
 
                   // activate loading animation on processing_start message
@@ -788,17 +771,6 @@
                   <label for="current_language" title="Set speaker language. Helps with WhisperAI precision as it does not have to guess the language.">speaker language: <select name="current_language" id="current_language">
                         <option value="">Auto</option>
                   </select></label><br />
-                  <div class="flan-settings">
-                     <strong>FLAN-T5:</strong>&nbsp;<label for="flan_whisper_answer" title="enable FLAN-T5 to answer WhisperAI transcriptions or translations.">answering: <input type="checkbox" id="flan_whisper_answer"
-                        name="flan_whisper_answer" value="1" /></label>&nbsp;&nbsp;&nbsp;
-                     <label for="flan_process_only_questions" title="process only questions. FLAN-T5 only responses if a question-word and question-mark are found.">only questions: <input type="checkbox" id="flan_process_only_questions"
-                        name="flan_process_only_questions" value="1" /></label>&nbsp;&nbsp;&nbsp;
-                     <label for="flan_translate_to_speaker_language" title="Try to reply in the language of the speaker.">reply in speaker lang.: <input type="checkbox" id="flan_translate_to_speaker_language"
-                        name="flan_translate_to_speaker_language" value="1" /></label>&nbsp;&nbsp;&nbsp;
-                     <label for="flan_prompt" class="setting-textarea" title="Prefix this before input or wrap around input at '??'">Prompt prefix:&nbsp;<textarea name="flan_prompt" id="flan_prompt" rows="1" cols="18" style="height: 3em;"></textarea></label>&nbsp;&nbsp;&nbsp;
-                     <label for="flan_conditioning_history">conditioning lines:&nbsp;<input type="number" id="flan_conditioning_history" name="flan_conditioning_history" min="0" style="width: 3rem;"></label>&nbsp;&nbsp;
-                     <label for="flan_memory" class="setting-textarea" title="long term memory (always added at top of prompt)">Prompt memory:&nbsp;<textarea name="flan_memory" id="flan_memory" rows="1" cols="18" style="height: 3em;"></textarea></label><br />
-                  </div>
                   <strong>TTS:</strong>&nbsp;<label for="tts_answer" title="enable TTS to answer WhisperAI results.">answering: <input type="checkbox" id="tts_answer"
                      name="tts_answer" value="1" /></label>&nbsp;&nbsp;&nbsp;Model: <select name="tts_model" id="tts_model"></select>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Voice: <select name="tts_voice" id="tts_voice"></select>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
                   <button name="transl_result_textarea_savetts_voice" id="transl_result_textarea_savetts_voice" value="1" title="save last random generated voice for use as 'last' voice">save random voice</button>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
@@ -812,7 +784,7 @@
                   <label for="txt_translate" title="Automatically translate speech results using text translation.">Enable Live Text Translate: <input type="checkbox" id="txt_translate"
                      name="txt_translate" value="1" /></label>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
                   <label for="osc_auto_processing_enabled"
-                     title="Toggle automatically sending OSC messages on WhisperAI or FLAN-T5 results.">Automatic OSC msg: <input type="checkbox" id="osc_auto_processing_enabled" name="osc_auto_processing_enabled" value="1" /></label>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                     title="Toggle automatically sending OSC messages on WhisperAI results.">Automatic OSC msg: <input type="checkbox" id="osc_auto_processing_enabled" name="osc_auto_processing_enabled" value="1" /></label>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
                   <label for="txt_ascii"
                      title="transliterate hiragana, katakana and kanji (Japanese text) into rōmaji">Convert to
                      romaji: <input type="checkbox" id="txt_ascii" name="txt_ascii" value="1" /></label>
@@ -852,7 +824,6 @@
                   <div class="col-1">
                      <button name="translate_do" id="translate_do" value="1" style="width: 100%;">translate</button>
                      <div style="text-align:center;"><button name="ocr_transl_do" id="ocr_transl_do" value="1" title="Optical Character Recognition processing" style="width: 100%;">OCR</button></div>
-                     <div style="text-align:center;"><button name="flan_do" id="flan_do" value="1" title="Ask FLAN A.I." style="width: 100%;">ask FLAN</button></div>
                   </div>
                   <div class="col-5">
                      <textarea style="width:100%;" name="transl_result_textarea" id="transl_result_textarea"></textarea>
