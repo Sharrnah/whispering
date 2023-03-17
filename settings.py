@@ -35,7 +35,7 @@ TRANSLATE_SETTINGS = {
     "logprob_threshold": "-1.0",
     "no_speech_threshold": "0.6",
     "whisper_precision": "float32",  # for original Whisper can be "float16" or "float32", for faster-whisper "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
-    "faster_whisper": False,  # Set to True to use faster whisper.
+    "faster_whisper": True,  # Set to True to use faster whisper.
     "temperature_fallback": True,  # Set to False to disable temperature fallback which is the reason for some slowdowns, but decreases quality.
     "beam_size": 5,  # Beam size for beam search. (higher = more accurate, but slower)
     "whisper_cpu_threads": 0,  # Number of threads to use when running on CPU (4 by default)
