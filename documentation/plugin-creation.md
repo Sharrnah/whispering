@@ -21,6 +21,8 @@ So if you want to play a sound when the STT engine returns a result, you should 
 
 The `init` method is called at the initialization of whispering tiger, right after the settings file is loaded.
 
+The _optional_ methods `on_enable` and `on_disable` are called when the plugin is enabled or disabled.
+
 ## Helper methods
 
 The `Base` class provides some helper methods to make it easier to write plugins.
@@ -44,13 +46,24 @@ class ExamplePlugin(Plugins.Base):
     def init(self):
         if self.is_enabled():
             print(self.__class__.__name__ + " is enabled")
+
+            # disable OSC processing so the Plugin can take it over:
+            settings.SetOption("osc_auto_processing_enabled", False)
+            # disable TTS so the Plugin can take it over:
+            settings.SetOption("tts_answer", False)
+
+            # disable websocket final messages processing so the Plugin can take it over:
+            # this is really only needed if you want to use the websocket to send your own messages.
+            # for the Websocket clients to understand the messages, you must follow the format. (see the LLM Plugin for a good example)
+            ## settings.SetOption("websocket_final_messages", False)
         else:
             print(self.__class__.__name__ + " is disabled")
-        pass
+        
         # prepare all possible plugin settings and their default values
         # (make sure to use get_plugin_setting() to not overwrite user changed settings)
         self.get_plugin_setting("hello_world", "default foo bar")
 
+    # called every x seconds (defined in plugin_timer)
     def timer(self):
         osc_ip = settings.GetOption("osc_ip")
         osc_address = settings.GetOption("osc_address")
@@ -63,13 +76,20 @@ class ExamplePlugin(Plugins.Base):
                             convert_ascii=False)
         pass
 
+    # called when the STT engine returns a result
     def stt(self, text, result_obj):
         if self.is_enabled():
             print("Plugin Example")
             print(result_obj['language'])
         return
 
+    # called when the "send TTS" function is called
     def tts(self, text, device_index):
         return
 
+    def on_enable(self):
+        pass
+
+    def on_disable(self):
+        pass
 ```

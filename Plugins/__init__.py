@@ -52,6 +52,12 @@ class Base:
             settings.GetOption("plugin_settings")[self.__class__.__name__][settings_name] = value
             settings.SetOption("plugin_settings", settings.GetOption("plugin_settings"))
 
+    def on_enable(self):
+        pass
+
+    def on_disable(self):
+        pass
+
     @abstractmethod
     def init(self):
         pass

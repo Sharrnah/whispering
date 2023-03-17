@@ -50,6 +50,7 @@ def tts_plugin_process(msgObj, websocket):
     for plugin_inst in Plugins.plugins:
         plugin_inst.tts(text, device)
 
+
 def ocr_req(msgObj, websocket):
     window_name = settings.GetOption("ocr_window_name")
     ocr_result, image, bounding_boxes = easyocr.run_image_processing(window_name, ['en', msgObj["value"]["ocr_lang"]])
@@ -68,6 +69,21 @@ def ocr_req(msgObj, websocket):
 
 def websocketMessageHandler(msgObj, websocket):
     if msgObj["type"] == "setting_change":
+
+        # handle plugin activation / deactivation before setting the option
+        if msgObj["name"] == "plugins":
+            for plugin_name, is_enabled in msgObj["value"].items():
+                for plugin_inst in Plugins.plugins:
+                    if plugin_name == type(plugin_inst).__name__:
+                        if plugin_name in settings.GetOption("plugins") and is_enabled != settings.GetOption("plugins")[plugin_name]:
+                            settings.SetOption(msgObj["name"], msgObj["value"])
+                            if is_enabled:
+                                if hasattr(plugin_inst, 'on_enable'):
+                                    plugin_inst.on_enable()
+                            else:
+                                if hasattr(plugin_inst, 'on_enable'):
+                                    plugin_inst.on_disable()
+
         settings.SetOption(msgObj["name"], msgObj["value"])
         BroadcastMessage(json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}),
                          exclude_client=websocket)  # broadcast updated settings to all clients

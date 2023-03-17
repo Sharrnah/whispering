@@ -67,7 +67,7 @@ TRANSLATE_SETTINGS = {
     # TTS settings
     "tts_enabled": True,  # enable TTS
     "tts_ai_device": "cuda",  # can be "auto", "cuda" or "cpu".
-    "tts_answer": True,  # answer to whisper results
+    "tts_answer": True,  # send whisper results to TTS engine
     "device_out_index": None,  # output device index for TTS
     "tts_model": ["en", "v3_en"],  # TTS language and model to use
     "tts_voice": "en_0",  # TTS voice (one of silero tts voices, or "last" to use last used voice)
