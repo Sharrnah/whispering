@@ -341,9 +341,9 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
         continue_recording = True
         while continue_recording:
-            phrase_time_limit = settings.GetArgumentSettingFallback(ctx, "phrase_time_limit", "phrase_time_limit")
-            pause = settings.GetArgumentSettingFallback(ctx, "pause", "pause")
-            energy = settings.GetArgumentSettingFallback(ctx, "energy", "energy")
+            phrase_time_limit = settings.GetOption("phrase_time_limit")
+            pause = settings.GetOption("pause")
+            energy = settings.GetOption("energy")
             if phrase_time_limit == 0:
                 phrase_time_limit = None
 
@@ -464,11 +464,12 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
             audioprocessor.start_whisper_thread()
 
             while True:
-                phrase_time_limit = settings.GetArgumentSettingFallback(ctx, "phrase_time_limit", "phrase_time_limit")
+                phrase_time_limit = settings.GetOption("phrase_time_limit")
                 if phrase_time_limit == 0:
                     phrase_time_limit = None
-                pause = settings.GetArgumentSettingFallback(ctx, "pause", "pause")
-                energy = settings.GetArgumentSettingFallback(ctx, "energy", "energy")
+                pause = settings.GetOption("pause")
+                energy = settings.GetOption("energy")
+
                 r.energy_threshold = energy
                 r.pause_threshold = pause
 

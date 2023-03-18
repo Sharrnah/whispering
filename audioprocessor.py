@@ -73,8 +73,6 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
     if not predicted_text.lower() in blacklist and \
             (final_audio or (not final_audio and audio_timestamp > last_audio_timestamp)):
 
-        last_audio_timestamp = audio_timestamp
-
         if final_audio:
             if not verbose:
                 try:
@@ -110,6 +108,8 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
 
         # send regular message
         send_message(predicted_text, result, final_audio)
+
+        last_audio_timestamp = audio_timestamp
 
 
 def plugin_process(predicted_text, result_obj):
@@ -227,9 +227,19 @@ def whisper_ai_thread(audio, audio_timestamp, audio_model, audio_model_realtime,
     else:
         whisper_no_speech_threshold = float(whisper_no_speech_threshold)
 
-    audio_sample = convert_audio(audio)
-    try:
+    # use realtime settings if realtime is enabled but no realtime model is set and its not the final audio clip
+    if settings.GetOption("realtime") and audio_model_realtime is None and not final_audio:
+        whisper_beam_size = whisper_beam_size_realtime
+        whisper_temperature_fallback_option = 0
 
+    audio_sample = convert_audio(audio)
+
+    # do not process audio if it is older than the last result
+    if not final_audio and audio_timestamp < last_audio_timestamp:
+        print("Audio is older than last result. Skipping...")
+        return
+
+    try:
         if not settings.GetOption("faster_whisper"):
             # official whisper model
             whisper_fp16 = False
