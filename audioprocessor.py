@@ -26,13 +26,17 @@ blacklist = [
     "Thank you for watching!",
     "Thanks for watching.",
     "Thank you for watching.",
+    "Please subscribe!"
     "Please subscribe to my channel!",
     "Please subscribe to my channel.",
     "Please search TongTongTV online.",
     "Please search TongTongTV online!",
     "Please search TongTongTV online",
     "you",
-    "Go to Beadaholique.com for all of your beading supply needs!"
+    "Go to Beadaholique.com for all of your beading supply needs!",
+    "MBC 뉴스 이재경입니다."
+    "This is the end of this video. Thank you for watching."
+    "Thanks for watching and don't forget to like and subscribe!"
 ]
 # make all list entries lowercase for later comparison
 blacklist = list((map(lambda x: x.lower(), blacklist)))

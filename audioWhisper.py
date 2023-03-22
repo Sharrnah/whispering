@@ -407,11 +407,10 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
             # set start recording variable to true if the volume and voice confidence is above the threshold
             if peak_amplitude >= energy and new_confidence >= confidence_threshold:
                 if not start_rec_on_volume_threshold:
-                    # start processing_start event if realtime is enabled
-                    if settings.GetOption("realtime"):
-                        typing_indicator_thread = threading.Thread(target=typing_indicator_function,
-                                                                   args=(osc_ip, osc_port, True))
-                        typing_indicator_thread.start()
+                    # start processing_start event
+                    typing_indicator_thread = threading.Thread(target=typing_indicator_function,
+                                                               args=(osc_ip, osc_port, True))
+                    typing_indicator_thread.start()
                 start_rec_on_volume_threshold = True
                 pause_time = time.time()
 
