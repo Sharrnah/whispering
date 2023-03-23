@@ -1,3 +1,8 @@
+import os
+# set environment variable CT2_CUDA_ALLOW_FP16 to 1 (before ctranslate2 is imported)
+# to allow using FP16 computation on GPU even if the device does not have efficient FP16 support.
+os.environ["CT2_CUDA_ALLOW_FP16"] = "1"
+
 import io
 import json
 import signal
@@ -8,7 +13,6 @@ import threading
 # import speech_recognition_patch as sr  # this is a patched version of speech_recognition. (disabled for now because of freeze issues)
 import speech_recognition as sr
 import audioprocessor
-import os
 from pathlib import Path
 import click
 import VRC_OSCLib

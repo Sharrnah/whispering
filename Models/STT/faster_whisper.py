@@ -221,7 +221,7 @@ class FasterWhisper:
         if compute_type == "float16" or compute_type == "int8_float16":
             model_path = Path(model_cache_path / (model + "-ct2-fp16"))
 
-        print("loading faster-whisper...")
+        print(f"faster-whisper {model} is Loading to {device} using {compute_type} precision...")
         self.model = WhisperModel(str(Path(model_path).resolve()), device=device, compute_type=compute_type,
                                   cpu_threads=cpu_threads, num_workers=num_workers)
 

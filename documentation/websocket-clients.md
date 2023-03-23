@@ -19,6 +19,12 @@ You have build a nice Client and would like to share?, let me know so i can add 
 
   Has a lot more around the actual websocket implementation. Including a Styling that should work well for Streaming Overlays.
 
+- **Streaming Overlay 02** [_websocket_clients/streaming-overlay-02_](../websocket_clients/streaming-overlay-02/)
+
+  A rewritten implementation that looks more like traditional subtitles.
+
+  <img src=../images/streaming-overlay-02.png width=300>
+
 - **Websocket Remote** [_websocket_clients/websocket-remote_](../websocket_clients/websocket-remote/)
 
   Is the most complete Websocket implementation with additional Configuration Options that can be changed without restarting the application.

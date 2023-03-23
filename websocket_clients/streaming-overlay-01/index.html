@@ -66,6 +66,9 @@
          // disable scrolling
          no_scroll = getParameter("no_scroll");
 
+         // mirror mode (mirrors the overlay including the text)
+         let mirror = getParameter("mirror");
+
          // align to bottom of page (has no scrolling)
          bottom_align = getParameter("bottom_align");
 
@@ -75,6 +78,9 @@
             }
             if (typeof bottom_align != 'undefined') {
                document.querySelector('body').classList.add("bottom-align");
+            }
+            if (typeof mirror != 'undefined') {
+                document.querySelector('body').classList.add("mirror");
             }
 
             // loader animation
@@ -177,12 +183,12 @@
                      if (typeof received_msg.type != 'undefined' && received_msg.type === "transcript" && typeof received_msg.text != 'undefined') {
                         console.log(received_msg);
 
-                         // clear realtime translation
-                         document.querySelector('#loader #live-data').textContent = "";
+                        // clear realtime translation
+                        document.querySelector('#loader #live-data').textContent = "";
 
                         let message_text = received_msg.text.trim();
                         let txt_translation_html = "";
-                        // use argos translate text result if received
+                        // use translate text result if received
                         if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation.trim() !== '') {
                            message_text = received_msg.txt_translation.trim();
 

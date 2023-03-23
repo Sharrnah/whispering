@@ -57,12 +57,23 @@ condition_on_previous_text: true  # if enabled, Whisper will condition on previo
 initial_prompt: ""  # initial prompt for Whisper to try to follow its style. for example "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking." will give more filler words.
 logprob_threshold: "-1.0",  # log probability threshold for Whisper to treat as failed. (can be negative or positive).
 no_speech_threshold: "0.6",  # If the no_speech probability is higher than this value AND the average log probability over sampled tokens is below `logprob_threshold`, consider the segment as silent
+faster_whisper: true  # if enabled, uses faster-whisper instead of original Whisper.
+whisper_precision: "float32"  # for original Whisper can be "float16" or "float32", for faster-whisper "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
+temperature_fallback: true  # Set to False to disable temperature fallback which is the reason for some slowdowns, but decreases quality.
+beam_size: 5  # Beam size for beam search. (higher = more accurate, but slower)
+whisper_cpu_threads: 0  # Number of threads to use when running on CPU (4 by default)
+whisper_num_workers: 1  # When transcribe() is called from multiple Python threads
 vad_enabled: True,  # Enable Voice activity detection (VAD)
 vad_on_full_clip: False,  # If enabled,  an additional VAD check will be applied to the full clip, not just the frames.
 vad_confidence_threshold: "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
 vad_num_samples: 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
 vad_thread_num: 1,  # number of threads to use for VAD.
-fp16: false  # Set to true to use FP16 instead of FP32.
+
+realtime: false  # if enabled, Whisper will process audio in realtime.
+realtime_whisper_model: ''  # model used for realtime transcription. (empty for using same model as model setting)
+realtime_whisper_precision: "float16"  # precision used for realtime transcription model.
+realtime_whisper_beam_size: 1  # beam size used for realtime transcription model.
+realtime_frame_multiply: 10  # Only sends the audio clip to Whisper every X frames. (higher = less whisper updates and less processing time)
 
 # text translate settings
 txt_translate: false  # if enabled, pipes whisper A.I. results through text translator.
@@ -72,6 +83,8 @@ trg_lang: fra_Latn  # target language for text translator.
 txt_ascii: false  # if enabled, text translator will convert text to romaji.
 txt_translator: NLLB200  # can be "NLLB200" or "M2M100".
 txt_translator_size: small  # for M2M100 model size: Can be "small" or "large", for NLLB200 model size: Can be "small", "medium", "large".
+txt_translator_precision: float32  # for ctranwslate based text translators: can be "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
+txt_translate_realtime: false  # use text translator in realtime mode
 
 # websocket settings
 websocket_ip: 127.0.0.1
@@ -83,6 +96,7 @@ osc_port: 9000
 osc_address: /chatbox/input
 osc_typing_indicator: true
 osc_convert_ascii: false
+osc_chat_prefix: ''  # Prefix for OSC messages. (is prepended in front of the OSC message)
 
 # OCR settings
 ocr_lang: en  # language for OCR image to text recognition.
@@ -95,6 +109,8 @@ tts_answer: True,  # answer to whisper results
 device_out_index: None,  # output device index for TTS
 tts_model: ["en", "v3_en"],  # TTS language and model to use
 tts_voice: "en_0",  # TTS voice (one of silero tts voices, or "last" to use last used voice)
+tts_prosody_rate: ""  # TTS voice speed. Can be "x-slow", "slow", "medium", "fast", "x-fast" or "" for default.
+tts_prosody_pitch: "" # TTS voice pitch. Can be "x-low", "low", "medium", "high", "x-high" or "" for default.
 
 # plugin settings
 plugins: {}  # list of plugins to load.

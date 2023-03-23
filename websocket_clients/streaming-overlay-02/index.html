@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<!--
+  This file displays a subtitle like overlay,
+  which can be used to display transcriptions or translations on overlays for OBS, vMix etc.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-time Translation/Transcription Overlay</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      font-size: 24px;
+      background-color: rgba(0, 0, 0, 0);
+      color: #ffffff;
+      display: flex;
+      flex-direction: column-reverse;
+      justify-content: flex-start;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    body.mirror {
+      transform: scaleX(-1);
+    }
+    .subtitle {
+      background-color: rgba(0, 0, 0, 0.5);
+      padding: 5px;
+      border-radius: 5px;
+      margin-bottom: 5px;
+    }
+    #processing_data.subtitle {
+      position: relative;
+      z-index: 1;
+    }
+
+    .transcription-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow: hidden;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+    }
+  </style>
+</head>
+<body>
+<script>
+  let socket;
+  let connectionAttempts = 0;
+
+  let newestTranscript = null;
+
+  function getParameter(name) {
+    let urlString = window.location.href;
+    let paramString = urlString.split('?')[1];
+    let queryString = new URLSearchParams(paramString);
+    for(let pair of queryString.entries()) {
+      if (name === pair[0]) {
+        return pair[1];
+      }
+    }
+    return undefined;
+  }
+
+  ws_server = getParameter("ws_server");
+  if (typeof ws_server != 'undefined') {
+    ws_server_url = ws_server;
+  } else {
+    ws_server_url = 'ws://127.0.0.1:5000'
+  }
+
+  let auto_rm_message = getParameter("auto_rm_message");
+  if (typeof auto_rm_message != 'undefined') {
+    auto_remove_msg_time = auto_rm_message;
+  } else {
+    auto_remove_msg_time = 0;
+  }
+
+  let mirror = getParameter("mirror");
+
+  function updateProcessingDataVisibility() {
+    const processingElem = document.getElementById('processing_data');
+    if (processingElem.innerText.trim() === '') {
+      processingElem.style.display = 'none';
+    } else {
+      processingElem.style.display = 'block';
+    }
+  }
+
+  function removeElementById(id) {
+    const elem = document.getElementById(id);
+    if (elem) {
+      elem.parentNode.removeChild(elem);
+    }
+  }
+
+  function removeTranscriptionAfterDelay(elem, delay) {
+    setTimeout(function () {
+      elem.remove();
+    }, delay);
+  }
+
+  function onOpen(event) {
+    const successMsg = document.createElement('div');
+    successMsg.id = 'connection_success';
+    successMsg.className = 'subtitle';
+    successMsg.innerText = 'WebSocket connection established.';
+    document.body.appendChild(successMsg);
+
+    updateProcessingDataVisibility();
+
+    setTimeout(function() {
+      removeElementById('connection_success');
+    }, 3000);
+
+    if (typeof mirror != 'undefined') {
+      document.body.className = 'mirror';
+    }
+  }
+
+  function onMessage(event) {
+    const message = JSON.parse(event.data);
+
+    if (message.type === 'processing_data') {
+      const processingElem = document.getElementById('processing_data');
+      processingElem.innerText = message.data;
+      updateProcessingDataVisibility();
+    } else if (message.type === 'transcript') {
+      const processingElem = document.getElementById('processing_data');
+      processingElem.innerText = '';
+      updateProcessingDataVisibility();
+
+      const transcriptElem = document.createElement('div');
+      transcriptElem.className = 'transcription subtitle';
+
+      let transcriptText = message.text;
+      // use text translation if provided.
+      if (typeof message.txt_translation != 'undefined' && message.txt_translation.trim() !== '') {
+        transcriptText = message.txt_translation.trim();
+      }
+      transcriptElem.innerText = transcriptText;
+
+      const container = document.querySelector('.transcription-container');
+      container.insertBefore(transcriptElem, processingElem.nextSibling);
+
+      if (newestTranscript && auto_remove_msg_time >= 0) {
+        removeTranscriptionAfterDelay(newestTranscript, auto_remove_msg_time);
+      }
+      newestTranscript = transcriptElem;
+    }
+  }
+
+  function onClose(event) {
+    console.log('WebSocket closed:', event);
+    connectionAttempts++;
+    setTimeout(connectWebSocket, 5000); // Adjust the delay (in milliseconds) as needed
+  }
+
+  function onError(event) {
+    console.error('WebSocket error:', event);
+    connectionAttempts++;
+    setTimeout(connectWebSocket, 5000);
+  }
+
+  function connectWebSocket() {
+    // remove any existing event listeners to prevent multiple calls
+    if (socket) {
+      socket.removeEventListener('open', onOpen);
+      socket.removeEventListener('message', onMessage);
+      socket.removeEventListener('close', onClose);
+      socket.removeEventListener('error', onError);
+    }
+
+    socket = new WebSocket(ws_server_url);
+
+    // Add the WebSocket event listeners
+    socket.addEventListener('open', onOpen);
+    socket.addEventListener('message', onMessage);
+    socket.addEventListener('close', onClose);
+    socket.addEventListener('error', onError);
+  }
+
+  connectWebSocket();
+
+</script>
+  <div class="transcription-container">
+    <div id="processing_data" class="subtitle"></div>
+  </div>
+</body>
+</html>

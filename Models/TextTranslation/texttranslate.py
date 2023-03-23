@@ -3,6 +3,7 @@ import pykakasi
 # import texttranslateM2M100
 from Models.TextTranslation import texttranslateM2M100_CTranslate2
 from Models.TextTranslation import texttranslateNLLB200
+from Models.TextTranslation import texttranslateNLLB200_CTranslate2
 
 
 def get_current_translator():
@@ -25,7 +26,9 @@ def InstallLanguages():
         case "M2M100":
             texttranslateM2M100_CTranslate2.load_model(settings.GetOption("txt_translator_size"))
         case "NLLB200":
-            texttranslateNLLB200.load_model(settings.GetOption("txt_translator_size"))
+            texttranslateNLLB200.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
+        case "NLLB200_CT2":
+            texttranslateNLLB200_CTranslate2.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
 
 
 def GetInstalledLanguageNames():
@@ -34,6 +37,8 @@ def GetInstalledLanguageNames():
             return texttranslateM2M100_CTranslate2.get_installed_language_names()
         case "NLLB200":
             return texttranslateNLLB200.get_installed_language_names()
+        case "NLLB200_CT2":
+            return texttranslateNLLB200_CTranslate2.get_installed_language_names()
 
 
 def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
@@ -49,6 +54,11 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
                 translation_text, from_code, to_code = texttranslateNLLB200.translate_language(text, from_code, to_code, as_iso1)
             except Exception as e:
                 print("Error: " + str(e))
+        case "NLLB200_CT2":
+            try:
+                translation_text, from_code, to_code = texttranslateNLLB200_CTranslate2.translate_language(text, from_code, to_code, as_iso1)
+            except Exception as e:
+                print("Error: " + str(e))
     if to_romaji:
         translation_text = convert_to_romaji(translation_text)
 
@@ -57,4 +67,5 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
 
 def SetDevice(option):
     texttranslateNLLB200.set_device(option)
+    texttranslateNLLB200_CTranslate2.set_device(option)
     texttranslateM2M100_CTranslate2.set_device(option)

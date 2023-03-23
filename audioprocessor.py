@@ -139,7 +139,7 @@ def send_message(predicted_text, result_obj, final_audio):
     # Send over OSC
     if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and predicted_text != "":
         osc_notify = final_audio and settings.GetOption("osc_typing_indicator")
-        VRC_OSCLib.Chat(predicted_text, True, osc_notify, osc_address, IP=osc_ip, PORT=osc_port,
+        VRC_OSCLib.Chat(settings.GetOption("osc_chat_prefix") + predicted_text, True, osc_notify, osc_address, IP=osc_ip, PORT=osc_port,
                         convert_ascii=settings.GetOption("osc_convert_ascii"))
         settings.SetOption("plugin_timer_stopped", True)
 

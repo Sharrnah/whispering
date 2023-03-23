@@ -1,5 +1,6 @@
 import torch
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, models
+import ctranslate2
+from transformers import AutoTokenizer
 import os
 import downloader
 from pathlib import Path
@@ -445,11 +446,12 @@ MODEL_LINKS = {
 }
 
 # [Modify] Set paths to the models
-ct_model_path = Path(Path.cwd() / ".cache" / "nllb200")
+ct_model_path = Path(Path.cwd() / ".cache" / "nllb200_ct2")
 os.makedirs(ct_model_path, exist_ok=True)
 
-model = AutoModelForSeq2SeqLM
-tokenizer: models.nllb.NllbTokenizer = AutoTokenizer  # type: ignore
+model = None
+#tokenizer: models.nllb.NllbTokenizer = AutoTokenizer  # type: ignore
+tokenizer = None
 
 torch_device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -471,22 +473,23 @@ def load_model(size="small", compute_type="float32"):
 
     model_path = Path(ct_model_path / size)
 
-    print(f"NLLB-200 {size} is Loading to {torch_device} using {compute_type} precision...")
+    print(f"NLLB-200_CTranslate2 {size} is Loading to {torch_device} using {compute_type} precision...")
 
-    if not model_path.exists():
+    pretrained_lang_model_file = Path(model_path / "model.bin")
+
+    if not model_path.exists() or not pretrained_lang_model_file.is_file():
         print(f"Downloading {size} NLLB-200 model...")
         downloader.download_extract(MODEL_LINKS[size]["urls"], str(ct_model_path.resolve()), MODEL_LINKS[size]["checksum"])
 
     model_path_string = str(model_path.resolve())
 
-    torch_dtype = torch.float16 if compute_type == "float16" else torch.float32
+    model = ctranslate2.Translator(model_path_string, device=torch_device, compute_type=compute_type)
+    #if torch_device == 'cuda':
+    #    model = model.half()
 
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_path_string, torch_dtype=torch_dtype).to(torch_device)
-    if torch_device == 'cuda':
-        model = model.half()
     tokenizer = AutoTokenizer.from_pretrained(model_path_string)
 
-    print(f"NLLB-200 model loaded.")
+    print(f"NLLB-200_CTranslate2 model loaded.")
 
 
 def translate_language(text, from_code, to_code, as_iso1=False):
@@ -512,9 +515,9 @@ def translate_language(text, from_code, to_code, as_iso1=False):
         return text, from_code, to_code
 
     tokenizer.src_lang = from_code
-    inputs = tokenizer(text, return_tensors="pt").to(torch_device)
-    translated_tokens = model.generate(** inputs, forced_bos_token_id=tokenizer.lang_code_to_id[to_code], max_length=200)
+    inputs = tokenizer.convert_ids_to_tokens(tokenizer.encode(text))
+    translated_tokens = model.translate_batch([inputs], target_prefix=[[to_code]])
+    target = translated_tokens[0].hypotheses[0][1:]
+    translation_text = tokenizer.decode(tokenizer.convert_tokens_to_ids(target))
 
-    translation_text = tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
-    translation_text = translation_text.removeprefix("- ")
     return translation_text, from_code, to_code

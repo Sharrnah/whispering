@@ -14,13 +14,18 @@ TRANSLATE_SETTINGS = {
     "src_lang": "auto",  # source language for text translator (Whisper A.I. in translation mode always translates to "en")
     "trg_lang": "fra_Latn",  # target language for text translator
     "txt_ascii": False,  # if enabled, text translator will convert text to romaji.
-    "txt_translator": "NLLB200",  # can be "NLLB200" or "M2M100"
+    "txt_translator": "NLLB200_CT2",  # can be "NLLB200", "NLLB200_CT2" or "M2M100"
     "txt_translator_size": "small",  # for M2M100 model size: Can be "small" or "large", for NLLB200 model size: Can be "small", "medium", "large".
+    "txt_translator_precision": "float32",  # for ctranwslate based: can be "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
     "txt_translate_realtime": True,  # use text translator in realtime mode
 
     # ocr settings
     "ocr_lang": "en",  # language for OCR image to text recognition.
     "ocr_window_name": "VRChat",  # window name for OCR image to text recognition.
+
+    # audio settings
+    "audio_input_device": "",  # used by whispering tiger UI to select audio input device by name
+    "audio_output_device": "",  # used by whispering tiger UI to select audio output device by name
 
     # whisper settings
     "ai_device": None,  # can be None (auto), "cuda" or "cpu".
@@ -57,6 +62,7 @@ TRANSLATE_SETTINGS = {
     "osc_address": "/chatbox/input",
     "osc_typing_indicator": True,
     "osc_convert_ascii": False,
+    "osc_chat_prefix": "",  # Prefix for OSC messages.
     "osc_auto_processing_enabled": True,  # Toggle auto sending of OSC messages on WhisperAI results. (not saved)
 
     # websocket settings
@@ -151,8 +157,9 @@ def GetAvailableSettingValues():
         "whisper_task": ["transcribe", "translate"],
         "tts_ai_device": ["cuda", "cpu"],
         "txt_translator_device": ["cuda", "cpu"],
-        "txt_translator": ["NLLB200", "M2M100"],
+        "txt_translator": ["NLLB200_CT2", "NLLB200", "M2M100"],
         "txt_translator_size": ["small", "medium", "large"],
+        "txt_translator_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
         "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
         "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
         "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
