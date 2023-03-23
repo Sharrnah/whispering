@@ -275,7 +275,7 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
         print("--open_browser flag requres --websocket_ip to be set.")
 
     # Load textual translation dependencies
-    if txt_translator.lower() != "none":
+    if txt_translator.lower() != "none" and txt_translator != "":
         websocket.set_loading_state("txt_transl_loading", True)
         try:
             texttranslate.InstallLanguages()

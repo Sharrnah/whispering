@@ -7,6 +7,8 @@ from pathlib import Path
 import os
 from pydub import AudioSegment
 
+from functools import partial
+
 import websocket
 import settings
 from scipy.io.wavfile import write
@@ -22,6 +24,18 @@ os.makedirs(voices_path, exist_ok=True)
 
 
 #  https://github.com/snakers4/silero-models#standalone-use
+
+def is_inside_xml_tag(match, text):
+    open_tag_pos = text.rfind('<', 0, match.start())
+    close_tag_pos = text.rfind('>', 0, match.start())
+    return open_tag_pos > close_tag_pos
+
+
+def replace_numbers(match, lang, text):
+    if is_inside_xml_tag(match, text):
+        return match.group(0)
+    else:
+        return num2words.num2words(int(match.group(0)), lang=lang)
 
 
 class Silero:
@@ -39,7 +53,8 @@ class Silero:
     last_voice = str(Path(voices_path / "last_voice.pt").resolve())
 
     def __init__(self):
-        self.device = "cuda" if settings.GetOption("tts_ai_device") == "cuda" or settings.GetOption("tts_ai_device") == "auto" else "cpu"
+        self.device = "cuda" if settings.GetOption("tts_ai_device") == "cuda" or settings.GetOption(
+            "tts_ai_device") == "auto" else "cpu"
         # if cuda is not available, use cpu
         if self.device == "cuda" and not torch.cuda.is_available():
             print("CUDA not available, using CPU for TTS Model")
@@ -92,7 +107,8 @@ class Silero:
     def set_pitch(self, pitch):
         self.pitch = pitch
 
-    def _load_model(self, repo_or_dir, model, source='github', trust_repo=None, verbose=False, skip_validation=False, fallback_local_dir=None):
+    def _load_model(self, repo_or_dir, model, source='github', trust_repo=None, verbose=False, skip_validation=False,
+                    fallback_local_dir=None):
         try:
             self.model, _ = torch.hub.load(trust_repo=trust_repo, skip_validation=skip_validation,
                                            source=source,
@@ -128,7 +144,8 @@ class Silero:
         load_error = self._load_model(trust_repo=True, skip_validation=True,
                                       repo_or_dir='snakers4/silero-models',
                                       model='silero_tts',
-                                      fallback_local_dir=str(Path(cache_path / "snakers4_silero-models_master").resolve()))
+                                      fallback_local_dir=str(
+                                          Path(cache_path / "snakers4_silero-models_master").resolve()))
 
         self.model.to(device)
         if self.device == "cpu":
@@ -145,12 +162,14 @@ class Silero:
 
     def _preprocess_tts(self, text):
         # replace all numbers with their word representations
-        text = re.sub(r"(\d+)", lambda x: num2words.num2words(int(x.group(0)), lang=self.lang), text)
+        replace_numbers_with_lang = partial(replace_numbers, lang=self.lang, text=text)
+        text = re.sub(r"\d+", replace_numbers_with_lang, text)
 
         # replace parts the tts has trouble with
         text = text.replace("...", ".")
 
-        if not text.endswith(".") and not text.endswith("!") and not text.endswith("?") and not text.endswith(",") and not text.endswith(";") and not text.endswith(
+        if not text.endswith(".") and not text.endswith("!") and not text.endswith("?") and not text.endswith(
+                ",") and not text.endswith(";") and not text.endswith(
                 ":") and not text.endswith(")") and not text.endswith("]"):
             text += "."
 

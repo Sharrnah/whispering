@@ -421,27 +421,27 @@ LANGUAGES_ISO1_TO_ISO3 = {
 MODEL_LINKS = {
     "small": {
         "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/NLLB-200/small.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200/small.zip",
-            "https://s3.libs.space:9000/ai-models/NLLB-200/small.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/NLLB-200/CT2/small.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200/CT2/small.zip",
+            "https://s3.libs.space:9000/ai-models/NLLB-200/CT2/small.zip",
         ],
-        "checksum": "598aca00cac6835bb1e41109c3fcb5d3988d60be57c5b2b200c1e1c58b0fd1e2"
+        "checksum": "54188e59e5267329996f93a559befc0c14c09ef6a4f5f4e9645b0da94e380d47"
     },
     "medium": {
         "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/NLLB-200/medium.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200/medium.zip",
-            "https://s3.libs.space:9000/ai-models/NLLB-200/medium.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/NLLB-200/CT2/medium.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200/CT2/medium.zip",
+            "https://s3.libs.space:9000/ai-models/NLLB-200/CT2/medium.zip",
         ],
-        "checksum": "5b68b58640b6c292d0e0f4617e7a1b61921ad74b6f5cb0f035087a9aed8b85ba"
+        "checksum": "88efd459f37d098bc44262721add08c57d22e482aab986edb4c7cbde5bd17cf9"
     },
     "large": {
         "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/NLLB-200/large.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200/large.zip",
-            "https://s3.libs.space:9000/ai-models/NLLB-200/large.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/NLLB-200/CT2/large.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200/CT2/large.zip",
+            "https://s3.libs.space:9000/ai-models/NLLB-200/CT2/large.zip",
         ],
-        "checksum": "00866e6aae6f8c9274b25eed118b8638a2598ba7121fa0436e098ff09b0a3520"
+        "checksum": "c1f5618552cdfad2a5daf74e8218e5c583a6ee10acd3b8dc139ae2d94067af85"
     }
 }
 
