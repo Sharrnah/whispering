@@ -1,3 +1,4 @@
+import sys
 import threading
 import queue
 
@@ -139,7 +140,8 @@ def send_message(predicted_text, result_obj, final_audio):
     # Send over OSC
     if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and predicted_text != "":
         osc_notify = final_audio and settings.GetOption("osc_typing_indicator")
-        VRC_OSCLib.Chat(settings.GetOption("osc_chat_prefix") + predicted_text, True, osc_notify, osc_address, IP=osc_ip, PORT=osc_port,
+        VRC_OSCLib.Chat(settings.GetOption("osc_chat_prefix") + predicted_text, True, osc_notify, osc_address,
+                        IP=osc_ip, PORT=osc_port,
                         convert_ascii=settings.GetOption("osc_convert_ascii"))
         settings.SetOption("plugin_timer_stopped", True)
 
@@ -161,7 +163,11 @@ def load_whisper(model, ai_device):
     cpu_threads = settings.GetOption("whisper_cpu_threads")
     num_workers = settings.GetOption("whisper_num_workers")
     if not settings.GetOption("faster_whisper"):
-        return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
+        try:
+            return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
+        except Exception as e:
+            print("Failed to load whisper model. Application exits. " + str(e))
+            sys.exit(1)
     else:
         compute_dtype = settings.GetOption("whisper_precision")
 
@@ -351,7 +357,9 @@ def whisper_worker():
             continue
 
         # start processing audio thread
-        threading.Thread(target=whisper_ai_thread, args=(audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio), daemon=True).start()
+        threading.Thread(target=whisper_ai_thread, args=(
+        audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio),
+                         daemon=True).start()
 
         q.task_done()
 

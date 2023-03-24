@@ -1,3 +1,4 @@
+import sys
 import threading
 import asyncio
 import websockets
@@ -131,6 +132,9 @@ def websocketMessageHandler(msgObj, websocket):
         if osc_ip != "0":
             VRC_OSCLib.Chat(msgObj["value"], True, osc_address, IP=osc_ip, PORT=osc_port)
             settings.SetOption("plugin_timer_stopped", True)
+
+    if msgObj["type"] == "quit":
+        sys.exit(0)
 
 
 async def handler(websocket):
