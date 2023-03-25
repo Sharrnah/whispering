@@ -1,5 +1,8 @@
+import re
+
 import torch
 import ctranslate2
+import sentencepiece as spm
 from transformers import AutoTokenizer
 import os
 import downloader
@@ -442,6 +445,14 @@ MODEL_LINKS = {
             "https://s3.libs.space:9000/ai-models/NLLB-200/CT2/large.zip",
         ],
         "checksum": "c1f5618552cdfad2a5daf74e8218e5c583a6ee10acd3b8dc139ae2d94067af85"
+    },
+    "sentencepiece": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/NLLB-200/CT2/sentencepiece.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/NLLB-200/CT2/sentencepiece.zip",
+            "https://s3.libs.space:9000/ai-models/NLLB-200/CT2/sentencepiece.zip",
+        ],
+        "checksum": "7e7fe41261d253ebba549de48b280021b1ae9d7915aa583689b34aa1f8604d13"
     }
 }
 
@@ -449,11 +460,23 @@ MODEL_LINKS = {
 ct_model_path = Path(Path.cwd() / ".cache" / "nllb200_ct2")
 os.makedirs(ct_model_path, exist_ok=True)
 
+sp_model_path = Path(ct_model_path / ct_model_path / "flores200_sacrebleu_tokenizer_spm.model")
+
 model = None
-#tokenizer: models.nllb.NllbTokenizer = AutoTokenizer  # type: ignore
 tokenizer = None
 
+sentencepiece = None
+
 torch_device = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def split_sentences(text):
+    # Regular expression to match sentence delimiters (Latin only)
+    #sentence_delimiters = re.compile(u'[\\[\\]\n.!?]')
+    # Regular expression to match sentence delimiters (Latin, Chinese, Japanese, and Arabic)
+    sentence_delimiters = re.compile(r'[。.!?！？؟\n]+')
+    sentences = sentence_delimiters.split(text)
+    return [s.strip() for s in sentences if s.strip() != '']
 
 
 def get_installed_language_names():
@@ -470,6 +493,7 @@ def set_device(device: str):
 def load_model(size="small", compute_type="float32"):
     global model
     global tokenizer
+    global sentencepiece
 
     model_path = Path(ct_model_path / size)
 
@@ -481,11 +505,15 @@ def load_model(size="small", compute_type="float32"):
         print(f"Downloading {size} NLLB-200 model...")
         downloader.download_extract(MODEL_LINKS[size]["urls"], str(ct_model_path.resolve()), MODEL_LINKS[size]["checksum"])
 
-    model_path_string = str(model_path.resolve())
+    if not sp_model_path.is_file():
+        print(f"Downloading sentencepiece model...")
+        downloader.download_extract(MODEL_LINKS["sentencepiece"]["urls"], str(ct_model_path.resolve()), MODEL_LINKS["sentencepiece"]["checksum"])
 
+    sentencepiece = spm.SentencePieceProcessor()
+    sentencepiece.load(str(sp_model_path.resolve()))
+
+    model_path_string = str(model_path.resolve())
     model = ctranslate2.Translator(model_path_string, device=torch_device, compute_type=compute_type)
-    #if torch_device == 'cuda':
-    #    model = model.half()
 
     tokenizer = AutoTokenizer.from_pretrained(model_path_string)
 
@@ -493,6 +521,10 @@ def load_model(size="small", compute_type="float32"):
 
 
 def translate_language(text, from_code, to_code, as_iso1=False):
+    global model
+    global tokenizer
+    global sentencepiece
+
     if as_iso1 and from_code in LANGUAGES_ISO1_TO_ISO3:
         from_code = LANGUAGES_ISO1_TO_ISO3[from_code][0]
     if as_iso1 and to_code in LANGUAGES_ISO1_TO_ISO3:
@@ -514,10 +546,22 @@ def translate_language(text, from_code, to_code, as_iso1=False):
     if from_code == to_code:
         return text, from_code, to_code
 
-    tokenizer.src_lang = from_code
-    inputs = tokenizer.convert_ids_to_tokens(tokenizer.encode(text))
-    translated_tokens = model.translate_batch([inputs], target_prefix=[[to_code]])
-    target = translated_tokens[0].hypotheses[0][1:]
-    translation_text = tokenizer.decode(tokenizer.convert_tokens_to_ids(target))
+    # Split the text into sentences
+    sentences = split_sentences(text)
 
-    return translation_text, from_code, to_code
+    # Subword the source sentences
+    source_sents_target_prefix = [[to_code]] * len(sentences)
+    source_sents_subworded = sentencepiece.encode(sentences, out_type=str)
+    source_sents_subworded = [sent + ["</s>", from_code] for sent in source_sents_subworded]
+
+    tokenizer.src_lang = from_code
+    translated_tokens = model.translate_batch(source_sents_subworded, batch_type="tokens", max_batch_size=2024, target_prefix=source_sents_target_prefix, beam_size=4)
+    translated_tokens = [translation[0]['tokens'] for translation in translated_tokens]
+    for translation in translated_tokens:
+        if to_code in translation:
+            translation.remove(to_code)
+
+    # Desubword the target sentences
+    translations = sentencepiece.decode(translated_tokens)
+
+    return ' '.join(translations), from_code, to_code

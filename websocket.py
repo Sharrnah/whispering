@@ -134,6 +134,7 @@ def websocketMessageHandler(msgObj, websocket):
             settings.SetOption("plugin_timer_stopped", True)
 
     if msgObj["type"] == "quit":
+        print("Received quit command.")
         sys.exit(0)
 
 

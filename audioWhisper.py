@@ -411,6 +411,8 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
             # set start recording variable to true if the volume and voice confidence is above the threshold
             if peak_amplitude >= energy and new_confidence >= confidence_threshold:
                 if not start_rec_on_volume_threshold:
+                    # clear frames on start of new recording
+                    frames = []
                     # start processing_start event
                     typing_indicator_thread = threading.Thread(target=typing_indicator_function,
                                                                args=(osc_ip, osc_port, True))

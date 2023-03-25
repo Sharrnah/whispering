@@ -8,6 +8,7 @@ class WindowCapture:
     w = 0
     h = 0
     hwnd = None
+    window_name = None
     cropped_x = 0
     cropped_y = 0
     offset_x = 0
@@ -15,17 +16,23 @@ class WindowCapture:
 
     def __init__(self, window_name=None):
         self.shell = win32com.client.Dispatch("WScript.Shell")
+        self.window_name = window_name
+        self.hwnd = None
+
         # find the handle for the window we want to capture.
         # if no window name is given, capture the entire screen
         if window_name is None:
             self.hwnd = win32gui.GetDesktopWindow()
         else:
-            self.hwnd = win32gui.FindWindow(None, window_name)
+            #self.hwnd = win32gui.FindWindow(None, window_name)
+            self.hwnd = self.find_window_by_title(window_name)
+
             if not self.hwnd:
                 self.hwnd = win32gui.GetDesktopWindow()
                 print('Window not found: {}. capturing whole desktop instead.'.format(window_name))
                 # raise Exception('Window not found: {}'.format(window_name))
             else:
+                print('Window found: {}'.format(window_name))
                 # try to focus window to be able to capture it
                 try:
                     self.bring_to_top()
@@ -52,6 +59,19 @@ class WindowCapture:
         # images into actual screen positions
         self.offset_x = window_rect[0] + self.cropped_x
         self.offset_y = window_rect[1] + self.cropped_y
+
+    def find_window_by_title(self, title):
+        windows = []
+
+        def enum_callback(hwnd, _):
+            if win32gui.IsWindowVisible(hwnd):
+                window_title = win32gui.GetWindowText(hwnd)
+                if window_title.lower() == title.lower():
+                    windows.append(hwnd)
+            return True
+
+        win32gui.EnumWindows(enum_callback, None)
+        return windows[0] if windows else None
 
     def bring_to_top(self):
         win32gui.BringWindowToTop(self.hwnd)
