@@ -49,6 +49,11 @@ last_audio_timestamp = 0
 
 q = queue.Queue(maxsize=max_queue_size)
 
+final_audio = False
+queue_data = None
+audio = None
+audio_timestamp = None
+
 
 def whisper_get_languages_list_keys():
     return sorted(LANGUAGES.keys())
@@ -314,6 +319,10 @@ def whisper_ai_thread(audio, audio_timestamp, audio_model, audio_model_realtime,
 
 
 def whisper_worker():
+    global queue_data
+    global final_audio
+    global audio
+
     whisper_model = settings.GetOption("model")
 
     whisper_ai_device = settings.GetOption("ai_device")
@@ -333,6 +342,9 @@ def whisper_worker():
 
     while True:
         final_audio = False
+        queue_data = None
+        audio = None
+        audio_timestamp = None
         try:
             queue_data = q.get(timeout=queue_timeout)
             audio = queue_data["data"]
@@ -345,23 +357,25 @@ def whisper_worker():
             print("Queue is full. Skipping...")
             continue
 
+        q.task_done()
+
+        # skip if no audio data is available
+        if audio is None or len(audio) == 0:
+            continue
+
         # skip if queue is full
         if settings.GetOption("realtime") and q.qsize() >= max_queue_size and not final_audio or \
                 not settings.GetOption("realtime") and q.qsize() >= max_queue_size:
-            q.task_done()
             continue
 
         # skip if audio is too old, except if it's the final audio
         if audio_timestamp < last_audio_time and not final_audio:
-            q.task_done()
             continue
 
         # start processing audio thread
         threading.Thread(target=whisper_ai_thread, args=(
-        audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio),
+            audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio),
                          daemon=True).start()
-
-        q.task_done()
 
 
 def start_whisper_thread():
