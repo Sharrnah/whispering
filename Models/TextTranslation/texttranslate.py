@@ -10,6 +10,13 @@ def get_current_translator():
     return settings.GetOption("txt_translator")
 
 
+def iso3_to_iso1(iso3_code):
+    for iso1, iso3_codes in texttranslateNLLB200_CTranslate2.LANGUAGES_ISO1_TO_ISO3.items():
+        if iso3_code in iso3_codes:
+            return iso1
+    return None
+
+
 def convert_to_romaji(text):
     # Convert Hiragana, Katakana, Japanese to romaji (ascii compatible)
     kks = pykakasi.kakasi()

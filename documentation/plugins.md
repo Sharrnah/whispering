@@ -19,6 +19,13 @@ Consider reading the plugin file to see if there are any dependencies that need 
   https://gist.github.com/Sharrnah/802ab486374c69a183c85d5846100232
 
 
+- **Volume and audio direction send over OSC**
+
+  <img src=https://user-images.githubusercontent.com/55756126/228648156-56de7f87-476a-4569-866a-8b8591b2549e.gif width=250>
+
+  https://gist.github.com/Sharrnah/582b8a390e2462bcec77332cac2eb570
+
+
 - **Large Language Model Answering**
 
   <img src=https://user-images.githubusercontent.com/55756126/225940740-f5e44911-9836-4b26-ab6e-a32676ddd27e.png width=250>

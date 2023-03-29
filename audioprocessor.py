@@ -33,11 +33,14 @@ blacklist = [
     "Please search TongTongTV online.",
     "Please search TongTongTV online!",
     "Please search TongTongTV online",
+    "Untertitel der Amara.org-Community",
+    "Untertitel von Stephanie Geiges",
     "you",
     "Go to Beadaholique.com for all of your beading supply needs!",
     "MBC 뉴스 이재경입니다."
     "This is the end of this video. Thank you for watching."
     "Thanks for watching and don't forget to like and subscribe!"
+    "Untertitel im Auftrag des ZDF für funk, 2017"
 ]
 # make all list entries lowercase for later comparison
 blacklist = list((map(lambda x: x.lower(), blacklist)))
@@ -105,7 +108,7 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
                 do_txt_translate and not settings.GetOption("txt_translate_realtime") and final_audio:
             from_lang = settings.GetOption("src_lang")
             to_lang = settings.GetOption("trg_lang")
-            to_romaji = settings.GetOption("txt_ascii")
+            to_romaji = settings.GetOption("txt_romaji")
             predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, from_lang,
                                                                                          to_lang, to_romaji)
             result["txt_translation"] = predicted_text
@@ -127,6 +130,28 @@ def plugin_process(predicted_text, result_obj):
         plugin_inst.stt(predicted_text, result_obj)
 
 
+# replace {src} and {trg} with source and target language in osc prefix
+def build_whisper_translation_osc_prefix(result_obj):
+    prefix = settings.GetOption("osc_chat_prefix")
+    txt_translate_enabled = settings.GetOption("txt_translate")
+    whisper_task = settings.GetOption("whisper_task")
+
+    # replace {src} with source language
+    prefix = prefix.replace("{src}", result_obj["language"])
+
+    if txt_translate_enabled and "txt_translation" in result_obj and "txt_translation_target" in result_obj:
+        # replace {trg} with target language
+        prefix = prefix.replace("{trg}", texttranslate.iso3_to_iso1(result_obj["txt_translation_target"]))
+    else:
+        if whisper_task == "transcript":
+            # replace {trg} with target language of whisper
+            prefix = prefix.replace("{trg}", result_obj["language"])
+        else:
+            # replace {trg} with target language of whisper
+            prefix = prefix.replace("{trg}", "en")
+    return prefix
+
+
 def send_message(predicted_text, result_obj, final_audio):
     osc_ip = settings.GetOption("osc_ip")
     osc_address = settings.GetOption("osc_address")
@@ -145,7 +170,7 @@ def send_message(predicted_text, result_obj, final_audio):
     # Send over OSC
     if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and predicted_text != "":
         osc_notify = final_audio and settings.GetOption("osc_typing_indicator")
-        VRC_OSCLib.Chat(settings.GetOption("osc_chat_prefix") + predicted_text, True, osc_notify, osc_address,
+        VRC_OSCLib.Chat(build_whisper_translation_osc_prefix(result_obj) + predicted_text, True, osc_notify, osc_address,
                         IP=osc_ip, PORT=osc_port,
                         convert_ascii=settings.GetOption("osc_convert_ascii"))
         settings.SetOption("plugin_timer_stopped", True)
@@ -210,7 +235,7 @@ def whisper_result_thread(result, audio_timestamp, final_audio):
         websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": False}))
 
 
-def whisper_ai_thread(audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio):
+def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio):
     whisper_task = settings.GetOption("whisper_task")
     whisper_language = settings.GetOption("current_language")
     whisper_condition_on_previous_text = settings.GetOption("condition_on_previous_text")
@@ -223,6 +248,11 @@ def whisper_ai_thread(audio, audio_timestamp, audio_model, audio_model_realtime,
     whisper_temperature_fallback_option = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
     if not whisper_temperature_fallback:
         whisper_temperature_fallback_option = 0
+
+    whisper_temperature_fallback_realtime = settings.GetOption("realtime_temperature_fallback")
+    whisper_temperature_fallback_realtime_option = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
+    if not whisper_temperature_fallback_realtime:
+        whisper_temperature_fallback_realtime_option = 0
 
     whisper_initial_prompt = settings.GetOption("initial_prompt").strip()
     if whisper_initial_prompt is None or whisper_initial_prompt == "" or whisper_initial_prompt.lower() == "none":
@@ -245,12 +275,12 @@ def whisper_ai_thread(audio, audio_timestamp, audio_model, audio_model_realtime,
     # use realtime settings if realtime is enabled but no realtime model is set and its not the final audio clip
     if settings.GetOption("realtime") and audio_model_realtime is None and not final_audio:
         whisper_beam_size = whisper_beam_size_realtime
-        whisper_temperature_fallback_option = 0
+        whisper_temperature_fallback_option = whisper_temperature_fallback_realtime_option
 
-    audio_sample = convert_audio(audio)
+    audio_sample = convert_audio(audio_data)
 
     # do not process audio if it is older than the last result
-    if not final_audio and audio_timestamp < last_audio_timestamp:
+    if not final_audio and current_audio_timestamp < last_audio_timestamp:
         print("Audio is older than last result. Skipping...")
         return
 
@@ -272,7 +302,7 @@ def whisper_ai_thread(audio, audio_timestamp, audio_model, audio_model_realtime,
                                                          logprob_threshold=whisper_logprob_threshold,
                                                          no_speech_threshold=whisper_no_speech_threshold,
                                                          fp16=realtime_whisper_fp16,
-                                                         temperature=0,
+                                                         temperature=whisper_temperature_fallback_realtime_option,
                                                          beam_size=whisper_beam_size_realtime
                                                          )
             else:
@@ -294,7 +324,7 @@ def whisper_ai_thread(audio, audio_timestamp, audio_model, audio_model_realtime,
                                                          initial_prompt=whisper_initial_prompt,
                                                          logprob_threshold=whisper_logprob_threshold,
                                                          no_speech_threshold=whisper_no_speech_threshold,
-                                                         temperature=0,
+                                                         temperature=whisper_temperature_fallback_realtime_option,
                                                          beam_size=whisper_beam_size_realtime
                                                          )
 
@@ -311,17 +341,21 @@ def whisper_ai_thread(audio, audio_timestamp, audio_model, audio_model_realtime,
         if last_whisper_result == result.get('text').strip() and not final_audio:
             return
 
-        result_thread = threading.Thread(target=whisper_result_thread,
-                                         args=(result, audio_timestamp, final_audio))
-        result_thread.start()
+        #result_thread = threading.Thread(target=whisper_result_thread,
+        #                                 args=(result, current_audio_timestamp, final_audio))
+        #result_thread.start()
+
+        whisper_result_thread(result, current_audio_timestamp, final_audio)
+
     except Exception as e:
         print("Error while processing audio: " + str(e))
 
 
 def whisper_worker():
-    global queue_data
     global final_audio
+    global queue_data
     global audio
+    global audio_timestamp
 
     whisper_model = settings.GetOption("model")
 
@@ -330,7 +364,8 @@ def whisper_worker():
     audio_model = load_whisper(whisper_model, whisper_ai_device)
     # load realtime whisper model
     audio_model_realtime = None
-    if settings.GetOption("realtime") and settings.GetOption("realtime_whisper_model") != "":
+    if settings.GetOption("realtime") and settings.GetOption("realtime_whisper_model") != "" and settings.GetOption(
+            "realtime_whisper_model") is not None:
         audio_model_realtime = load_realtime_whisper(settings.GetOption("realtime_whisper_model"), whisper_ai_device)
     websocket.set_loading_state("whisper_loading", False)
 

@@ -1,4 +1,5 @@
 import os
+
 # set environment variable CT2_CUDA_ALLOW_FP16 to 1 (before ctranslate2 is imported)
 # to allow using FP16 computation on GPU even if the device does not have efficient FP16 support.
 os.environ["CT2_CUDA_ALLOW_FP16"] = "1"
@@ -109,6 +110,23 @@ def typing_indicator_function(osc_ip, osc_port, send_websocket=True):
         VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
     if send_websocket and settings.GetOption("websocket_ip") != "0":
         websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
+
+
+def process_audio_chunk(audio_chunk, vad_model, sample_rate):
+    audio_int16 = np.frombuffer(audio_chunk, np.int16)
+    audio_float32 = int2float(audio_int16)
+    new_confidence = vad_model(torch.from_numpy(audio_float32), sample_rate).item()
+    peak_amplitude = np.max(np.abs(audio_int16))
+    return new_confidence, peak_amplitude
+
+
+def should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold):
+    return peak_amplitude >= energy and new_confidence >= confidence_threshold
+
+
+def should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause):
+    return (new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (
+            time.time() - pause_time) > pause
 
 
 @click.command()
@@ -356,28 +374,18 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
             if clip_duration is not None:
                 fps = int(SAMPLE_RATE / CHUNK * clip_duration)
 
-            audio_chunk = stream.read(num_samples)
-
-            audio_int16 = np.frombuffer(audio_chunk, np.int16)
-
-            audio_float32 = int2float(audio_int16)
-
-            # rms = np.sqrt(np.mean(audio_int16.astype(np.float32) ** 2))  # audio volume
-
-            # Calculate the peak amplitude of the audio samples
-            # peak_amplitude = np.max(np.abs(audio_int16.astype(np.float32)))
-            peak_amplitude = np.max(np.abs(audio_int16))
-
-            # get the confidences and add them to the list to plot them later
-            new_confidence = vad_model(torch.from_numpy(audio_float32), SAMPLE_RATE).item()
-
             end_time = time.time()
             elapsed_time = end_time - start_time
 
             confidence_threshold = float(settings.GetOption("vad_confidence_threshold"))
 
+            audio_chunk = stream.read(num_samples)
+
+            new_confidence, peak_amplitude = process_audio_chunk(audio_chunk, vad_model, SAMPLE_RATE)
+
             # put frames with recognized speech into a list and send to whisper
             # if (clip_duration is not None and len(frames) > fps) or (elapsed_time > 3 and len(frames) > 0):
+
             if (clip_duration is not None and len(frames) > fps) or (elapsed_time > pause and len(frames) > 0):
                 clip = []
                 # for i in range(0, fps):
@@ -409,10 +417,10 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                 start_time = time.time()
 
             # set start recording variable to true if the volume and voice confidence is above the threshold
-            if peak_amplitude >= energy and new_confidence >= confidence_threshold:
+            if should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold):
                 if not start_rec_on_volume_threshold:
                     # clear frames on start of new recording
-                    frames = []
+                    # frames = []
                     # start processing_start event
                     typing_indicator_thread = threading.Thread(target=typing_indicator_function,
                                                                args=(osc_ip, osc_port, True))
@@ -444,9 +452,7 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                             {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': False})
 
             # stop recording if no speech is detected for pause seconds
-            if start_rec_on_volume_threshold and (
-                    new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (
-                    time.time() - pause_time) > pause:
+            if should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause):
                 start_rec_on_volume_threshold = False
 
             # save chunk as previous audio chunk to reuse later

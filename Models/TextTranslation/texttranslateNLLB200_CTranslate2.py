@@ -3,7 +3,6 @@ import re
 import torch
 import ctranslate2
 import sentencepiece as spm
-from transformers import AutoTokenizer
 import os
 import downloader
 from pathlib import Path
@@ -414,12 +413,9 @@ LANGUAGES_ISO1_TO_ISO3 = {
     "zu": ["zul_Latn"]
 }
 
-# MODEL_LINKS = {
-#     "small": "facebook/nllb-200-distilled-600M",
-#     "medium": "facebook/nllb-200-distilled-1.3B",
-#     "large": "facebook/nllb-200-3.3B",
-#     "xxl": "facebook/nllb-200-54.5B"
-# }
+SUPPORTED_LANGUAGES = set()
+for lang_codes in LANGUAGES_ISO1_TO_ISO3.values():
+    SUPPORTED_LANGUAGES.update(lang_codes)
 
 MODEL_LINKS = {
     "small": {
@@ -463,20 +459,10 @@ os.makedirs(ct_model_path, exist_ok=True)
 sp_model_path = Path(ct_model_path / ct_model_path / "flores200_sacrebleu_tokenizer_spm.model")
 
 model = None
-tokenizer = None
 
 sentencepiece = None
 
 torch_device = "cuda" if torch.cuda.is_available() else "cpu"
-
-
-def split_sentences(text):
-    # Regular expression to match sentence delimiters (Latin only)
-    #sentence_delimiters = re.compile(u'[\\[\\]\n.!?]')
-    # Regular expression to match sentence delimiters (Latin, Chinese, Japanese, and Arabic)
-    sentence_delimiters = re.compile(r'[。.!?！？؟\n]+')
-    sentences = sentence_delimiters.split(text)
-    return [s.strip() for s in sentences if s.strip() != '']
 
 
 def get_installed_language_names():
@@ -492,7 +478,6 @@ def set_device(device: str):
 
 def load_model(size="small", compute_type="float32"):
     global model
-    global tokenizer
     global sentencepiece
 
     model_path = Path(ct_model_path / size)
@@ -515,14 +500,11 @@ def load_model(size="small", compute_type="float32"):
     model_path_string = str(model_path.resolve())
     model = ctranslate2.Translator(model_path_string, device=torch_device, compute_type=compute_type)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_path_string)
-
     print(f"NLLB-200_CTranslate2 model loaded.")
 
 
 def translate_language(text, from_code, to_code, as_iso1=False):
     global model
-    global tokenizer
     global sentencepiece
 
     if as_iso1 and from_code in LANGUAGES_ISO1_TO_ISO3:
@@ -534,10 +516,10 @@ def translate_language(text, from_code, to_code, as_iso1=False):
         from_code = languageClassification.classify(text)
 
     language_unsupported = False
-    if from_code not in tokenizer.lang_code_to_id:
+    if from_code not in SUPPORTED_LANGUAGES:
         print(f"error translating. {from_code} not supported.")
         language_unsupported = True
-    if to_code not in tokenizer.lang_code_to_id:
+    if to_code not in SUPPORTED_LANGUAGES:
         print(f"error translating. {to_code} not supported.")
         language_unsupported = True
     if language_unsupported:
@@ -546,22 +528,17 @@ def translate_language(text, from_code, to_code, as_iso1=False):
     if from_code == to_code:
         return text, from_code, to_code
 
-    # Split the text into sentences
-    sentences = split_sentences(text)
+    # Tokenize the source text
+    source_text_subworded = sentencepiece.encode([text], out_type=str)[0] + ["</s>", from_code]
 
-    # Subword the source sentences
-    source_sents_target_prefix = [[to_code]] * len(sentences)
-    source_sents_subworded = sentencepiece.encode(sentences, out_type=str)
-    source_sents_subworded = [sent + ["</s>", from_code] for sent in source_sents_subworded]
+    # Add target language code as the target prefix
+    source_sents_target_prefix = [[to_code]]
 
-    tokenizer.src_lang = from_code
-    translated_tokens = model.translate_batch(source_sents_subworded, batch_type="tokens", max_batch_size=2024, target_prefix=source_sents_target_prefix, beam_size=4)
+    translated_tokens = model.translate_batch([source_text_subworded], batch_type="tokens", max_batch_size=2024, target_prefix=source_sents_target_prefix, beam_size=4)
     translated_tokens = [translation[0]['tokens'] for translation in translated_tokens]
     for translation in translated_tokens:
         if to_code in translation:
             translation.remove(to_code)
 
-    # Desubword the target sentences
-    translations = sentencepiece.decode(translated_tokens)
-
-    return ' '.join(translations), from_code, to_code
+    translation = sentencepiece.decode(translated_tokens[0])
+    return translation, from_code, to_code
