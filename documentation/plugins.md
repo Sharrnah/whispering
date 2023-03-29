@@ -25,6 +25,11 @@ Consider reading the plugin file to see if there are any dependencies that need 
 
   https://gist.github.com/Sharrnah/582b8a390e2462bcec77332cac2eb570
 
+  _Add the synced float parameters `audio_volume` and `audio_direction` to your VRChat avatar._
+  - _`audio_direction` at `/avatar/parameters/audio_direction`: the direction of the sound. Where 0.5 is centered, 0 is left 1 is right._
+  - _`audio_volume` at `/avatar/parameters/audio_volume`: the volume of the sound. Where 0 is silent, 1 is loud._
+
+
 
 - **Large Language Model Answering**
 
