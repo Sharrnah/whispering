@@ -1,4 +1,4 @@
-# List of Plugins
+# Plugins
 
 Current list of plugins that are available for Whispering Tiger.
 
@@ -11,35 +11,12 @@ Copy the plugin file to the `Plugins` directory in the root of the project.
 
 Consider reading the plugin file to see if there are any dependencies that need to be installed.
 
-## List
-- **Show currently playing song over OSC**
+## List of Plugins
 
-  <img src=https://user-images.githubusercontent.com/55756126/223178202-ef31fb96-6fa8-4427-9f5e-b4dd587f07ab.png width=250>
-  
-  https://gist.github.com/Sharrnah/802ab486374c69a183c85d5846100232
-
-
-- **Volume and audio direction send over OSC**
-
-  <img src=https://user-images.githubusercontent.com/55756126/228648156-56de7f87-476a-4569-866a-8b8591b2549e.gif width=250>
-
-  https://gist.github.com/Sharrnah/582b8a390e2462bcec77332cac2eb570
-
-  _Add the synced float parameters `audio_volume` and `audio_direction` to your VRChat avatar._
-  - _`audio_direction` at `/avatar/parameters/audio_direction`: the direction of the sound. Where 0.5 is centered, 0 is left 1 is right._
-  - _`audio_volume` at `/avatar/parameters/audio_volume`: the volume of the sound. Where 0 is silent, 1 is loud._
-
-
-- **Control VRChat Avatar Parameters by Commands**
-
-  <img src=https://user-images.githubusercontent.com/55756126/228892285-a2148a33-94b2-460c-9632-423f77235c03.gif width=250>
-
-  https://gist.github.com/Sharrnah/64ea762819b39c5bddbac2730ae43dcc
-
-
-- **Large Language Model Answering**
-
-  <img src=https://user-images.githubusercontent.com/55756126/225940740-f5e44911-9836-4b26-ab6e-a32676ddd27e.png width=250>
-
-  https://gist.github.com/Sharrnah/eeaf2acda3e92d8eed1747f05a3f4102
+| Title                                                                                                                 | Preview                                                                                                                   | Description                                                                                                                                                                                                                                                                                                                                                             | Author   |
+|-----------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| [**Show currently playing song over OSC**](https://gist.github.com/Sharrnah/802ab486374c69a183c85d5846100232)         | <img src=https://user-images.githubusercontent.com/55756126/223178202-ef31fb96-6fa8-4427-9f5e-b4dd587f07ab.png width=250> |                                                                                                                                                                                                                                                                                                                                                                         | Sharrnah |
+| [**Volume and audio direction send over OSC**](https://gist.github.com/Sharrnah/582b8a390e2462bcec77332cac2eb570)     | <img src=https://user-images.githubusercontent.com/55756126/228648156-56de7f87-476a-4569-866a-8b8591b2549e.gif width=250> | Add the synced float parameters `audio_volume` and `audio_direction` to your VRChat avatar. <ul><li>`audio_direction` at `/avatar/parameters/audio_direction`: the direction of the sound. Where 0.5 is centered, 0 is left 1 is right.</li> <li>`audio_volume` at `/avatar/parameters/audio_volume`: the volume of the sound. Where 0 is silent, 1 is loud.</li></ul>  | Sharrnah |
+| [**Control VRChat Avatar Parameters by Commands**](https://gist.github.com/Sharrnah/64ea762819b39c5bddbac2730ae43dcc) | <img src=https://user-images.githubusercontent.com/55756126/228892285-a2148a33-94b2-460c-9632-423f77235c03.gif width=250> |                                                                                                                                                                                                                                                                                                                                                                         | Sharrnah |
+| [**Large Language Model Answering**](https://gist.github.com/Sharrnah/eeaf2acda3e92d8eed1747f05a3f4102)               | <img src=https://user-images.githubusercontent.com/55756126/225940740-f5e44911-9836-4b26-ab6e-a32676ddd27e.png width=250> |                                                                                                                                                                                                                                                                                                                                                                         | Sharrnah |
 

@@ -8,7 +8,8 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
 
 ## Content:
 - [Features](#features)
-  - [Available Plugins](documentation/plugins.md)
+  - [Plugins](documentation/plugins.md)
+    - [List of Plugins](documentation/plugins.md#list-of-plugins)
     - [How to create Plugins](documentation/plugin-creation.md)
 - [Quickstart](#quickstart)
 - [Release Downloads](#release-downloads)
