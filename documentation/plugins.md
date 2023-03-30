@@ -30,6 +30,12 @@ Consider reading the plugin file to see if there are any dependencies that need 
   - _`audio_volume` at `/avatar/parameters/audio_volume`: the volume of the sound. Where 0 is silent, 1 is loud._
 
 
+- **Control VRChat Avatar Parameters by Commands**
+
+  <img src=https://user-images.githubusercontent.com/55756126/228892285-a2148a33-94b2-460c-9632-423f77235c03.gif width=250>
+
+  https://gist.github.com/Sharrnah/64ea762819b39c5bddbac2730ae43dcc
+
 
 - **Large Language Model Answering**
 

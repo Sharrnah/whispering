@@ -82,7 +82,7 @@ def websocketMessageHandler(msgObj, websocket):
                                 if hasattr(plugin_inst, 'on_enable'):
                                     plugin_inst.on_enable()
                             else:
-                                if hasattr(plugin_inst, 'on_enable'):
+                                if hasattr(plugin_inst, 'on_disable'):
                                     plugin_inst.on_disable()
 
         settings.SetOption(msgObj["name"], msgObj["value"])

@@ -33,4 +33,5 @@ requests
 # downgradea of scikit-image to prevent https://github.com/scikit-image/scikit-image/issues/6784
 scikit-image==v0.19.3
 
-faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/tags/v0.2.0.zip
+#faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/tags/v0.3.0.zip
+faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/heads/master.zip
