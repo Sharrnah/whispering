@@ -25,8 +25,8 @@ import Plugins
 # some regular mistakenly recognized words/sentences on mostly silence audio, which are ignored in processing
 ignore_list_file = open(str(Path(Path.cwd() / "ignorelist.txt").resolve()), "r", encoding="utf-8")
 ignore_list = ignore_list_file.readlines()
-# make all list entries lowercase for later comparison
-ignore_list = list((map(lambda x: x.lower(), ignore_list)))
+# make all list entries lowercase and strip space, tab, CR, LF etc. for later comparison
+ignore_list = list((map(lambda x: x.lower().rstrip(), ignore_list)))
 
 max_queue_size = 10
 queue_timeout = 5
