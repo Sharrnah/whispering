@@ -9,6 +9,7 @@ from Models.TextTranslation import texttranslate
 import websocket
 import json
 import numpy as np
+from pathlib import Path
 from pydub import AudioSegment
 from whisper.tokenizer import LANGUAGES, TO_LANGUAGE_CODE
 import io
@@ -20,32 +21,14 @@ import Models.STT.faster_whisper as faster_whisper
 # Plugins
 import Plugins
 
-# some regular mistakenly recognized words/sentences on mostly silence audio, which are ignored in processing
-blacklist = [
-    "",
-    "Thanks for watching!",
-    "Thank you for watching!",
-    "Thanks for watching.",
-    "Thank you for watching.",
-    "Please subscribe!"
-    "Please subscribe to my channel!",
-    "Please subscribe to my channel.",
-    "Please search TongTongTV online.",
-    "Please search TongTongTV online!",
-    "Please search TongTongTV online",
-    "Untertitel der Amara.org-Community",
-    "Untertitel von Stephanie Geiges",
-    "you",
-    "Go to Beadaholique.com for all of your beading supply needs!",
-    "MBC 뉴스 이재경입니다."
-    "This is the end of this video. Thank you for watching."
-    "Thanks for watching and don't forget to like and subscribe!"
-    "Untertitel im Auftrag des ZDF für funk, 2017"
-]
-# make all list entries lowercase for later comparison
-blacklist = list((map(lambda x: x.lower(), blacklist)))
 
-max_queue_size = 5
+# some regular mistakenly recognized words/sentences on mostly silence audio, which are ignored in processing
+ignore_list_file = open(str(Path(Path.cwd() / "ignorelist.txt").resolve()), "r", encoding="utf-8")
+ignore_list = ignore_list_file.readlines()
+# make all list entries lowercase for later comparison
+ignore_list = list((map(lambda x: x.lower(), ignore_list)))
+
+max_queue_size = 10
 queue_timeout = 5
 
 last_audio_timestamp = 0
@@ -83,7 +66,7 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
     predicted_text = result.get('text').strip()
     result["type"] = "transcript"
 
-    if not predicted_text.lower() in blacklist and \
+    if not predicted_text.lower() in ignore_list and \
             (final_audio or (not final_audio and audio_timestamp > last_audio_timestamp)):
 
         if final_audio:
@@ -340,10 +323,6 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
 
         if last_whisper_result == result.get('text').strip() and not final_audio:
             return
-
-        #result_thread = threading.Thread(target=whisper_result_thread,
-        #                                 args=(result, current_audio_timestamp, final_audio))
-        #result_thread.start()
 
         whisper_result_thread(result, current_audio_timestamp, final_audio)
 
