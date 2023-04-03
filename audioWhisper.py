@@ -1,13 +1,32 @@
 import os
+import sys
+import json
+import traceback
 
 # set environment variable CT2_CUDA_ALLOW_FP16 to 1 (before ctranslate2 is imported)
 # to allow using FP16 computation on GPU even if the device does not have efficient FP16 support.
 os.environ["CT2_CUDA_ALLOW_FP16"] = "1"
 
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    error_msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+
+    print(error_msg, file=sys.stderr)  # print to standard error stream
+
+    # Format the traceback and error message as a JSON string
+    error_dict = {
+        'type': "error",
+        'message': str(exc_value),
+        'traceback': traceback.format_tb(exc_traceback)
+    }
+    error_json = json.dumps(error_dict)
+    print(error_json, file=sys.stderr)  # print to standard error stream
+
+
+sys.excepthook = handle_exception
+
 import io
-import json
 import signal
-import sys
 import time
 import threading
 
