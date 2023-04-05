@@ -67,7 +67,7 @@ class Base:
         pass
 
     @abstractmethod
-    def tts(self, text, device_index):
+    def tts(self, text, device_index, websocket_connection=None, download=False):
         pass
 
     @abstractmethod

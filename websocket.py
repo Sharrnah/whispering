@@ -39,7 +39,7 @@ def tts_request(msgObj, websocket):
         print("TTS failed")
 
 
-def tts_plugin_process(msgObj, websocket):
+def tts_plugin_process(msgObj, websocket, download=False):
     text = msgObj["value"]["text"]
     device = None
     if msgObj["value"]["to_device"]:
@@ -49,7 +49,7 @@ def tts_plugin_process(msgObj, websocket):
             device = settings.GetOption("device_out_index")
 
     for plugin_inst in Plugins.plugins:
-        plugin_inst.tts(text, device)
+        plugin_inst.tts(text, device, websocket, download)
 
 
 def ocr_req(msgObj, websocket):
@@ -114,12 +114,18 @@ def websocketMessageHandler(msgObj, websocket):
             tts_thread = threading.Thread(target=tts_request, args=(msgObj, websocket))
             tts_thread.start()
         else:
-            tts_thread = threading.Thread(target=tts_plugin_process, args=(msgObj, websocket))
+            download = False
+            if not msgObj["value"]["to_device"]:
+                download = True
+            tts_thread = threading.Thread(target=tts_plugin_process, args=(msgObj, websocket, download))
             tts_thread.start()
 
     if msgObj["type"] == "tts_voice_save_req":
         if silero.init():
             silero.tts.save_voice()
+        else:
+            tts_thread = threading.Thread(target=tts_plugin_process, args=(msgObj, websocket, True))
+            tts_thread.start()
 
     if msgObj["type"] == "get_windows_list":
         windows_list = WindowCapture.list_window_names()
