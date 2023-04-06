@@ -84,7 +84,7 @@ class ExamplePlugin(Plugins.Base):
         return
 
     # called when the "send TTS" function is called
-    def tts(self, text, device_index):
+    def tts(self, text, device_index, websocket_connection=None, download=False):
         return
 
     def on_enable(self):
