@@ -46,10 +46,14 @@ TRANSLATE_SETTINGS = {
     "whisper_cpu_threads": 0,  # Number of threads to use when running on CPU (4 by default)
     "whisper_num_workers": 1,  # When transcribe() is called from multiple Python threads
     "vad_enabled": True,  # Enable Voice activity detection (VAD)
-    "vad_on_full_clip": False,  # Make an additional VAD check on the full clip (Not only on each frame).
+    "vad_on_full_clip": False,  # Make an additional VAD check on the full clip (Not only on each frame) [Not working as the VAD model works best on 30, 60 and 100ms chunks].
     "vad_confidence_threshold": "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
     "vad_num_samples": 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
     "vad_thread_num": 1,  # number of threads to use for VAD.
+    "speaker_change_check": False,  # if enabled, Whisper will check for speaker change.
+    "speaker_similarity_threshold": 0.7,  # speaker similarity threshold. (higher = speaker voice is more similar in seperate clips)
+    "speaker_diarization_window_size": 15,  # speaker diarization window size.
+    "speaker_min_duration": 0.5,  # minimum duration of a speaker (in seconds).
     "realtime": False,  # if enabled, Whisper will process audio in realtime.
     "realtime_whisper_model": "",  # model used for realtime transcription. (empty for using same model as model setting)
     "realtime_whisper_precision": "float16",  # precision used for realtime transcription model.

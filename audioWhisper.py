@@ -29,6 +29,7 @@ import io
 import signal
 import time
 import threading
+import queue
 
 # import speech_recognition_patch as sr  # this is a patched version of speech_recognition. (disabled for now because of freeze issues)
 import speech_recognition as sr
@@ -44,6 +45,9 @@ from Models.TextTranslation import texttranslate
 from Models import languageClassification
 import pyaudiowpatch as pyaudio
 from whisper import available_models, audio as whisper_audio
+
+from speechbrain.pretrained import SpeakerRecognition
+from scipy.spatial.distance import cosine
 
 import numpy as np
 import torch
@@ -61,6 +65,10 @@ CHUNK = int(SAMPLE_RATE / 10)
 
 cache_vad_path = Path(Path.cwd() / ".cache" / "silero-vad")
 os.makedirs(cache_vad_path, exist_ok=True)
+
+
+cache_speechbrain_path = Path(Path.cwd() / ".cache" / "speechbrain")
+os.makedirs(cache_speechbrain_path, exist_ok=True)
 
 
 def sigterm_handler(_signo, _stack_frame):
@@ -146,6 +154,33 @@ def should_start_recording(peak_amplitude, energy, new_confidence, confidence_th
 def should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause):
     return (new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (
             time.time() - pause_time) > pause
+
+
+def perform_speaker_diarization(diarization_model, diarization_data, diarization_result_queue):
+    diarization_embedding = get_embedding(np.frombuffer(diarization_data, np.int16), diarization_model)
+    diarization_result_queue.put(diarization_embedding)
+
+
+def get_embedding(audio_segment, diarization_model):
+    audio_tensor = torch.tensor(audio_segment).unsqueeze(0).float()  # Convert to tensor and add batch dimension
+    embedding = diarization_model.encode_batch(audio_tensor)
+    return embedding.squeeze().detach().numpy()
+
+
+def is_speaker_changed(embedding1, embedding2, threshold):
+    if len(embedding1.shape) > 1:
+        embedding1 = embedding1.squeeze()
+    if len(embedding2.shape) > 1:
+        embedding2 = embedding2.squeeze()
+
+    similarity = 1 - cosine(embedding1, embedding2)
+    #print("Similarity: " + str(similarity))
+    #if similarity < threshold:
+    #    print("Similarity: " + str(similarity))
+    return similarity < threshold
+
+
+new_speaker = False
 
 
 @click.command()
@@ -359,6 +394,9 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                 print("Error loading vad model")
                 return False
 
+        # load speaker diarization model
+        diarization_model = SpeakerRecognition.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb", savedir=str(Path(cache_speechbrain_path / "ecapa-voxceleb").resolve()))
+
         # num_samples = 1536
         num_samples = int(settings.SetOption("vad_num_samples",
                                              settings.GetArgumentSettingFallback(ctx, "vad_num_samples",
@@ -381,6 +419,16 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
         start_rec_on_volume_threshold = False
 
         continue_recording = True
+
+
+        previous_diarization_embedding = None
+        first_diarization_run = True
+        diarization_thread = None
+        diarization_result_queue = queue.Queue()
+        diarization_embeddings = []
+        global new_speaker
+        diarization_chunks = []
+
         while continue_recording:
             phrase_time_limit = settings.GetOption("phrase_time_limit")
             pause = settings.GetOption("pause")
@@ -405,7 +453,11 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
             # put frames with recognized speech into a list and send to whisper
             # if (clip_duration is not None and len(frames) > fps) or (elapsed_time > 3 and len(frames) > 0):
 
-            if (clip_duration is not None and len(frames) > fps) or (elapsed_time > pause and len(frames) > 0):
+
+            if ((clip_duration is not None and len(frames) > fps) or (
+                    elapsed_time > pause and len(frames) > 0)) or new_speaker:
+                new_speaker = False
+                print("sending to whisper...")
                 clip = []
                 # for i in range(0, fps):
                 for i in range(0, len(frames)):
@@ -449,24 +501,58 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
             # append audio frame to the list if the recording var is set and voice confidence is above the threshold (So it only adds the audio parts with speech)
             if start_rec_on_volume_threshold and new_confidence >= confidence_threshold:
+
+                # check for speaker change
+                if settings.GetOption("speaker_change_check"):
+                    diarization_window_size = settings.GetOption("speaker_diarization_window_size")
+                    min_speaker_duration = settings.GetOption("speaker_min_duration")  # Minimum speaker duration in seconds
+
+                    diarization_chunks.append(audio_chunk)
+                    if len(diarization_chunks) >= diarization_window_size:
+                        diarization_data = b''.join(diarization_chunks)
+                        diarization_chunks.pop(0)  # Remove the oldest chunk
+
+                        if diarization_thread is None or not diarization_thread.is_alive():
+                            diarization_thread = threading.Thread(
+                                target=lambda: perform_speaker_diarization(diarization_model, diarization_data, diarization_result_queue)
+                            )
+                            diarization_thread.start()
+
+                        if not diarization_result_queue.empty():
+                            diarization_embedding = diarization_result_queue.get()
+                            diarization_embeddings.append(diarization_embedding)
+
+                            if len(diarization_embeddings) >= 2:
+                                audio_duration = len(diarization_data) / (SAMPLE_RATE * CHANNELS * np.dtype(np.int16).itemsize)
+                                if audio_duration >= min_speaker_duration:
+                                    # Compare the last two embeddings in the list
+                                    if is_speaker_changed(diarization_embeddings[-2], diarization_embeddings[-1], settings.GetOption("speaker_similarity_threshold")):
+                                        frames.append(diarization_embeddings[-2])
+                                        frames.append(diarization_embeddings[-1])
+                                        new_speaker = True
+                                        print("new speaker detected")
+
                 # append previous audio chunk to improve recognition on too late audio recording starts
                 if previous_audio_chunk is not None:
                     frames.append(previous_audio_chunk)
 
                 frames.append(audio_chunk)
                 start_time = time.time()
+
+                # combine audio chunks
+                # for i in range(0, fps):
+                tmp_clip = []
+                for i in range(0, len(frames)):
+                    tmp_clip.append(frames[i])
+                wavefiledata = b''.join(tmp_clip)
+
                 if settings.GetOption("realtime"):
-                    clip = []
                     frame_count = len(frames)
                     if frame_count % settings.GetOption("realtime_frame_multiply") == 0:
                         # set typing indicator for VRChat but not websocket
                         typing_indicator_thread = threading.Thread(target=typing_indicator_function,
                                                                    args=(osc_ip, osc_port, False))
                         typing_indicator_thread.start()
-                        # for i in range(0, fps):
-                        for i in range(0, len(frames)):
-                            clip.append(frames[i])
-                        wavefiledata = b''.join(clip)
                         audioprocessor.q.put(
                             {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': False})
 
