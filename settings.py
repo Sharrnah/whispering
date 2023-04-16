@@ -8,16 +8,18 @@ from whisper import available_models
 SETTINGS_PATH = Path(Path.cwd() / 'settings.yaml')
 
 TRANSLATE_SETTINGS = {
+    "process_id": 0,  # the process id of the running instance
+
     # text translate settings
     "txt_translate": False,  # if enabled, pipes whisper A.I. results through text translator
-    "txt_translator_device": "auto",  # auto, cuda, cpu
+    "txt_translator_device": "cpu",  # auto, cuda, cpu
     "src_lang": "auto",  # source language for text translator (Whisper A.I. in translation mode always translates to "en")
     "trg_lang": "fra_Latn",  # target language for text translator
     "txt_romaji": False,  # if enabled, text translator will convert text to romaji.
     "txt_translator": "NLLB200_CT2",  # can be "NLLB200", "NLLB200_CT2" or "M2M100"
     "txt_translator_size": "small",  # for M2M100 model size: Can be "small" or "large", for NLLB200 model size: Can be "small", "medium", "large".
     "txt_translator_precision": "float32",  # for ctranwslate based: can be "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
-    "txt_translate_realtime": True,  # use text translator in realtime mode
+    "txt_translate_realtime": False,  # use text translator in realtime mode
 
     # ocr settings
     "ocr_lang": "en",  # language for OCR image to text recognition.
@@ -56,7 +58,7 @@ TRANSLATE_SETTINGS = {
     "speaker_min_duration": 0.5,  # minimum duration of a speaker (in seconds).
     "realtime": False,  # if enabled, Whisper will process audio in realtime.
     "realtime_whisper_model": "",  # model used for realtime transcription. (empty for using same model as model setting)
-    "realtime_whisper_precision": "float16",  # precision used for realtime transcription model.
+    "realtime_whisper_precision": "float16",  # precision used for realtime transcription model. (only used when realtime_whisper_model is set)
     "realtime_whisper_beam_size": 1,  # beam size used for realtime transcription model.
     "realtime_temperature_fallback": False,  # Set to False to disable temperature fallback for realtime transcription. (see temperature_fallback setting)
     "realtime_frame_multiply": 15,  # Only sends the audio clip to Whisper every X frames. (higher = less whisper updates and less processing time)
@@ -77,7 +79,7 @@ TRANSLATE_SETTINGS = {
 
     # TTS settings
     "tts_enabled": True,  # enable TTS
-    "tts_ai_device": "cuda",  # can be "auto", "cuda" or "cpu".
+    "tts_ai_device": "cpu",  # can be "auto", "cuda" or "cpu".
     "tts_answer": True,  # send whisper results to TTS engine
     "device_out_index": None,  # output device index for TTS
     "tts_model": ["en", "v3_en"],  # TTS language and model to use

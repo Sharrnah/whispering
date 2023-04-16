@@ -29,10 +29,10 @@ class WindowCapture:
 
             if not self.hwnd:
                 self.hwnd = win32gui.GetDesktopWindow()
-                print('Window not found: {}. capturing whole desktop instead.'.format(window_name))
+                print('Window not found: {}. capturing whole desktop instead.'.format(window_name.encode('unicode_escape')))
                 # raise Exception('Window not found: {}'.format(window_name))
             else:
-                print('Window found: {}'.format(window_name))
+                print('Window found: {}'.format(window_name.encode('unicode_escape')))
                 # try to focus window to be able to capture it
                 try:
                     self.bring_to_top()
@@ -40,7 +40,7 @@ class WindowCapture:
                     self.set_as_foreground_window()
                     time.sleep(0.2)
                 except Exception as e:
-                    print('Failed to focus window: {}'.format(window_name))
+                    print('Failed to focus window: {}'.format(window_name.encode('unicode_escape')))
 
         # get the window size
         window_rect = win32gui.GetWindowRect(self.hwnd)
