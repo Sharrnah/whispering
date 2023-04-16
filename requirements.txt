@@ -13,15 +13,14 @@ git+https://github.com/openai/whisper.git
 --extra-index-url https://download.pytorch.org/whl/cu117
 torch==1.13.1+cu117
 torchaudio==0.13.1+cu117
-soundfile
+soundfile==0.12.1
 python-osc>=1.8.0
 websockets>=10.4
 unidecode>=1.3.6
 pykakasi>=2.2.1
 ctranslate2==3.11.0
-fairseq
 sentencepiece==0.1.98
-protobuf==4.22.1
+protobuf==4.22.3
 progressbar2
 fasttext-wheel
 best-download
@@ -38,7 +37,7 @@ scikit-image==v0.19.3
 
 omegaconf>=2.0.6
 PyYAML>=6.0
-winsdk>=1.0.0b7
+winsdk>=1.0.0b9
 
 #faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/tags/v0.3.0.zip
 faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/heads/master.zip
