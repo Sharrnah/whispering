@@ -3,6 +3,8 @@ import sys
 import json
 import traceback
 
+from pydub import AudioSegment
+
 # set environment variable CT2_CUDA_ALLOW_FP16 to 1 (before ctranslate2 is imported)
 # to allow using FP16 computation on GPU even if the device does not have efficient FP16 support.
 os.environ["CT2_CUDA_ALLOW_FP16"] = "1"
@@ -46,6 +48,7 @@ from Models import languageClassification
 import pyaudiowpatch as pyaudio
 from whisper import available_models, audio as whisper_audio
 
+from pyannote.audio import Pipeline as PyannotePipeline
 from speechbrain.pretrained import SpeakerRecognition
 from scipy.spatial.distance import cosine
 
@@ -66,6 +69,8 @@ CHUNK = int(SAMPLE_RATE / 10)
 cache_vad_path = Path(Path.cwd() / ".cache" / "silero-vad")
 os.makedirs(cache_vad_path, exist_ok=True)
 
+cache_pyannote_path = Path(Path.cwd() / ".cache" / "pyannote")
+os.makedirs(cache_pyannote_path, exist_ok=True)
 
 cache_speechbrain_path = Path(Path.cwd() / ".cache" / "speechbrain")
 os.makedirs(cache_speechbrain_path, exist_ok=True)
@@ -156,7 +161,32 @@ def should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, 
             time.time() - pause_time) > pause
 
 
-def perform_speaker_diarization(diarization_model, diarization_data, diarization_result_queue):
+def perform_speaker_diarization_pyannote(diarization_pipeline, audio_data, result_queue):
+    audio = AudioSegment.from_file(io.BytesIO(audio_bytes_to_wav(audio_data)), format="wav")
+    sample_rate = audio.frame_rate
+    duration = len(audio) / sample_rate
+    file = {'audio': audio, 'duration': duration}
+
+    diarization_result = diarization_pipeline(file)
+    speaker_change = diarization_result.get("speaker_change", False)
+    embeddings = diarization_result.get("embeddings", [])
+
+    result_queue.put({"embeddings": embeddings, "speaker_change": speaker_change})
+
+
+diarization_model = None
+
+
+def perform_speaker_diarization(diarization_data, diarization_result_queue):
+    global diarization_model
+    if diarization_model is None:
+        # load speaker diarization model - spkrec-ecapa-voxceleb
+        diarization_model = SpeakerRecognition.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb", savedir=str(
+            Path(cache_speechbrain_path / "ecapa-voxceleb").resolve()))
+        # diarization_model = SpeakerRecognition.from_hparams(source="speechbrain/spkrec-xvect-voxceleb", savedir=str(Path(cache_speechbrain_path / "xvect-voxceleb").resolve()))
+        #if torch.cuda.is_available():
+        #    diarization_model.cuda()
+
     diarization_embedding = get_embedding(np.frombuffer(diarization_data, np.int16), diarization_model)
     diarization_result_queue.put(diarization_embedding)
 
@@ -174,8 +204,8 @@ def is_speaker_changed(embedding1, embedding2, threshold):
         embedding2 = embedding2.squeeze()
 
     similarity = 1 - cosine(embedding1, embedding2)
-    #print("Similarity: " + str(similarity))
-    #if similarity < threshold:
+    # print("Similarity: " + str(similarity))
+    # if similarity < threshold:
     #    print("Similarity: " + str(similarity))
     return similarity < threshold
 
@@ -394,8 +424,8 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                 print("Error loading vad model")
                 return False
 
-        # load speaker diarization model
-        diarization_model = SpeakerRecognition.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb", savedir=str(Path(cache_speechbrain_path / "ecapa-voxceleb").resolve()))
+        # load speaker diarization model - pyannote/speaker-diarization
+        # diarization_pipeline = PyannotePipeline.from_pretrained(str(Path(cache_pyannote_path / "speaker-diarization" / "pipeline_config.yaml").resolve()))
 
         # num_samples = 1536
         num_samples = int(settings.SetOption("vad_num_samples",
@@ -419,7 +449,6 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
         start_rec_on_volume_threshold = False
 
         continue_recording = True
-
 
         previous_diarization_embedding = None
         first_diarization_run = True
@@ -452,7 +481,6 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
             # put frames with recognized speech into a list and send to whisper
             # if (clip_duration is not None and len(frames) > fps) or (elapsed_time > 3 and len(frames) > 0):
-
 
             if ((clip_duration is not None and len(frames) > fps) or (
                     elapsed_time > pause and len(frames) > 0)) or new_speaker:
@@ -505,7 +533,8 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                 # check for speaker change
                 if settings.GetOption("speaker_change_check"):
                     diarization_window_size = settings.GetOption("speaker_diarization_window_size")
-                    min_speaker_duration = settings.GetOption("speaker_min_duration")  # Minimum speaker duration in seconds
+                    min_speaker_duration = settings.GetOption(
+                        "speaker_min_duration")  # Minimum speaker duration in seconds
 
                     diarization_chunks.append(audio_chunk)
                     if len(diarization_chunks) >= diarization_window_size:
@@ -513,20 +542,29 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                         diarization_chunks.pop(0)  # Remove the oldest chunk
 
                         if diarization_thread is None or not diarization_thread.is_alive():
+                            # # spkrec-ecapa-voxceleb # #
                             diarization_thread = threading.Thread(
-                                target=lambda: perform_speaker_diarization(diarization_model, diarization_data, diarization_result_queue)
+                                target=lambda: perform_speaker_diarization(diarization_data,
+                                                                           diarization_result_queue)
                             )
+                            # # pyannote/speaker-diarization # #
+                            # diarization_thread = threading.Thread(
+                            #    target=lambda: perform_speaker_diarization_pyannote(diarization_pipeline, diarization_data, diarization_result_queue)
+                            # )
                             diarization_thread.start()
 
                         if not diarization_result_queue.empty():
+                            # # spkrec-ecapa-voxceleb # #
                             diarization_embedding = diarization_result_queue.get()
                             diarization_embeddings.append(diarization_embedding)
 
                             if len(diarization_embeddings) >= 2:
-                                audio_duration = len(diarization_data) / (SAMPLE_RATE * CHANNELS * np.dtype(np.int16).itemsize)
+                                audio_duration = len(diarization_data) / (
+                                            SAMPLE_RATE * CHANNELS * np.dtype(np.int16).itemsize)
                                 if audio_duration >= min_speaker_duration:
                                     # Compare the last two embeddings in the list
-                                    if is_speaker_changed(diarization_embeddings[-2], diarization_embeddings[-1], settings.GetOption("speaker_similarity_threshold")):
+                                    if is_speaker_changed(diarization_embeddings[-2], diarization_embeddings[-1],
+                                                          settings.GetOption("speaker_similarity_threshold")):
                                         frames.append(diarization_embeddings[-2])
                                         frames.append(diarization_embeddings[-1])
                                         new_speaker = True
