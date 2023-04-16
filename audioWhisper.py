@@ -64,6 +64,9 @@ os.makedirs(cache_vad_path, exist_ok=True)
 
 
 def sigterm_handler(_signo, _stack_frame):
+    # reset process id
+    settings.SetOption("process_id", 0)
+
     # it raises SystemExit(0):
     print('Process died')
     sys.exit(0)
@@ -207,6 +210,9 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     if config is not None:
         settings.SETTINGS_PATH = Path(Path.cwd() / config)
     settings.LoadYaml(settings.SETTINGS_PATH)
+
+    # set process id
+    settings.SetOption("process_id", os.getpid())
 
     for plugin_inst in Plugins.plugins:
         plugin_inst.init()

@@ -8,6 +8,8 @@ from whisper import available_models
 SETTINGS_PATH = Path(Path.cwd() / 'settings.yaml')
 
 TRANSLATE_SETTINGS = {
+    "process_id": 0,  # the process id of the running instance
+
     # text translate settings
     "txt_translate": False,  # if enabled, pipes whisper A.I. results through text translator
     "txt_translator_device": "cpu",  # auto, cuda, cpu
