@@ -34,14 +34,14 @@ def sha256_checksum(file_path):
 
 def download_file_simple(url, target_path, expected_sha256=None):
     progress_lock = threading.Lock()
+    file_name = os.path.basename(urlparse(url).path)
 
     def show_progress(count, total_size):
         with progress_lock:
             percentage = int(count * 100 / total_size)
-            print(f'\rDownloading {url}: {percentage}%', end='')
+            print(f'\rDownloading {file_name}: {percentage}%', end='')
 
     if os.path.isdir(target_path):
-        file_name = os.path.basename(urlparse(url).path)
         target_path = os.path.join(target_path, file_name)
 
     with closing(urllib.request.urlopen(url)) as remote_file:

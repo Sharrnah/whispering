@@ -23,6 +23,8 @@ The `init` method is called at the initialization of whispering tiger, right aft
 
 The _optional_ methods `on_enable` and `on_disable` are called when the plugin is enabled or disabled.
 
+The _optional_ method `stt_intermediate` is only called when a live transcription result is available. Make sure to use the `stt` function for final results.
+
 ## Helper methods
 
 The `Base` class provides some helper methods to make it easier to write plugins.
@@ -83,13 +85,22 @@ class ExamplePlugin(Plugins.Base):
             print(result_obj['language'])
         return
 
+    # OPTIONAL. only called when the STT engine returns an intermediate live result
+    def stt_intermediate(self, text, result_obj):
+        if self.is_enabled():
+            print("Plugin Example")
+            print(result_obj['language'])
+        return
+
     # called when the "send TTS" function is called
     def tts(self, text, device_index, websocket_connection=None, download=False):
         return
-
+    
+    # OPTIONAL
     def on_enable(self):
         pass
-
+    
+    # OPTIONAL
     def on_disable(self):
         pass
 ```

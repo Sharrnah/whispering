@@ -108,9 +108,13 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
         last_audio_timestamp = audio_timestamp
 
 
-def plugin_process(predicted_text, result_obj):
+def plugin_process(predicted_text, result_obj, final_audio):
     for plugin_inst in Plugins.plugins:
-        plugin_inst.stt(predicted_text, result_obj)
+        if final_audio:
+            plugin_inst.stt(predicted_text, result_obj)
+        else:
+            if hasattr(plugin_inst, 'stt_intermediate'):
+                plugin_inst.stt_intermediate(predicted_text, result_obj)
 
 
 # replace {src} and {trg} with source and target language in osc prefix
@@ -145,9 +149,9 @@ def send_message(predicted_text, result_obj, final_audio):
     if predicted_text == settings.GetOption("initial_prompt"):
         return
 
-    # process plugins (only on final audio)
-    if final_audio:
-        plugin_thread = threading.Thread(target=plugin_process, args=(predicted_text, result_obj))
+    # process plugins
+    if final_audio and not settings.GetOption("realtime") or settings.GetOption("realtime"):
+        plugin_thread = threading.Thread(target=plugin_process, args=(predicted_text, result_obj, final_audio))
         plugin_thread.start()
 
     # Send over OSC

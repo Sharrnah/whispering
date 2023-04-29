@@ -135,8 +135,10 @@ def websocketMessageHandler(msgObj, websocket):
         osc_address = settings.GetOption("osc_address")
         osc_ip = settings.GetOption("osc_ip")
         osc_port = settings.GetOption("osc_port")
+        osc_notify = settings.GetOption("osc_typing_indicator")
         if osc_ip != "0":
-            VRC_OSCLib.Chat(msgObj["value"], True, osc_address, IP=osc_ip, PORT=osc_port)
+            VRC_OSCLib.Chat(msgObj["value"], True, osc_notify, osc_address, IP=osc_ip, PORT=osc_port,
+                            convert_ascii=settings.GetOption("osc_convert_ascii"))
             settings.SetOption("plugin_timer_stopped", True)
 
     if msgObj["type"] == "quit":
