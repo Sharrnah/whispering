@@ -26,8 +26,11 @@ TRANSLATE_SETTINGS = {
     "ocr_window_name": "VRChat",  # window name for OCR image to text recognition.
 
     # audio settings
-    "audio_input_device": "",  # used by whispering tiger UI to select audio input device by name
-    "audio_output_device": "",  # used by whispering tiger UI to select audio output device by name
+    "audio_api": 0,  # The id of the audio API. (0 = MME, 1 = DirectSound, 2 = WASAPI)
+    "audio_input_device": "",  # audio input device name - used by whispering tiger UI to select audio input device by name
+    "audio_output_device": "",  # audio output device name - used by whispering tiger UI to select audio output device by name
+    "device_index": None,  # input device index for STT
+    "device_out_index": None,  # output device index for TTS
 
     # whisper settings
     "ai_device": None,  # can be None (auto), "cuda" or "cpu".
@@ -77,7 +80,6 @@ TRANSLATE_SETTINGS = {
     "tts_enabled": True,  # enable TTS
     "tts_ai_device": "cpu",  # can be "auto", "cuda" or "cpu".
     "tts_answer": True,  # send whisper results to TTS engine
-    "device_out_index": None,  # output device index for TTS
     "tts_model": ["en", "v3_en"],  # TTS language and model to use
     "tts_voice": "en_0",  # TTS voice (one of silero tts voices, or "last" to use last used voice)
     "tts_prosody_rate": "",  # TTS voice speed. Can be "x-slow", "slow", "medium", "fast", "x-fast" or "" for default.
