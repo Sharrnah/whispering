@@ -26,7 +26,7 @@ TRANSLATE_SETTINGS = {
     "ocr_window_name": "VRChat",  # window name for OCR image to text recognition.
 
     # audio settings
-    "audio_api": 0,  # The id of the audio API. (0 = MME, 1 = DirectSound, 2 = WASAPI)
+    "audio_api": "MME",  # The name of the audio API. (MME, DirectSound, WASAPI)
     "audio_input_device": "",  # audio input device name - used by whispering tiger UI to select audio input device by name
     "audio_output_device": "",  # audio output device name - used by whispering tiger UI to select audio output device by name
     "device_index": None,  # input device index for STT
