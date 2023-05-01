@@ -48,7 +48,18 @@ from whisper import available_models, audio as whisper_audio
 import numpy as np
 import torch
 import torchaudio
+import resampy
+
 import wave
+
+
+def save_to_wav(data, filename, sample_rate, channels=1):
+    with wave.open(filename, 'wb') as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(2)  # Assuming 16-bit audio
+        wf.setframerate(sample_rate)
+        wf.writeframes(data)
+
 
 import Plugins
 
@@ -126,6 +137,31 @@ def audio_bytes_to_wav(audio_bytes):
     return return_data
 
 
+# resample_audio function to resample audio data to a different sample rate and convert it to mono.
+# set channels to '-1' to average the left and right channels to create mono audio (default)
+# set channels to '0' to extract the first channel (left channel) data
+# set channels to '1' to extract the first channel (right channel) data
+# set channels to '2' to keep stereo channels
+def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, channels=-1):
+    audio_data = np.frombuffer(audio_chunk, dtype=np.int16)
+    # Reshape the array to separate the channels
+    audio_data = audio_data.reshape(-1, 2)
+
+    if channels == -1:
+        # Average the left and right channels to create mono audio
+        audio_data = audio_data.mean(axis=1)
+    elif channels == 0 or channels == 1:
+        # Extract the first channel (left channel) data
+        audio_data = audio_data[:, channels]
+
+    # Resample the audio data to the desired sample rate
+    audio_data = resampy.resample(audio_data, recorded_sample_rate, target_sample_rate)
+    # Convert the resampled data back to int16 dtype
+    int16_resampled_data = np.asarray(audio_data, dtype=np.int16)
+    # Convert the int16 numpy array to bytes
+    return int16_resampled_data.tobytes()
+
+
 def typing_indicator_function(osc_ip, osc_port, send_websocket=True):
     if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption(
             "osc_typing_indicator"):
@@ -151,11 +187,45 @@ def should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, 
             time.time() - pause_time) > pause
 
 
+def get_host_audio_api_names():
+    audio = pyaudio.PyAudio()
+    host_api_count = audio.get_host_api_count()
+    host_api_names = {}
+    for i in range(host_api_count):
+        host_api_info = audio.get_host_api_info_by_index(i)
+        host_api_names[i] = host_api_info["name"]
+    return host_api_names
+
+
+def get_audio_device_index_by_name_and_api(name, api, is_input=True, default=None):
+    audio = pyaudio.PyAudio()
+    device_count = audio.get_device_count()
+    for i in range(device_count):
+        device_info = audio.get_device_info_by_index(i)
+        if device_info["hostApi"] == api and device_info[
+            "maxInputChannels" if is_input else "maxOutputChannels"] > 0 and name in device_info["name"]:
+            return i
+    return default
+
+
+def get_audio_api_index_by_name(name):
+    audio = pyaudio.PyAudio()
+    host_api_count = audio.get_host_api_count()
+    for i in range(host_api_count):
+        host_api_info = audio.get_host_api_info_by_index(i)
+        if name in host_api_info["name"]:
+            print("using Audio API: " + host_api_info["name"])
+            return i
+    return 0
+
+
 @click.command()
 @click.option('--devices', default='False', help='print all available devices id', type=str)
 @click.option('--device_index', default=-1, help='the id of the input device (-1 = default active Mic)', type=int)
 @click.option('--device_out_index', default=-1, help='the id of the output device (-1 = default active Speaker)',
               type=int)
+@click.option('--audio_api', default='MME', help='the name of the audio API. ("MME", "DirectSound", "WASAPI")',
+              type=str)
 @click.option('--sample_rate', default=whisper_audio.SAMPLE_RATE, help='sample rate of recording', type=int)
 @click.option("--task", default="transcribe",
               help="task for the model whether to only transcribe the audio or translate the audio to english",
@@ -205,7 +275,45 @@ def should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, 
               type=str)
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 @click.pass_context
-def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, config, verbose, **kwargs):
+def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbose, **kwargs):
+    if str2bool(devices):
+        host_audio_api_names = get_host_audio_api_names()
+        audio = pyaudio.PyAudio()
+        # print all available host apis
+        print("-------------------------------------------------------------------")
+        print("                           Host APIs                               ")
+        print("-------------------------------------------------------------------")
+        for i in range(audio.get_host_api_count()):
+            print(f"Host API {i}: {audio.get_host_api_info_by_index(i)['name']}")
+        print("")
+        print("-------------------------------------------------------------------")
+        print("                           Input Devices                           ")
+        print(" In form of: DEVICE_NAME [Sample Rate=?] [Loopback?] (Index=INDEX) ")
+        print("-------------------------------------------------------------------")
+        for device in audio.get_device_info_generator():
+            device_list_index = device["index"]
+            device_list_api = host_audio_api_names[device["hostApi"]]
+            device_list_name = device["name"]
+            device_list_sample_rate = int(device["defaultSampleRate"])
+            device_list_max_channels = audio.get_device_info_by_index(device_list_index)['maxInputChannels']
+            if device_list_max_channels >= 1:
+                print(
+                    f"{device_list_name} [Sample Rate={device_list_sample_rate}, API={device_list_api}] (Index={device_list_index})")
+        print("")
+        print("-------------------------------------------------------------------")
+        print("                          Output Devices                           ")
+        print("-------------------------------------------------------------------")
+        for device in audio.get_device_info_generator():
+            device_list_index = device["index"]
+            device_list_api = host_audio_api_names[device["hostApi"]]
+            device_list_name = device["name"]
+            device_list_sample_rate = int(device["defaultSampleRate"])
+            device_list_max_channels = audio.get_device_info_by_index(device_list_index)['maxOutputChannels']
+            if device_list_max_channels >= 1:
+                print(
+                    f"{device_list_name} [Sample Rate={device_list_sample_rate}, API={device_list_api}] (Index={device_list_index})")
+        return
+
     # Load settings from file
     if config is not None:
         settings.SETTINGS_PATH = Path(Path.cwd() / config)
@@ -217,42 +325,41 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
     for plugin_inst in Plugins.plugins:
         plugin_inst.init()
 
-    if str2bool(devices):
-        audio = pyaudio.PyAudio()
-        print("-------------------------------------------------------------------")
-        print("                           Input Devices                           ")
-        print(" In form of: DEVICE_NAME [Sample Rate=?] [Loopback?] (Index=INDEX) ")
-        print("-------------------------------------------------------------------")
-        for device in audio.get_device_info_generator():
-            device_list_index = device["index"]
-            # device_list_api = device["hostApi"]
-            device_list_name = device["name"]
-            device_list_sample_rate = int(device["defaultSampleRate"])
-            device_list_max_channels = audio.get_device_info_by_index(device_list_index)['maxInputChannels']
-            if device_list_max_channels >= 1:
-                print(f"{device_list_name} [Sample Rate={device_list_sample_rate}] (Index={device_list_index})")
-        print("")
-        print("-------------------------------------------------------------------")
-        print("                          Output Devices                           ")
-        print("-------------------------------------------------------------------")
-        for device in audio.get_device_info_generator():
-            device_list_index = device["index"]
-            device_list_name = device["name"]
-            device_list_sample_rate = int(device["defaultSampleRate"])
-            device_list_max_channels = audio.get_device_info_by_index(device_list_index)['maxOutputChannels']
-            if device_list_max_channels >= 1:
-                print(f"{device_list_name} [Sample Rate={device_list_sample_rate}] (Index={device_list_index})")
-        return
-
     print("###################################")
     print("# Whispering Tiger is starting... #")
     print("###################################")
 
     # set initial settings
     settings.SetOption("whisper_task", settings.GetArgumentSettingFallback(ctx, "task", "whisper_task"))
+
+    # set audio settings
+    device_index = settings.GetArgumentSettingFallback(ctx, "device_index", "device_index")
+    settings.SetOption("device_index",
+                       (device_index if device_index is None or device_index > -1 else None))
     device_out_index = settings.GetArgumentSettingFallback(ctx, "device_out_index", "device_out_index")
     settings.SetOption("device_out_index",
                        (device_out_index if device_out_index is None or device_out_index > -1 else None))
+
+    audio_api = settings.SetOption("audio_api", settings.GetArgumentSettingFallback(ctx, "audio_api", "audio_api"))
+    audio_api_index = get_audio_api_index_by_name(audio_api)
+
+    audio_input_device = settings.GetOption("audio_input_device")
+    if audio_input_device is not None and audio_input_device != "":
+        if audio_input_device == "Default":
+            device_index = None
+        else:
+            device_index = get_audio_device_index_by_name_and_api(audio_input_device, audio_api_index, True,
+                                                                  device_index)
+    settings.SetOption("device_index", device_index)
+
+    audio_output_device = settings.GetOption("audio_output_device")
+    if audio_output_device is not None and audio_output_device != "":
+        if audio_output_device == "Default":
+            device_out_index = None
+        else:
+            device_out_index = get_audio_device_index_by_name_and_api(audio_output_device, audio_api_index, False,
+                                                                      device_out_index)
+    settings.SetOption("device_out_index", device_out_index)
 
     settings.SetOption("condition_on_previous_text",
                        settings.GetArgumentSettingFallback(ctx, "condition_on_previous_text",
@@ -371,12 +478,28 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                                                                                  "vad_num_samples")))
 
         frames = []
-        stream = py_audio.open(format=FORMAT,
-                               channels=CHANNELS,
-                               rate=SAMPLE_RATE,
-                               input=True,
-                               input_device_index=(device_index if device_index > -1 else None),
-                               frames_per_buffer=CHUNK)
+
+        default_sample_rate = SAMPLE_RATE
+        recorded_sample_rate = SAMPLE_RATE
+        needs_sample_rate_conversion = False
+        try:
+            stream = py_audio.open(format=FORMAT,
+                                   channels=CHANNELS,
+                                   rate=default_sample_rate,
+                                   input=True,
+                                   input_device_index=(device_index if device_index > -1 else None),
+                                   frames_per_buffer=CHUNK)
+        except Exception as e:
+            print("opening stream failed, falling back to default sample rate")
+            dev_info = py_audio.get_device_info_by_index(device_index)
+            recorded_sample_rate = int(dev_info['defaultSampleRate'])
+            stream = py_audio.open(format=FORMAT,
+                                   channels=2,
+                                   rate=int(dev_info['defaultSampleRate']),
+                                   input=True,
+                                   input_device_index=(device_index if device_index > -1 else None),
+                                   frames_per_buffer=CHUNK)
+            needs_sample_rate_conversion = True
 
         audioprocessor.start_whisper_thread()
 
@@ -397,7 +520,7 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
             clip_duration = phrase_time_limit
             fps = 0
             if clip_duration is not None:
-                fps = int(SAMPLE_RATE / CHUNK * clip_duration)
+                fps = int(default_sample_rate / CHUNK * clip_duration)
 
             end_time = time.time()
             elapsed_time = end_time - start_time
@@ -406,7 +529,11 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
 
             audio_chunk = stream.read(num_samples)
 
-            new_confidence, peak_amplitude = process_audio_chunk(audio_chunk, vad_model, SAMPLE_RATE)
+            # special case which seems to be needed for WASAPI
+            if needs_sample_rate_conversion:
+                audio_chunk = resample_audio(audio_chunk, recorded_sample_rate, default_sample_rate, -1)
+
+            new_confidence, peak_amplitude = process_audio_chunk(audio_chunk, vad_model, default_sample_rate)
 
             # put frames with recognized speech into a list and send to whisper
             # if (clip_duration is not None and len(frames) > fps) or (elapsed_time > 3 and len(frames) > 0):
@@ -425,10 +552,13 @@ def main(ctx, devices, device_index, sample_rate, dynamic_energy, open_browser, 
                 if vad_clip_test:
                     audio_full_int16 = np.frombuffer(wavefiledata, np.int16)
                     audio_full_float32 = int2float(audio_full_int16)
-                    full_audio_confidence = vad_model(torch.from_numpy(audio_full_float32), SAMPLE_RATE).item()
+                    full_audio_confidence = vad_model(torch.from_numpy(audio_full_float32), default_sample_rate).item()
                     print(full_audio_confidence)
 
                 if (not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold):
+                    # debug save of audio clip
+                    # save_to_wav(wavefiledata, "resampled_audio_chunk.wav", default_sample_rate)
+
                     audioprocessor.q.put(
                         {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': True})
                     # vad_iterator.reset_states()  # reset model states after each audio

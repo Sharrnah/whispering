@@ -187,6 +187,25 @@ MODEL_LINKS = {
     },
 }
 
+TOKENIZER_LINKS = {
+    "normal": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/tokenizer.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/tokenizer.zip",
+            "https://s3.libs.space:9000/ai-models/Whisper-CT2/tokenizer.zip",
+        ],
+        "checksum": "f6233d181a04abce6e2ba20189d5872b58ce2e14917af525a99feb5619777d7d"
+    },
+    "en": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/tokenizer.en.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/tokenizer.en.zip",
+            "https://s3.libs.space:9000/ai-models/Whisper-CT2/tokenizer.en.zip",
+        ],
+        "checksum": "fb364e7cae84eedfd742ad116a397daa75e4eebba38f27e3f391ae4fee19afa9"
+    }
+}
+
 
 def download_model(model: str, compute_type: str = "float32"):
     model_cache_path = Path(".cache/whisper")
@@ -203,6 +222,19 @@ def download_model(model: str, compute_type: str = "float32"):
                                            str(model_cache_path.resolve()),
                                            MODEL_LINKS[model][compute_type]["checksum"]):
             print("Model download failed")
+
+    tokenizer_file = Path(model_path / "tokenizer.json")
+    if not tokenizer_file.is_file() and Path(model_path).exists():
+        tokenizer_type = "normal"
+        if ".en" in model:
+            tokenizer_type = "en"
+        print("downloading tokenizer...")
+        if not downloader.download_extract(TOKENIZER_LINKS[tokenizer_type]["urls"],
+                                           str(model_path.resolve()),
+                                           TOKENIZER_LINKS[tokenizer_type]["checksum"]):
+            print("Tokenizer download failed")
+    elif not Path(model_path).exists():
+        print("no model downloaded for tokenizer.")
 
 
 class FasterWhisper:
