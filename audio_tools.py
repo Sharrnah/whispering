@@ -1,0 +1,135 @@
+import io
+import wave
+
+import resampy
+import numpy as np
+import pyaudio
+import torch
+from pydub import AudioSegment
+
+
+# resample_audio function to resample audio data to a different sample rate and convert it to mono.
+# set target_channels to '-1' to average the left and right channels to create mono audio (default)
+# set target_channels to '0' to extract the first channel (left channel) data
+# set target_channels to '1' to extract the second channel (right channel) data
+# set target_channels to '2' to keep stereo channels
+# to Convert the int16 numpy array to bytes use .tobytes()
+def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16"):
+    audio_data_dtype = np.int16
+    if dtype == "int16":
+        audio_data_dtype = np.int16
+    elif dtype == "float32":
+        audio_data_dtype = np.float32
+    audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
+
+    # try to guess if the audio is mono or stereo
+    if is_mono is None:
+        is_mono = audio_data.shape[0] % 2 != 0
+
+    if target_channels < 2 and not is_mono:
+        # Reshape the array to separate the channels
+        audio_data = audio_data.reshape(-1, 2)
+
+    if target_channels == -1 and not is_mono:
+        # Average the left and right channels to create mono audio
+        audio_data = audio_data.mean(axis=1)
+    elif target_channels == 0 or target_channels == 1 and not is_mono:
+        # Extract the first channel (left channel) data
+        audio_data = audio_data[:, target_channels]
+    elif target_channels == 2 and is_mono:
+        # Duplicate the mono channel to create left and right channels
+        audio_data = np.column_stack((audio_data, audio_data))
+        # Flatten the array and convert it back to int16 dtype
+        audio_data = audio_data.flatten()
+
+    # Resample the audio data to the desired sample rate
+    audio_data = resampy.resample(audio_data, recorded_sample_rate, target_sample_rate)
+    # Convert the resampled data back to int16 dtype
+    return np.asarray(audio_data, dtype=audio_data_dtype)
+
+
+def get_closest_sample_rate_of_device(device_index, target_sample_rate, fallback_sample_rate=44100):
+    p = pyaudio.PyAudio()
+    device_info = p.get_device_info_by_index(device_index if device_index is not None else p.get_default_output_device_info()["index"])
+    supported_sample_rates = device_info.get("supportedSampleRates")
+
+    # If supported_sample_rates is empty, use common sample rates as a fallback
+    if not supported_sample_rates:
+        supported_sample_rates = [device_info.get("defaultSampleRate")]
+        if not supported_sample_rates:
+            supported_sample_rates = [fallback_sample_rate]
+
+    # Find the closest supported sample rate to the original sample rate
+    closest_sample_rate = min(supported_sample_rates, key=lambda x: abs(x - target_sample_rate))
+    return closest_sample_rate
+
+
+# ------------------------
+# Audio Playback Functions
+# ------------------------
+def _tensor_to_buffer(tensor):
+    buff = io.BytesIO()
+    torch.save(tensor, buff)
+    buff.seek(0)
+    return buff
+
+
+def _generate_binary_buffer(audio):
+    return io.BytesIO(audio)
+
+
+def convert_tensor_to_wav_buffer(audio, sample_rate=24000, channels=1, sample_width=4):
+    audio = _tensor_to_buffer(audio)
+
+    wav_file = AudioSegment.from_file(audio, format="raw", frame_rate=sample_rate, channels=channels, sample_width=sample_width)
+
+    buff = io.BytesIO()
+    wav_file.export(buff, format="wav")
+
+    return buff
+
+
+# play wav binary audio to device, converting audio sample_rate and channels if necessary
+# audio can be bytes (in wav) or tensor
+# tensor_sample_with is the sample width of the tensor (if audio is tensor and not bytes) [default is 4 bytes]
+# tensor_channels is the number of channels of the tensor (if audio is tensor and not bytes) [default is 1 channel (mono)]
+def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channel_num=2, target_channels=2, is_mono=True, dtype="int16", tensor_sample_with=4, tensor_channels=1):
+    if isinstance(audio, bytes):
+        buff = _generate_binary_buffer(audio)
+    else:
+        buff = convert_tensor_to_wav_buffer(audio, sample_rate=source_sample_rate, channels=tensor_channels, sample_width=tensor_sample_with)
+
+    # Set chunk size of 1024 samples per data frame
+    chunk = 1024
+
+    # Open the sound file
+    wf = wave.open(buff, 'rb')
+
+    # Create an interface to PortAudio
+    p = pyaudio.PyAudio()
+
+    # Find the closest supported sample rate to the original sample rate
+    closest_sample_rate = get_closest_sample_rate_of_device(device, wf.getframerate())
+
+    # Read all audio data and resample if necessary
+    frame_data = wf.readframes(wf.getnframes())
+
+    # resample audio data
+    audio_data = resample_audio(frame_data, source_sample_rate, closest_sample_rate, target_channels=target_channels, is_mono=is_mono, dtype=dtype)
+
+    # Open a .Stream object to write the WAV file to
+    # 'output = True' indicates that the sound will be played rather than recorded
+    stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                    channels=audio_device_channel_num,
+                    rate=int(closest_sample_rate),
+                    output_device_index=device,
+                    output=True)
+
+    # Play the sound by writing the audio data to the stream in chunks
+    for i in range(0, len(audio_data), chunk * audio_device_channel_num):
+        stream.write(audio_data[i:i + chunk * audio_device_channel_num].tobytes())
+
+    # Close and terminate the stream
+    stream.close()
+    wf.close()
+    p.terminate()

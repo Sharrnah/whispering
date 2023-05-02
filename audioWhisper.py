@@ -48,7 +48,8 @@ from whisper import available_models, audio as whisper_audio
 import numpy as np
 import torch
 import torchaudio
-import resampy
+import audio_tools
+import sounddevice as sd
 
 import wave
 
@@ -137,31 +138,6 @@ def audio_bytes_to_wav(audio_bytes):
     return return_data
 
 
-# resample_audio function to resample audio data to a different sample rate and convert it to mono.
-# set channels to '-1' to average the left and right channels to create mono audio (default)
-# set channels to '0' to extract the first channel (left channel) data
-# set channels to '1' to extract the first channel (right channel) data
-# set channels to '2' to keep stereo channels
-def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, channels=-1):
-    audio_data = np.frombuffer(audio_chunk, dtype=np.int16)
-    # Reshape the array to separate the channels
-    audio_data = audio_data.reshape(-1, 2)
-
-    if channels == -1:
-        # Average the left and right channels to create mono audio
-        audio_data = audio_data.mean(axis=1)
-    elif channels == 0 or channels == 1:
-        # Extract the first channel (left channel) data
-        audio_data = audio_data[:, channels]
-
-    # Resample the audio data to the desired sample rate
-    audio_data = resampy.resample(audio_data, recorded_sample_rate, target_sample_rate)
-    # Convert the resampled data back to int16 dtype
-    int16_resampled_data = np.asarray(audio_data, dtype=np.int16)
-    # Convert the int16 numpy array to bytes
-    return int16_resampled_data.tobytes()
-
-
 def typing_indicator_function(osc_ip, osc_port, send_websocket=True):
     if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption(
             "osc_typing_indicator"):
@@ -197,6 +173,26 @@ def get_host_audio_api_names():
     return host_api_names
 
 
+def get_default_audio_device_index_by_api(api, is_input=True):
+    devices = sd.query_devices()
+    api_info = sd.query_hostapis()
+    host_api_index = None
+
+    for i, host_api in enumerate(api_info):
+        if api.lower() in host_api['name'].lower():
+            host_api_index = i
+            break
+
+    if host_api_index is None:
+        return None
+
+    api_pyaudio_index, _ = get_audio_api_index_by_name(api)
+
+    default_device_index = api_info[host_api_index]['default_input_device' if is_input else 'default_output_device']
+    default_device_name = devices[default_device_index]['name']
+    return get_audio_device_index_by_name_and_api(default_device_name, api_pyaudio_index, is_input)
+
+
 def get_audio_device_index_by_name_and_api(name, api, is_input=True, default=None):
     audio = pyaudio.PyAudio()
     device_count = audio.get_device_count()
@@ -213,10 +209,9 @@ def get_audio_api_index_by_name(name):
     host_api_count = audio.get_host_api_count()
     for i in range(host_api_count):
         host_api_info = audio.get_host_api_info_by_index(i)
-        if name in host_api_info["name"]:
-            print("using Audio API: " + host_api_info["name"])
-            return i
-    return 0
+        if name.lower() in host_api_info["name"].lower():
+            return i, host_api_info["name"]
+    return 0, ""
 
 
 @click.command()
@@ -341,7 +336,8 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
                        (device_out_index if device_out_index is None or device_out_index > -1 else None))
 
     audio_api = settings.SetOption("audio_api", settings.GetArgumentSettingFallback(ctx, "audio_api", "audio_api"))
-    audio_api_index = get_audio_api_index_by_name(audio_api)
+    audio_api_index, audio_api_name = get_audio_api_index_by_name(audio_api)
+    print("using Audio API: " + audio_api_name)
 
     audio_input_device = settings.GetOption("audio_input_device")
     if audio_input_device is not None and audio_input_device != "":
@@ -360,6 +356,10 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
             device_out_index = get_audio_device_index_by_name_and_api(audio_output_device, audio_api_index, False,
                                                                       device_out_index)
     settings.SetOption("device_out_index", device_out_index)
+
+    # set default devices:
+    settings.SetOption("device_default_in_index", get_default_audio_device_index_by_api(audio_api, True))
+    settings.SetOption("device_default_out_index", get_default_audio_device_index_by_api(audio_api, False))
 
     settings.SetOption("condition_on_previous_text",
                        settings.GetArgumentSettingFallback(ctx, "condition_on_previous_text",
@@ -505,6 +505,7 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
 
         start_time = time.time()
         pause_time = time.time()
+        intermediate_time_start = time.time()
         previous_audio_chunk = None
 
         start_rec_on_volume_threshold = False
@@ -524,6 +525,7 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
 
             end_time = time.time()
             elapsed_time = end_time - start_time
+            elapsed_intermediate_time = end_time - intermediate_time_start
 
             confidence_threshold = float(settings.GetOption("vad_confidence_threshold"))
 
@@ -531,7 +533,7 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
 
             # special case which seems to be needed for WASAPI
             if needs_sample_rate_conversion:
-                audio_chunk = resample_audio(audio_chunk, recorded_sample_rate, default_sample_rate, -1)
+                audio_chunk = audio_tools.resample_audio(audio_chunk, recorded_sample_rate, default_sample_rate, -1, is_mono=False).tobytes()
 
             new_confidence, peak_amplitude = process_audio_chunk(audio_chunk, vad_model, default_sample_rate)
 
@@ -570,6 +572,7 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
 
                 frames = []
                 start_time = time.time()
+                intermediate_time_start = time.time()
 
             # set start recording variable to true if the volume and voice confidence is above the threshold
             if should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold):
@@ -594,7 +597,8 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
                 if settings.GetOption("realtime"):
                     clip = []
                     frame_count = len(frames)
-                    if frame_count % settings.GetOption("realtime_frame_multiply") == 0:
+                    # send realtime intermediate results every x frames and every x seconds (making sure its at least x frame length)
+                    if frame_count % settings.GetOption("realtime_frame_multiply") == 0 and elapsed_intermediate_time > settings.GetOption("realtime_frequency_time"):
                         # set typing indicator for VRChat but not websocket
                         typing_indicator_thread = threading.Thread(target=typing_indicator_function,
                                                                    args=(osc_ip, osc_port, False))
@@ -606,9 +610,12 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
                         audioprocessor.q.put(
                             {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': False})
 
+                        intermediate_time_start = time.time()
+
             # stop recording if no speech is detected for pause seconds
             if should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause):
                 start_rec_on_volume_threshold = False
+                intermediate_time_start = time.time()
 
             # save chunk as previous audio chunk to reuse later
             if not start_rec_on_volume_threshold and (

@@ -40,7 +40,7 @@ TRANSLATE_SETTINGS = {
     "condition_on_previous_text": False,  # if enabled, Whisper will condition on previous text. (more prone to loops or getting stuck)
     "energy": 300,  # energy of audio volume to start whisper processing. Can be 0-1000
     "phrase_time_limit": 0,  # time limit for Whisper to generate a phrase. (0 = no limit)
-    "pause": 0.8,  # pause between phrases.
+    "pause": 1.0,  # pause between phrases.
     "initial_prompt": "",  # initial prompt for Whisper. for example "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking." will give more filler words.
     "logprob_threshold": "-1.0",
     "no_speech_threshold": "0.6",
@@ -55,12 +55,14 @@ TRANSLATE_SETTINGS = {
     "vad_confidence_threshold": "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
     "vad_num_samples": 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
     "vad_thread_num": 1,  # number of threads to use for VAD.
+
     "realtime": False,  # if enabled, Whisper will process audio in realtime.
     "realtime_whisper_model": "",  # model used for realtime transcription. (empty for using same model as model setting)
     "realtime_whisper_precision": "float16",  # precision used for realtime transcription model. (only used when realtime_whisper_model is set)
     "realtime_whisper_beam_size": 1,  # beam size used for realtime transcription model.
     "realtime_temperature_fallback": False,  # Set to False to disable temperature fallback for realtime transcription. (see temperature_fallback setting)
-    "realtime_frame_multiply": 15,  # Only sends the audio clip to Whisper every X frames. (higher = less whisper updates and less processing time)
+    "realtime_frame_multiply": 15,  # Only sends the audio clip to Whisper every X frames (and if its minimum this length, to prevent partial frames). (higher = less whisper updates and less processing time)
+    "realtime_frequency_time": 1.0,  # Only sends the audio clip to Whisper every X seconds. (higher = less whisper updates and less processing time)
 
     # OSC settings
     "osc_ip": "127.0.0.1",  # OSC IP address. set to "0" to disable.
@@ -139,6 +141,10 @@ def SaveYaml(path):
         del to_save_settings['plugin_current_timer']
     if "websocket_final_messages" in to_save_settings:
         del to_save_settings['websocket_final_messages']
+    if "device_default_in_index" in to_save_settings:
+        del to_save_settings['device_default_in_index']
+    if "device_default_out_index" in to_save_settings:
+        del to_save_settings['device_default_out_index']
 
     with open(path, "w", encoding="utf-8") as f:
         yaml.dump(to_save_settings, f)

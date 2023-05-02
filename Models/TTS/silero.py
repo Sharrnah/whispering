@@ -1,14 +1,12 @@
 import torch
 from omegaconf import OmegaConf
-import pyaudio
-import wave
 import io
 from pathlib import Path
 import os
-from pydub import AudioSegment
 
 from functools import partial
 
+import audio_tools
 import websocket
 import settings
 from scipy.io.wavfile import write
@@ -170,7 +168,7 @@ class Silero:
 
         if not text.endswith(".") and not text.endswith("!") and not text.endswith("?") and not text.endswith(
                 ",") and not text.endswith(";") and not text.endswith(
-                ":") and not text.endswith(")") and not text.endswith("]"):
+            ":") and not text.endswith(")") and not text.endswith("]"):
             text += "."
 
         return text
@@ -217,55 +215,22 @@ class Silero:
 
         return audio, self.sample_rate
 
-    @staticmethod
-    def tensor_to_buffer(tensor):
-        buff = io.BytesIO()
-        torch.save(tensor, buff)
-        buff.seek(0)
-        return buff
-
     def play_audio(self, audio, device=None):
-        buff = self._generate_wav_buffer(audio)
+        source_sample_rate = 24000
+        source_is_mono = False
 
-        # Set chunk size of 1024 samples per data frame
-        chunk = 1024
+        if device is None:
+            device = settings.GetOption("device_default_out_index")
 
-        # Open the sound file
-        wf = wave.open(buff, 'rb')
-
-        # Create an interface to PortAudio
-        p = pyaudio.PyAudio()
-
-        # Open a .Stream object to write the WAV file to
-        # 'output = True' indicates that the sound will be played rather than recorded
-        stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
-                        channels=wf.getnchannels(),
-                        rate=wf.getframerate(),
-                        output_device_index=device,
-                        output=True)
-
-        # Read data in chunks
-        data = wf.readframes(chunk)
-
-        # Play the sound by writing the audio data to the stream
-        while len(data) > 0:
-            stream.write(data)
-            data = wf.readframes(chunk)
-
-        # Close and terminate the stream
-        stream.close()
-        wf.close()
-        p.terminate()
-
-    def _generate_wav_buffer(self, audio):
-        audio = Silero.tensor_to_buffer(audio)
-
-        wav_file = AudioSegment.from_file(audio, format="raw", frame_rate=self.sample_rate, channels=1, sample_width=4)
-
-        buff = io.BytesIO()
-        wav_file.export(buff, format="wav")
-
-        return buff
+        # play audio tensor
+        audio_tools.play_audio(audio, device,
+                               source_sample_rate=source_sample_rate,
+                               audio_device_channel_num=2,
+                               target_channels=2,
+                               is_mono=source_is_mono,
+                               tensor_channels=2,
+                               tensor_sample_with=4,
+                               dtype="float32")
 
     def return_wav_file_binary(self, audio):
         # convert pytorch tensor to numpy array
