@@ -153,6 +153,9 @@ def run_image_processing(window_name, src_languages):
             # get an updated image of the game
             screenshot, screenshot_png = win_cap.get_screenshot_mss()
 
+            # unitialize
+            win_cap.unitialize()
+
             result_data = reader.readtext(screenshot, paragraph=True)
             if len(result_data) > 0:
                 for line in result_data:
