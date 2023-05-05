@@ -2,6 +2,7 @@ import numpy as np
 import win32gui, win32ui, win32con, win32com.client
 import mss.tools
 import time
+import pythoncom
 
 
 class WindowCapture:
@@ -15,6 +16,7 @@ class WindowCapture:
     offset_y = 0
 
     def __init__(self, window_name=None):
+        pythoncom.CoInitialize()
         self.shell = win32com.client.Dispatch("WScript.Shell")
         self.window_name = window_name
         self.hwnd = None
@@ -142,6 +144,8 @@ class WindowCapture:
             # Save to the picture file
             return img, png_image
 
+    def unitialize(self):
+        pythoncom.CoUninitialize()
 
     # find the name of the window you're interested in.
     # once you have it, update window_capture()
