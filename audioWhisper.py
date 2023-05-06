@@ -198,8 +198,12 @@ def get_audio_device_index_by_name_and_api(name, api, is_input=True, default=Non
     device_count = audio.get_device_count()
     for i in range(device_count):
         device_info = audio.get_device_info_by_index(i)
+        device_name = device_info["name"]
+        if isinstance(device_name, bytes):
+            device_name = device_name.decode('utf-8')
+
         if device_info["hostApi"] == api and device_info[
-            "maxInputChannels" if is_input else "maxOutputChannels"] > 0 and name in device_info["name"]:
+            "maxInputChannels" if is_input else "maxOutputChannels"] > 0 and name in device_name:
             return i
     return default
 
@@ -341,7 +345,7 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
 
     audio_input_device = settings.GetOption("audio_input_device")
     if audio_input_device is not None and audio_input_device != "":
-        if audio_input_device == "Default":
+        if audio_input_device.lower() == "Default".lower():
             device_index = None
         else:
             device_index = get_audio_device_index_by_name_and_api(audio_input_device, audio_api_index, True,
@@ -350,7 +354,7 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
 
     audio_output_device = settings.GetOption("audio_output_device")
     if audio_output_device is not None and audio_output_device != "":
-        if audio_output_device == "Default":
+        if audio_output_device.lower() == "Default".lower():
             device_out_index = None
         else:
             device_out_index = get_audio_device_index_by_name_and_api(audio_output_device, audio_api_index, False,
@@ -358,8 +362,10 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
     settings.SetOption("device_out_index", device_out_index)
 
     # set default devices:
-    settings.SetOption("device_default_in_index", get_default_audio_device_index_by_api(audio_api, True))
-    settings.SetOption("device_default_out_index", get_default_audio_device_index_by_api(audio_api, False))
+    device_default_in_index = get_default_audio_device_index_by_api(audio_api, True)
+    device_default_out_index = get_default_audio_device_index_by_api(audio_api, False)
+    settings.SetOption("device_default_in_index", device_default_in_index)
+    settings.SetOption("device_default_out_index", device_default_out_index)
 
     settings.SetOption("condition_on_previous_text",
                        settings.GetArgumentSettingFallback(ctx, "condition_on_previous_text",
@@ -477,6 +483,10 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
                                              settings.GetArgumentSettingFallback(ctx, "vad_num_samples",
                                                                                  "vad_num_samples")))
 
+        # set default devices if not set
+        if device_index is None:
+            device_index = device_default_in_index
+
         frames = []
 
         default_sample_rate = SAMPLE_RATE
@@ -492,6 +502,7 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
         except Exception as e:
             print("opening stream failed, falling back to default sample rate")
             dev_info = py_audio.get_device_info_by_index(device_index)
+
             recorded_sample_rate = int(dev_info['defaultSampleRate'])
             stream = py_audio.open(format=FORMAT,
                                    channels=2,
@@ -533,9 +544,12 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
 
             # special case which seems to be needed for WASAPI
             if needs_sample_rate_conversion:
-                audio_chunk = audio_tools.resample_audio(audio_chunk, recorded_sample_rate, default_sample_rate, -1, is_mono=False).tobytes()
+                audio_chunk = audio_tools.resample_audio(audio_chunk, recorded_sample_rate, default_sample_rate, -1,
+                                                         is_mono=False).tobytes()
 
             new_confidence, peak_amplitude = process_audio_chunk(audio_chunk, vad_model, default_sample_rate)
+            if verbose:
+                print("new_confidence: " + str(new_confidence) + " peak_amplitude: " + str(peak_amplitude))
 
             # put frames with recognized speech into a list and send to whisper
             # if (clip_duration is not None and len(frames) > fps) or (elapsed_time > 3 and len(frames) > 0):
@@ -598,7 +612,9 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
                     clip = []
                     frame_count = len(frames)
                     # send realtime intermediate results every x frames and every x seconds (making sure its at least x frame length)
-                    if frame_count % settings.GetOption("realtime_frame_multiply") == 0 and elapsed_intermediate_time > settings.GetOption("realtime_frequency_time"):
+                    if frame_count % settings.GetOption(
+                            "realtime_frame_multiply") == 0 and elapsed_intermediate_time > settings.GetOption(
+                        "realtime_frequency_time"):
                         # set typing indicator for VRChat but not websocket
                         typing_indicator_thread = threading.Thread(target=typing_indicator_function,
                                                                    args=(osc_ip, osc_port, False))
