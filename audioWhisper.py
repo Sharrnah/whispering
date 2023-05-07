@@ -62,8 +62,6 @@ def save_to_wav(data, filename, sample_rate, channels=1):
         wf.writeframes(data)
 
 
-import Plugins
-
 torchaudio.set_audio_backend("soundfile")
 py_audio = pyaudio.PyAudio()
 FORMAT = pyaudio.paInt16
@@ -106,9 +104,9 @@ def int2float(sound):
     return sound
 
 
-def call_plugin_timer():
+def call_plugin_timer(Plugins):
     # Call the method every x seconds
-    timer = threading.Timer(settings.GetOption("plugin_timer"), call_plugin_timer)
+    timer = threading.Timer(settings.GetOption("plugin_timer"), call_plugin_timer, args=[Plugins])
     timer.start()
     if not settings.GetOption("plugin_timer_stopped"):
         for plugin_inst in Plugins.plugins:
@@ -149,7 +147,10 @@ def typing_indicator_function(osc_ip, osc_port, send_websocket=True):
 def process_audio_chunk(audio_chunk, vad_model, sample_rate):
     audio_int16 = np.frombuffer(audio_chunk, np.int16)
     audio_float32 = int2float(audio_int16)
-    new_confidence = vad_model(torch.from_numpy(audio_float32), sample_rate).item()
+    if vad_model is not None:
+        new_confidence = vad_model(torch.from_numpy(audio_float32), sample_rate).item()
+    else:
+        new_confidence = 9.9
     peak_amplitude = np.max(np.abs(audio_int16))
     return new_confidence, peak_amplitude
 
@@ -218,7 +219,55 @@ def get_audio_api_index_by_name(name):
     return 0, ""
 
 
+def record_highest_peak_amplitude(device_index=-1, record_time=10):
+    py_audio = pyaudio.PyAudio()
+
+    default_sample_rate = SAMPLE_RATE
+    recorded_sample_rate = SAMPLE_RATE
+    needs_sample_rate_conversion = False
+    try:
+        stream = py_audio.open(format=FORMAT,
+                               channels=CHANNELS,
+                               rate=default_sample_rate,
+                               input=True,
+                               input_device_index=(device_index if device_index > -1 else None),
+                               frames_per_buffer=CHUNK)
+    except Exception as e:
+        print("opening stream failed, falling back to default sample rate")
+        dev_info = py_audio.get_device_info_by_index(device_index)
+
+        recorded_sample_rate = int(dev_info['defaultSampleRate'])
+        stream = py_audio.open(format=FORMAT,
+                               channels=2,
+                               rate=int(dev_info['defaultSampleRate']),
+                               input=True,
+                               input_device_index=(device_index if device_index > -1 else None),
+                               frames_per_buffer=CHUNK)
+        needs_sample_rate_conversion = True
+
+    highest_peak_amplitude = 0
+    start_time = time.time()
+
+    while time.time() - start_time < record_time:
+        audio_chunk = stream.read(CHUNK)
+        # special case which seems to be needed for WASAPI
+        if needs_sample_rate_conversion:
+            audio_chunk = audio_tools.resample_audio(audio_chunk, recorded_sample_rate, default_sample_rate, -1,
+                                                     is_mono=False).tobytes()
+
+        _, peak_amplitude = process_audio_chunk(audio_chunk, None, default_sample_rate)
+        highest_peak_amplitude = max(highest_peak_amplitude, peak_amplitude)
+
+    stream.stop_stream()
+    stream.close()
+
+    return highest_peak_amplitude
+
+
 @click.command()
+@click.option('--detect_energy', default=False, is_flag=True,
+              help='detect energy level after set time of seconds recording.', type=bool)
+@click.option('--detect_energy_time', default=10, help='detect energy level time it records for.', type=int)
 @click.option('--devices', default='False', help='print all available devices id', type=str)
 @click.option('--device_index', default=-1, help='the id of the input device (-1 = default active Mic)', type=int)
 @click.option('--device_out_index', default=-1, help='the id of the output device (-1 = default active Speaker)',
@@ -274,7 +323,8 @@ def get_audio_api_index_by_name(name):
               type=str)
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 @click.pass_context
-def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbose, **kwargs):
+def main(ctx, detect_energy, detect_energy_time, devices, sample_rate, dynamic_energy, open_browser, config, verbose,
+         **kwargs):
     if str2bool(devices):
         host_audio_api_names = get_host_audio_api_names()
         audio = pyaudio.PyAudio()
@@ -321,13 +371,6 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
     # set process id
     settings.SetOption("process_id", os.getpid())
 
-    for plugin_inst in Plugins.plugins:
-        plugin_inst.init()
-
-    print("###################################")
-    print("# Whispering Tiger is starting... #")
-    print("###################################")
-
     # set initial settings
     settings.SetOption("whisper_task", settings.GetArgumentSettingFallback(ctx, "task", "whisper_task"))
 
@@ -341,7 +384,6 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
 
     audio_api = settings.SetOption("audio_api", settings.GetArgumentSettingFallback(ctx, "audio_api", "audio_api"))
     audio_api_index, audio_api_name = get_audio_api_index_by_name(audio_api)
-    print("using Audio API: " + audio_api_name)
 
     audio_input_device = settings.GetOption("audio_input_device")
     if audio_input_device is not None and audio_input_device != "":
@@ -381,6 +423,20 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
     pause = settings.SetOption("pause", settings.GetArgumentSettingFallback(ctx, "pause", "pause"))
 
     energy = settings.SetOption("energy", settings.GetArgumentSettingFallback(ctx, "energy", "energy"))
+
+    # is set to run energy detection
+    if detect_energy:
+        if device_index is None or device_index < 0:
+            device_index = device_default_in_index
+        max_detected_energy = record_highest_peak_amplitude(device_index, detect_energy_time)
+        print("detected_energy: " + str(max_detected_energy))
+        return
+
+    print("###################################")
+    print("# Whispering Tiger is starting... #")
+    print("###################################")
+
+    print("using Audio API: " + audio_api_name)
 
     # check if english only model is loaded, and configure whisper languages accordingly.
     if model.endswith(".en") and language not in {"en", "English"}:
@@ -430,6 +486,11 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
     if websocket_ip == "0" and open_browser:
         print("--open_browser flag requres --websocket_ip to be set.")
 
+    # initialize plugins
+    import Plugins
+    for plugin_inst in Plugins.plugins:
+        plugin_inst.init()
+
     # Load textual translation dependencies
     if txt_translator.lower() != "none" and txt_translator != "":
         websocket.set_loading_state("txt_transl_loading", True)
@@ -453,7 +514,7 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
         websocket.set_loading_state("downloading_whisper_model", False)
 
     # prepare the plugin timer calls
-    call_plugin_timer()
+    call_plugin_timer(Plugins)
 
     vad_enabled = settings.SetOption("vad_enabled",
                                      settings.GetArgumentSettingFallback(ctx, "vad_enabled", "vad_enabled"))
@@ -484,7 +545,7 @@ def main(ctx, devices, sample_rate, dynamic_energy, open_browser, config, verbos
                                                                                  "vad_num_samples")))
 
         # set default devices if not set
-        if device_index is None:
+        if device_index is None or device_index < 0:
             device_index = device_default_in_index
 
         frames = []
