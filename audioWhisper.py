@@ -268,6 +268,7 @@ def record_highest_peak_amplitude(device_index=-1, record_time=10):
 @click.option('--detect_energy', default=False, is_flag=True,
               help='detect energy level after set time of seconds recording.', type=bool)
 @click.option('--detect_energy_time', default=10, help='detect energy level time it records for.', type=int)
+@click.option('--audio_input_device', default="Default", help='audio input device name. (used for detect_energy', type=str)
 @click.option('--devices', default='False', help='print all available devices id', type=str)
 @click.option('--device_index', default=-1, help='the id of the input device (-1 = default active Mic)', type=int)
 @click.option('--device_out_index', default=-1, help='the id of the output device (-1 = default active Speaker)',
@@ -426,8 +427,17 @@ def main(ctx, detect_energy, detect_energy_time, devices, sample_rate, dynamic_e
 
     # is set to run energy detection
     if detect_energy:
+        if settings.IsArgumentSetting(ctx, "audio_input_device"):
+            audio_input_device = ctx.params["audio_input_device"]
+            if audio_input_device is not None and audio_input_device != "":
+                if audio_input_device.lower() == "Default".lower():
+                    device_index = None
+                else:
+                    device_index = get_audio_device_index_by_name_and_api(audio_input_device, audio_api_index, True,
+                                                                          device_index)
         if device_index is None or device_index < 0:
             device_index = device_default_in_index
+
         max_detected_energy = record_highest_peak_amplitude(device_index, detect_energy_time)
         print("detected_energy: " + str(max_detected_energy))
         return
