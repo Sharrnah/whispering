@@ -202,6 +202,8 @@ def get_audio_device_index_by_name_and_api(name, api, is_input=True, default=Non
         device_name = device_info["name"]
         if isinstance(device_name, bytes):
             device_name = device_name.decode('utf-8')
+        if isinstance(name, bytes):
+            name = name.decode('utf-8')
 
         if device_info["hostApi"] == api and device_info[
             "maxInputChannels" if is_input else "maxOutputChannels"] > 0 and name in device_name:
