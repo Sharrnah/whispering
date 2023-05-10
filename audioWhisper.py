@@ -271,6 +271,8 @@ def record_highest_peak_amplitude(device_index=-1, record_time=10):
               help='detect energy level after set time of seconds recording.', type=bool)
 @click.option('--detect_energy_time', default=10, help='detect energy level time it records for.', type=int)
 @click.option('--audio_input_device', default="Default", help='audio input device name. (used for detect_energy', type=str)
+@click.option('--ui_download', default=False, is_flag=True,
+              help='use UI application for downloads.', type=bool)
 @click.option('--devices', default='False', help='print all available devices id', type=str)
 @click.option('--device_index', default=-1, help='the id of the input device (-1 = default active Mic)', type=int)
 @click.option('--device_out_index', default=-1, help='the id of the output device (-1 = default active Speaker)',
@@ -326,7 +328,7 @@ def record_highest_peak_amplitude(device_index=-1, record_time=10):
               type=str)
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 @click.pass_context
-def main(ctx, detect_energy, detect_energy_time, devices, sample_rate, dynamic_energy, open_browser, config, verbose,
+def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_rate, dynamic_energy, open_browser, config, verbose,
          **kwargs):
     if str2bool(devices):
         host_audio_api_names = get_host_audio_api_names()
@@ -373,6 +375,8 @@ def main(ctx, detect_energy, detect_energy_time, devices, sample_rate, dynamic_e
 
     # set process id
     settings.SetOption("process_id", os.getpid())
+
+    settings.SetOption("ui_download", ui_download)
 
     # set initial settings
     settings.SetOption("whisper_task", settings.GetArgumentSettingFallback(ctx, "task", "whisper_task"))
@@ -497,6 +501,13 @@ def main(ctx, detect_energy, detect_energy_time, devices, sample_rate, dynamic_e
 
     if websocket_ip == "0" and open_browser:
         print("--open_browser flag requres --websocket_ip to be set.")
+
+    if ui_download:
+        # wait until ui is connected
+        print("waiting for ui to connect...")
+        while len(websocket.WS_CLIENTS) == 0 and websocket.UI_CONNECTED["value"] is False:
+            time.sleep(0.1)
+        print("ui connected.")
 
     # initialize plugins
     import Plugins

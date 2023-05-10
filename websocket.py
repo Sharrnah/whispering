@@ -17,6 +17,8 @@ import Plugins
 
 WS_CLIENTS = set()
 
+UI_CONNECTED = {"value": False, "websocket": None}
+
 LOADING_QUEUE = {}
 
 
@@ -69,6 +71,7 @@ def ocr_req(msgObj, websocket):
 
 
 def websocketMessageHandler(msgObj, websocket):
+    global UI_CONNECTED
     if msgObj["type"] == "setting_change":
 
         # handle plugin activation / deactivation before setting the option
@@ -140,6 +143,10 @@ def websocketMessageHandler(msgObj, websocket):
             VRC_OSCLib.Chat(msgObj["value"], True, osc_notify, osc_address, IP=osc_ip, PORT=osc_port,
                             convert_ascii=settings.GetOption("osc_convert_ascii"))
             settings.SetOption("plugin_timer_stopped", True)
+
+    if msgObj["type"] == "ui_connected":
+        UI_CONNECTED["value"] = True
+        UI_CONNECTED["websocket"] = websocket
 
     if msgObj["type"] == "quit":
         print("Received quit command.")

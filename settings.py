@@ -144,6 +144,8 @@ def SaveYaml(path):
         del to_save_settings['device_default_in_index']
     if "device_default_out_index" in to_save_settings:
         del to_save_settings['device_default_out_index']
+    if "ui_download" in to_save_settings:
+        del to_save_settings['ui_download']
 
     with open(path, "w", encoding="utf-8") as f:
         yaml.dump(to_save_settings, f)
