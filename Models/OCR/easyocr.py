@@ -109,9 +109,9 @@ def init_reader(languages):
         websocket.set_loading_state("ocr_loading", True)
         CURRENT_LANGUAGES = languages
         try:
-            reader = easyocr.Reader(CURRENT_LANGUAGES, model_storage_directory=str(model_path.resolve()))
+            reader = easyocr.Reader(CURRENT_LANGUAGES, model_storage_directory=str(model_path.resolve()), detect_network="craft")
         except Exception as e:
-            print(e)
+            print(str(e).encode('utf-8', 'ignore').decode('utf-8', 'ignore'))
             websocket.set_loading_state("ocr_loading", False)
             return False
         websocket.set_loading_state("ocr_loading", False)

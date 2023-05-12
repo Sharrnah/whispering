@@ -232,7 +232,7 @@ def record_highest_peak_amplitude(device_index=-1, record_time=10):
                                channels=CHANNELS,
                                rate=default_sample_rate,
                                input=True,
-                               input_device_index=(device_index if device_index > -1 else None),
+                               input_device_index=device_index,
                                frames_per_buffer=CHUNK)
     except Exception as e:
         print("opening stream failed, falling back to default sample rate")
@@ -243,7 +243,7 @@ def record_highest_peak_amplitude(device_index=-1, record_time=10):
                                channels=2,
                                rate=int(dev_info['defaultSampleRate']),
                                input=True,
-                               input_device_index=(device_index if device_index > -1 else None),
+                               input_device_index=device_index,
                                frames_per_buffer=CHUNK)
         needs_sample_rate_conversion = True
 
@@ -505,9 +505,18 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
     if ui_download:
         # wait until ui is connected
         print("waiting for ui to connect...")
+        max_wait = 15  # wait max 15 seconds for ui to connect
+        last_wait_time = time.time()
         while len(websocket.WS_CLIENTS) == 0 and websocket.UI_CONNECTED["value"] is False:
             time.sleep(0.1)
-        print("ui connected.")
+            if time.time() - last_wait_time > max_wait:
+                print("timeout while waiting for ui to connect.")
+                ui_download = False
+                settings.SetOption("ui_download", ui_download)
+                break
+        if ui_download:  # still true? then ui did connect
+            print("ui connected.")
+            time.sleep(0.5)
 
     # initialize plugins
     import Plugins
@@ -581,7 +590,7 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                                    channels=CHANNELS,
                                    rate=default_sample_rate,
                                    input=True,
-                                   input_device_index=(device_index if device_index > -1 else None),
+                                   input_device_index=device_index,
                                    frames_per_buffer=CHUNK)
         except Exception as e:
             print("opening stream failed, falling back to default sample rate")
@@ -592,7 +601,7 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                                    channels=2,
                                    rate=int(dev_info['defaultSampleRate']),
                                    input=True,
-                                   input_device_index=(device_index if device_index > -1 else None),
+                                   input_device_index=device_index,
                                    frames_per_buffer=CHUNK)
             needs_sample_rate_conversion = True
 
@@ -731,8 +740,8 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
         r.pause_threshold = pause
         r.dynamic_energy_threshold = dynamic_energy
 
-        with sr.Microphone(sample_rate=sample_rate,
-                           device_index=(device_index if device_index > -1 else None)) as source:
+        with sr.Microphone(sample_rate=whisper_audio.SAMPLE_RATE,
+                           device_index=device_index) as source:
 
             audioprocessor.start_whisper_thread()
 

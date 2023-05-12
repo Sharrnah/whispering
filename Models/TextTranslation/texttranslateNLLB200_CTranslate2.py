@@ -488,11 +488,11 @@ def load_model(size="small", compute_type="float32"):
 
     if not model_path.exists() or not pretrained_lang_model_file.is_file():
         print(f"Downloading {size} NLLB-200 model...")
-        downloader.download_extract(MODEL_LINKS[size]["urls"], str(ct_model_path.resolve()), MODEL_LINKS[size]["checksum"])
+        downloader.download_extract(MODEL_LINKS[size]["urls"], str(ct_model_path.resolve()), MODEL_LINKS[size]["checksum"], title="Text Translation (NLLB200CT2)")
 
     if not sp_model_path.is_file():
         print(f"Downloading sentencepiece model...")
-        downloader.download_extract(MODEL_LINKS["sentencepiece"]["urls"], str(ct_model_path.resolve()), MODEL_LINKS["sentencepiece"]["checksum"])
+        downloader.download_extract(MODEL_LINKS["sentencepiece"]["urls"], str(ct_model_path.resolve()), MODEL_LINKS["sentencepiece"]["checksum"], title="Text Translation (Sentencepiece)")
 
     sentencepiece = spm.SentencePieceProcessor()
     sentencepiece.load(str(sp_model_path.resolve()))

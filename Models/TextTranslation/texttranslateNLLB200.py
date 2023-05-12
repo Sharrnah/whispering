@@ -475,7 +475,7 @@ def load_model(size="small", compute_type="float32"):
 
     if not model_path.exists():
         print(f"Downloading {size} NLLB-200 model...")
-        downloader.download_extract(MODEL_LINKS[size]["urls"], str(ct_model_path.resolve()), MODEL_LINKS[size]["checksum"])
+        downloader.download_extract(MODEL_LINKS[size]["urls"], str(ct_model_path.resolve()), MODEL_LINKS[size]["checksum"], title="Text Translation (NLLB200)")
 
     model_path_string = str(model_path.resolve())
 

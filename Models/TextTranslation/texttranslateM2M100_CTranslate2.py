@@ -164,7 +164,7 @@ def load_model(size="small"):
 
     if not sp_model_path.exists():
         print(f"Downloading {size} text translation model...")
-        downloader.download_extract(MODEL_LINKS[size]["urls"], str(ct_model_path.resolve()), MODEL_LINKS[size]["checksum"])
+        downloader.download_extract(MODEL_LINKS[size]["urls"], str(ct_model_path.resolve()), MODEL_LINKS[size]["checksum"], title="M2M100CT2")
 
     model.load(str(sp_model_path.resolve()))
 

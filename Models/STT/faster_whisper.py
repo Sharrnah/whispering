@@ -212,6 +212,7 @@ def download_model(model: str, compute_type: str = "float32"):
     os.makedirs(model_cache_path, exist_ok=True)
     model_path = Path(model_cache_path / (model + "-ct2"))
     if compute_type == "float16" or compute_type == "int8_float16" or compute_type == "int16" or compute_type == "int8":
+        compute_type = "float16"
         model_path = Path(model_cache_path / (model + "-ct2-fp16"))
 
     pretrained_lang_model_file = Path(model_path / "model.bin")
@@ -220,7 +221,7 @@ def download_model(model: str, compute_type: str = "float32"):
         print("downloading faster-whisper...")
         if not downloader.download_extract(MODEL_LINKS[model][compute_type]["urls"],
                                            str(model_cache_path.resolve()),
-                                           MODEL_LINKS[model][compute_type]["checksum"]):
+                                           MODEL_LINKS[model][compute_type]["checksum"], title="Speech 2 Text (faster whisper)"):
             print("Model download failed")
 
     tokenizer_file = Path(model_path / "tokenizer.json")
@@ -231,7 +232,7 @@ def download_model(model: str, compute_type: str = "float32"):
         print("downloading tokenizer...")
         if not downloader.download_extract(TOKENIZER_LINKS[tokenizer_type]["urls"],
                                            str(model_path.resolve()),
-                                           TOKENIZER_LINKS[tokenizer_type]["checksum"]):
+                                           TOKENIZER_LINKS[tokenizer_type]["checksum"], title="tokenizer"):
             print("Tokenizer download failed")
     elif not Path(model_path).exists():
         print("no model downloaded for tokenizer.")

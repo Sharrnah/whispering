@@ -28,7 +28,7 @@ def download_model():
     pretrained_lang_model_file = Path(ct_model_path / "lid218e.bin")
     if not pretrained_lang_model_file.is_file():
         print(f"Downloading LID (language identification) model...")
-        downloader.download_extract(MODEL_LINKS["lid218e"]["urls"], str(ct_model_path.resolve()), MODEL_LINKS["lid218e"]["checksum"])
+        downloader.download_extract(MODEL_LINKS["lid218e"]["urls"], str(ct_model_path.resolve()), MODEL_LINKS["lid218e"]["checksum"], "language identification")
 
     websocket.set_loading_state("lid_downloading", False)
 

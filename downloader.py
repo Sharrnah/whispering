@@ -17,14 +17,14 @@ import websocket
 # logging.basicConfig(filename="download.log", level=logging.INFO)
 
 
-def download_extract(urls, extract_dir, checksum):
+def download_extract(urls, extract_dir, checksum, title=""):
     success = False
     local_dl_file = os.path.join(extract_dir, os.path.basename(urls[0]))
 
     use_ui_downloader = settings.GetOption("ui_download")
     if use_ui_downloader and websocket.UI_CONNECTED["value"] and websocket.UI_CONNECTED["websocket"] is not None:
         # send websocket message to UI
-        websocket.AnswerMessage(websocket.UI_CONNECTED["websocket"], json.dumps({"type": "download", "data": {"urls": urls, "extract_dir": local_dl_file, "checksum": checksum}}))
+        websocket.AnswerMessage(websocket.UI_CONNECTED["websocket"], json.dumps({"type": "download", "data": {"urls": urls, "extract_dir": local_dl_file, "checksum": checksum, "title": title}}))
         while True:
             if os.path.isfile(local_dl_file + ".finished"):
                 if sha256_checksum(local_dl_file + ".finished") == checksum:

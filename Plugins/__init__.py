@@ -19,9 +19,9 @@ class Base:
         cls.plugins.append(cls)
 
     def __init__(self):
-        print(self.__class__.__name__ + " initialized")
+        pass
 
-    def is_enabled(self, default=True):
+    def is_enabled(self, default=False):
         if self.__class__.__name__ not in settings.GetOption("plugins"):
             setting = settings.GetOption("plugins")
             setting[self.__class__.__name__] = default

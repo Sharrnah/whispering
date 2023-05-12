@@ -154,6 +154,7 @@ def websocketMessageHandler(msgObj, websocket):
 
 
 async def handler(websocket):
+    global UI_CONNECTED
     print('Websocket: Client connected.')
 
     # send all available text translation languages
@@ -195,6 +196,9 @@ async def handler(websocket):
     except websockets.ConnectionClosedError as error:
         print('Websocket: Client connection failed.', error)
     finally:
+        if UI_CONNECTED["websocket"] == websocket:
+            UI_CONNECTED["value"] = False
+            UI_CONNECTED["websocket"] = None
         WS_CLIENTS.remove(websocket)
         print('Websocket: Client disconnected.')
 
