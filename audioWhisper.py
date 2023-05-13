@@ -251,7 +251,7 @@ def record_highest_peak_amplitude(device_index=-1, record_time=10):
     start_time = time.time()
 
     while time.time() - start_time < record_time:
-        audio_chunk = stream.read(CHUNK)
+        audio_chunk = stream.read(CHUNK, exception_on_overflow=False)
         # special case which seems to be needed for WASAPI
         if needs_sample_rate_conversion:
             audio_chunk = audio_tools.resample_audio(audio_chunk, recorded_sample_rate, default_sample_rate, -1,
@@ -633,7 +633,7 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
 
             confidence_threshold = float(settings.GetOption("vad_confidence_threshold"))
 
-            audio_chunk = stream.read(num_samples)
+            audio_chunk = stream.read(num_samples, exception_on_overflow=False)
 
             # special case which seems to be needed for WASAPI
             if needs_sample_rate_conversion:
