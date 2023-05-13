@@ -109,6 +109,7 @@ def init_reader(languages):
         websocket.set_loading_state("ocr_loading", True)
         CURRENT_LANGUAGES = languages
         try:
+            # disable verbose logging (which also disables the progress bar) to prevent charset error: see https://github.com/JaidedAI/EasyOCR/issues/1017
             reader = easyocr.Reader(CURRENT_LANGUAGES, model_storage_directory=str(model_path.resolve()), detect_network="craft", verbose=False)
         except Exception as e:
             print(str(e).encode('utf-8', 'ignore').decode('utf-8', 'ignore'))
