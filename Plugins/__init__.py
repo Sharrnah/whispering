@@ -3,6 +3,7 @@ import traceback
 from abc import abstractmethod
 from importlib import util
 from pathlib import Path
+import copy
 
 import settings
 
@@ -35,7 +36,7 @@ class Base:
                 settings_name in settings.GetOption("plugin_settings")[self.__class__.__name__]:
             return settings.GetOption("plugin_settings")[self.__class__.__name__][settings_name]
         else:
-            setting = settings.GetOption("plugin_settings")
+            setting = copy.deepcopy(settings.GetOption("plugin_settings"))
             if self.__class__.__name__ not in setting or setting[self.__class__.__name__] is None:
                 setting[self.__class__.__name__] = {settings_name: default}
             elif settings_name not in setting[self.__class__.__name__]:
@@ -45,7 +46,7 @@ class Base:
 
     def set_plugin_setting(self, settings_name, value):
         if self.__class__.__name__ not in settings.GetOption("plugin_settings"):
-            setting = settings.GetOption("plugin_settings")
+            setting = copy.deepcopy(settings.GetOption("plugin_settings"))
             setting[self.__class__.__name__][settings_name] = value
             settings.SetOption("plugin_settings", setting)
         else:
