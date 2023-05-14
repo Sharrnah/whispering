@@ -179,7 +179,7 @@ def GetAvailableSettingValues():
         "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
         "realtime_whisper_model": [""] + available_models(),
         "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
-        "osc_type_transfer": ["source", "translation_result"],
+        "osc_type_transfer": ["source", "translation_result", "both"],
     }
 
     return possible_settings

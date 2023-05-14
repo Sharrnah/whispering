@@ -60,6 +60,8 @@ def translate_request(msgObj, websocket):
             msgObj["value"]["text"] = text
             if settings.GetOption("osc_type_transfer") == "source":
                 msgObj["value"]["text"] = orig_text
+            elif settings.GetOption("osc_type_transfer") == "both":
+                msgObj["value"]["text"] = orig_text + " // " + text
             osc_request(msgObj, websocket)
 
         if settings.GetOption("tts_answer"):
