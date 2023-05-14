@@ -14,8 +14,8 @@ SpeechRecognition==3.10.0
 pydub>=0.25.1
 git+https://github.com/openai/whisper.git
 --extra-index-url https://download.pytorch.org/whl/cu117
-torch==1.13.1+cu117
-torchaudio==0.13.1+cu117
+torch==2.0.1+cu117
+torchaudio==2.0.2+cu117
 soundfile==0.12.1
 python-osc>=1.8.0
 websockets>=10.4

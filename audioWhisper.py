@@ -53,7 +53,6 @@ import sounddevice as sd
 
 import wave
 
-
 def save_to_wav(data, filename, sample_rate, channels=1):
     with wave.open(filename, 'wb') as wf:
         wf.setnchannels(channels)

@@ -72,6 +72,7 @@ TRANSLATE_SETTINGS = {
     "osc_convert_ascii": False,
     "osc_chat_prefix": "",  # Prefix for OSC messages.
     "osc_auto_processing_enabled": True,  # Toggle auto sending of OSC messages on WhisperAI results. (not saved)
+    "osc_type_transfer": "translation_result",  # defines which type of data to send. Can be "source" or "translation_result".
 
     # websocket settings
     "websocket_ip": "127.0.0.1",
@@ -178,6 +179,7 @@ def GetAvailableSettingValues():
         "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
         "realtime_whisper_model": [""] + available_models(),
         "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
+        "osc_type_transfer": ["source", "translation_result"],
     }
 
     return possible_settings

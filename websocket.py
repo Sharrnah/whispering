@@ -41,6 +41,48 @@ def tts_request(msgObj, websocket):
         print("TTS failed")
 
 
+def translate_request(msgObj, websocket):
+    ignore_send_options = True
+    if "ignore_send_options" in msgObj["value"]:
+        ignore_send_options = msgObj["value"]["ignore_send_options"]
+    orig_text = msgObj["value"]["text"]
+    text = orig_text
+    if msgObj["value"]["to_lang"] != "":  # if to_lang is empty, don't translate
+        text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(orig_text,
+                                                                           msgObj["value"]["from_lang"],
+                                                                           msgObj["value"]["to_lang"])
+        AnswerMessage(websocket, json.dumps(
+            {"type": "translate_result", "translate_result": text, "txt_from_lang": txt_from_lang,
+             "txt_to_lang": txt_to_lang}))
+
+    if not ignore_send_options:
+        if settings.GetOption("osc_auto_processing_enabled"):
+            msgObj["value"]["text"] = text
+            if settings.GetOption("osc_type_transfer") == "source":
+                msgObj["value"]["text"] = orig_text
+            osc_request(msgObj, websocket)
+
+        if settings.GetOption("tts_answer"):
+            msgObj["value"]["text"] = text
+            msgObj["value"]["to_device"] = True
+            msgObj["value"]["download"] = False
+            if silero.init():
+                tts_request(msgObj, websocket)
+            else:
+                tts_plugin_process(msgObj, websocket)
+
+
+def osc_request(msgObj, websocket):
+    osc_address = settings.GetOption("osc_address")
+    osc_ip = settings.GetOption("osc_ip")
+    osc_port = settings.GetOption("osc_port")
+    osc_notify = settings.GetOption("osc_typing_indicator")
+    if osc_ip != "0":
+        VRC_OSCLib.Chat(msgObj["value"]["text"], True, osc_notify, osc_address, IP=osc_ip, PORT=osc_port,
+                        convert_ascii=settings.GetOption("osc_convert_ascii"))
+        settings.SetOption("plugin_timer_stopped", True)
+
+
 def tts_plugin_process(msgObj, websocket, download=False):
     text = msgObj["value"]["text"]
     device = None
@@ -100,13 +142,8 @@ def websocketMessageHandler(msgObj, websocket):
         AnswerMessage(websocket, json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))
 
     if msgObj["type"] == "translate_req":
-        if msgObj["value"]["to_lang"] != "":  # if to_lang is empty, don't translate
-            translate_result, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(msgObj["value"]["text"],
-                                                                                           msgObj["value"]["from_lang"],
-                                                                                           msgObj["value"]["to_lang"])
-            AnswerMessage(websocket, json.dumps(
-                {"type": "translate_result", "translate_result": translate_result, "txt_from_lang": txt_from_lang,
-                 "txt_to_lang": txt_to_lang}))
+        translate_thread = threading.Thread(target=translate_request, args=(msgObj, websocket))
+        translate_thread.start()
 
     if msgObj["type"] == "ocr_req":
         ocr_thread = threading.Thread(target=ocr_req, args=(msgObj, websocket))
@@ -135,14 +172,7 @@ def websocketMessageHandler(msgObj, websocket):
         AnswerMessage(websocket, json.dumps({"type": "windows_list", "data": windows_list}))
 
     if msgObj["type"] == "send_osc":
-        osc_address = settings.GetOption("osc_address")
-        osc_ip = settings.GetOption("osc_ip")
-        osc_port = settings.GetOption("osc_port")
-        osc_notify = settings.GetOption("osc_typing_indicator")
-        if osc_ip != "0":
-            VRC_OSCLib.Chat(msgObj["value"], True, osc_notify, osc_address, IP=osc_ip, PORT=osc_port,
-                            convert_ascii=settings.GetOption("osc_convert_ascii"))
-            settings.SetOption("plugin_timer_stopped", True)
+        osc_request(msgObj, websocket)
 
     if msgObj["type"] == "ui_connected":
         UI_CONNECTED["value"] = True
