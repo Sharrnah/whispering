@@ -162,7 +162,7 @@ def send_message(predicted_text, result_obj, final_audio):
         if settings.GetOption("osc_type_transfer") == "source":
             osc_text = result_obj["text"]
         elif settings.GetOption("osc_type_transfer") == "both":
-            osc_text = result_obj["text"] + " // " + predicted_text
+            osc_text = result_obj["text"] + settings.GetOption("osc_type_transfer_split") + predicted_text
 
         VRC_OSCLib.Chat(build_whisper_translation_osc_prefix(result_obj) + osc_text, True, osc_notify, osc_address,
                         IP=osc_ip, PORT=osc_port,

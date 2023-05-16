@@ -72,8 +72,10 @@ TRANSLATE_SETTINGS = {
     "osc_typing_indicator": True,
     "osc_convert_ascii": False,
     "osc_chat_prefix": "",  # Prefix for OSC messages.
+    "osc_chat_limit": 144,  # defines the maximum length of a chat message.
     "osc_auto_processing_enabled": True,  # Toggle auto sending of OSC messages on WhisperAI results. (not saved)
-    "osc_type_transfer": "translation_result",  # defines which type of data to send. Can be "source" or "translation_result".
+    "osc_type_transfer": "translation_result",  # defines which type of data to send. Can be "source", "translation_result" or "both".
+    "osc_type_transfer_split": " 🌐 ",  # defines how source and translation results are split. (only used when osc_type_transfer is set to "both")
 
     # websocket settings
     "websocket_ip": "127.0.0.1",
