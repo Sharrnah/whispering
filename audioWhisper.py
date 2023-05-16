@@ -55,6 +55,7 @@ import sounddevice as sd
 
 import wave
 
+
 def save_to_wav(data, filename, sample_rate, channels=1):
     with wave.open(filename, 'wb') as wf:
         wf.setnchannels(channels)
@@ -157,11 +158,14 @@ def process_audio_chunk(audio_chunk, vad_model, sample_rate):
 
 
 def should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold, keyboard_key=None):
-    return ((keyboard_key is not None and keyboard.is_pressed(keyboard_key)) or peak_amplitude >= energy) and new_confidence >= confidence_threshold
+    return ((keyboard_key is not None and keyboard.is_pressed(
+        keyboard_key)) or peak_amplitude >= energy) and new_confidence >= confidence_threshold
 
 
-def should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause, keyboard_key=None):
-    return ((keyboard_key is not None and not keyboard.is_pressed(keyboard_key)) or ((new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (
+def should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause,
+                          keyboard_key=None):
+    return ((keyboard_key is not None and not keyboard.is_pressed(keyboard_key)) or (
+            (new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (
             time.time() - pause_time) > pause))
 
 
@@ -226,27 +230,15 @@ def record_highest_peak_amplitude(device_index=-1, record_time=10):
     py_audio = pyaudio.PyAudio()
 
     default_sample_rate = SAMPLE_RATE
-    recorded_sample_rate = SAMPLE_RATE
-    needs_sample_rate_conversion = False
-    try:
-        stream = py_audio.open(format=FORMAT,
-                               channels=CHANNELS,
-                               rate=default_sample_rate,
-                               input=True,
-                               input_device_index=device_index,
-                               frames_per_buffer=CHUNK)
-    except Exception as e:
-        print("opening stream failed, falling back to default sample rate")
-        dev_info = py_audio.get_device_info_by_index(device_index)
 
-        recorded_sample_rate = int(dev_info['defaultSampleRate'])
-        stream = py_audio.open(format=FORMAT,
-                               channels=2,
-                               rate=int(dev_info['defaultSampleRate']),
-                               input=True,
-                               input_device_index=device_index,
-                               frames_per_buffer=CHUNK)
-        needs_sample_rate_conversion = True
+    stream, needs_sample_rate_conversion, recorded_sample_rate, is_mono = audio_tools.start_recording_audio_stream(
+        device_index,
+        sample_format=FORMAT,
+        sample_rate=SAMPLE_RATE,
+        channels=CHANNELS,
+        chunk=CHUNK,
+        py_audio=py_audio,
+    )
 
     highest_peak_amplitude = 0
     start_time = time.time()
@@ -256,7 +248,7 @@ def record_highest_peak_amplitude(device_index=-1, record_time=10):
         # special case which seems to be needed for WASAPI
         if needs_sample_rate_conversion:
             audio_chunk = audio_tools.resample_audio(audio_chunk, recorded_sample_rate, default_sample_rate, -1,
-                                                     is_mono=False).tobytes()
+                                                     is_mono=is_mono).tobytes()
 
         _, peak_amplitude = process_audio_chunk(audio_chunk, None, default_sample_rate)
         highest_peak_amplitude = max(highest_peak_amplitude, peak_amplitude)
@@ -271,7 +263,8 @@ def record_highest_peak_amplitude(device_index=-1, record_time=10):
 @click.option('--detect_energy', default=False, is_flag=True,
               help='detect energy level after set time of seconds recording.', type=bool)
 @click.option('--detect_energy_time', default=10, help='detect energy level time it records for.', type=int)
-@click.option('--audio_input_device', default="Default", help='audio input device name. (used for detect_energy', type=str)
+@click.option('--audio_input_device', default="Default", help='audio input device name. (used for detect_energy',
+              type=str)
 @click.option('--ui_download', default=False, is_flag=True,
               help='use UI application for downloads.', type=bool)
 @click.option('--devices', default='False', help='print all available devices id', type=str)
@@ -329,7 +322,8 @@ def record_highest_peak_amplitude(device_index=-1, record_time=10):
               type=str)
 @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
 @click.pass_context
-def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_rate, dynamic_energy, open_browser, config, verbose,
+def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_rate, dynamic_energy, open_browser,
+         config, verbose,
          **kwargs):
     if str2bool(devices):
         host_audio_api_names = get_host_audio_api_names()
@@ -583,44 +577,17 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
 
         frames = []
 
-        is_mono = False
-
         default_sample_rate = SAMPLE_RATE
-        recorded_sample_rate = SAMPLE_RATE
-        needs_sample_rate_conversion = False
-        try:
-            stream = py_audio.open(format=FORMAT,
-                                   channels=CHANNELS,
-                                   rate=default_sample_rate,
-                                   input=True,
-                                   input_device_index=device_index,
-                                   frames_per_buffer=CHUNK)
-        except Exception as e:
-            print("opening stream failed, falling back to default sample rate")
-            dev_info = py_audio.get_device_info_by_index(device_index)
 
-            #channel_number = int(dev_info['maxInputChannels'])
-            #is_mono = False
-            recorded_sample_rate = int(dev_info['defaultSampleRate'])
-            try:
-                stream = py_audio.open(format=FORMAT,
-                                       channels=2,
-                                       rate=int(dev_info['defaultSampleRate']),
-                                       input=True,
-                                       input_device_index=device_index,
-                                       frames_per_buffer=CHUNK)
-            except Exception as e:
-                print("opening stream failed, falling back to mono")
-                # try again with mono
-                is_mono = True
-                stream = py_audio.open(format=FORMAT,
-                                       channels=1,
-                                       rate=int(dev_info['defaultSampleRate']),
-                                       input=True,
-                                       input_device_index=device_index,
-                                       frames_per_buffer=CHUNK)
-
-            needs_sample_rate_conversion = True
+        # initialize audio stream
+        stream, needs_sample_rate_conversion, recorded_sample_rate, is_mono = audio_tools.start_recording_audio_stream(
+            device_index,
+            sample_format=FORMAT,
+            sample_rate=SAMPLE_RATE,
+            channels=CHANNELS,
+            chunk=CHUNK,
+            py_audio=py_audio,
+            )
 
         audioprocessor.start_whisper_thread()
 
@@ -668,13 +635,11 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                 print("new_confidence: " + str(new_confidence) + " peak_amplitude: " + str(peak_amplitude))
 
             # put frames with recognized speech into a list and send to whisper
-            # if (clip_duration is not None and len(frames) > fps) or (elapsed_time > 3 and len(frames) > 0):
-
             if (clip_duration is not None and len(frames) > fps) or (elapsed_time > pause and len(frames) > 0) or (
-                    keyboard_rec_force_stop and push_to_talk_key is not None and not keyboard.is_pressed(push_to_talk_key) and len(frames) > 0):
+                    keyboard_rec_force_stop and push_to_talk_key is not None and not keyboard.is_pressed(
+                push_to_talk_key) and len(frames) > 0):
 
                 clip = []
-                # for i in range(0, fps):
                 for i in range(0, len(frames)):
                     clip.append(frames[i])
 
@@ -708,10 +673,9 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                 keyboard_rec_force_stop = False
 
             # set start recording variable to true if the volume and voice confidence is above the threshold
-            if should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold, keyboard_key=push_to_talk_key):
+            if should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold,
+                                      keyboard_key=push_to_talk_key):
                 if not start_rec_on_volume_threshold:
-                    # clear frames on start of new recording
-                    # frames = []
                     # start processing_start event
                     typing_indicator_thread = threading.Thread(target=typing_indicator_function,
                                                                args=(osc_ip, osc_port, True))
@@ -740,7 +704,6 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                         typing_indicator_thread = threading.Thread(target=typing_indicator_function,
                                                                    args=(osc_ip, osc_port, False))
                         typing_indicator_thread.start()
-                        # for i in range(0, fps):
                         for i in range(0, len(frames)):
                             clip.append(frames[i])
                         wavefiledata = b''.join(clip)
@@ -750,10 +713,12 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                         intermediate_time_start = time.time()
 
             # stop recording if no speech is detected for pause seconds
-            if should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause, keyboard_key=push_to_talk_key):
+            if should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause,
+                                     keyboard_key=push_to_talk_key):
                 start_rec_on_volume_threshold = False
                 intermediate_time_start = time.time()
-                if push_to_talk_key is not None and not keyboard.is_pressed(push_to_talk_key) and keyboard_rec_force_stop:
+                if push_to_talk_key is not None and not keyboard.is_pressed(
+                        push_to_talk_key) and keyboard_rec_force_stop:
                     keyboard_rec_force_stop = True
                 else:
                     keyboard_rec_force_stop = False

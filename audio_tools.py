@@ -133,3 +133,48 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
     stream.close()
     wf.close()
     p.terminate()
+
+
+def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt16, sample_rate=16000, channels=1, chunk=int(16000/10), py_audio=None):
+    if py_audio is None:
+        py_audio = pyaudio.PyAudio()
+
+    needs_sample_rate_conversion = False
+    is_mono = False
+
+    recorded_sample_rate = sample_rate
+
+    try:
+        stream = py_audio.open(format=sample_format,
+                               channels=channels,
+                               rate=sample_rate,
+                               input=True,
+                               input_device_index=device_index,
+                               frames_per_buffer=chunk)
+    except Exception as e:
+        print("opening stream failed, falling back to default sample rate")
+        dev_info = py_audio.get_device_info_by_index(device_index)
+
+        #channel_number = int(dev_info['maxInputChannels'])
+        recorded_sample_rate = int(dev_info['defaultSampleRate'])
+        try:
+            stream = py_audio.open(format=sample_format,
+                                   channels=2,
+                                   rate=recorded_sample_rate,
+                                   input=True,
+                                   input_device_index=device_index,
+                                   frames_per_buffer=chunk)
+        except Exception as e:
+            print("opening stream failed, falling back to mono")
+            # try again with mono
+            is_mono = True
+            stream = py_audio.open(format=sample_format,
+                                   channels=1,
+                                   rate=recorded_sample_rate,
+                                   input=True,
+                                   input_device_index=device_index,
+                                   frames_per_buffer=chunk)
+
+        needs_sample_rate_conversion = True
+
+    return stream, needs_sample_rate_conversion, recorded_sample_rate, is_mono
