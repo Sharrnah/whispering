@@ -41,6 +41,7 @@ scikit-image==v0.19.3
 omegaconf>=2.0.6
 PyYAML>=6.0
 winsdk>=1.0.0b9
+keyboard>=0.13.5
 
 #faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/tags/v0.3.0.zip
 faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/heads/master.zip

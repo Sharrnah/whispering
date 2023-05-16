@@ -45,6 +45,8 @@ from Models import languageClassification
 import pyaudiowpatch as pyaudio
 from whisper import available_models, audio as whisper_audio
 
+import keyboard
+
 import numpy as np
 import torch
 import torchaudio
@@ -154,13 +156,13 @@ def process_audio_chunk(audio_chunk, vad_model, sample_rate):
     return new_confidence, peak_amplitude
 
 
-def should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold):
-    return peak_amplitude >= energy and new_confidence >= confidence_threshold
+def should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold, keyboard_key=None):
+    return ((keyboard_key is not None and keyboard.is_pressed(keyboard_key)) or peak_amplitude >= energy) and new_confidence >= confidence_threshold
 
 
-def should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause):
-    return (new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (
-            time.time() - pause_time) > pause
+def should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause, keyboard_key=None):
+    return ((keyboard_key is not None and not keyboard.is_pressed(keyboard_key)) or ((new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (
+            time.time() - pause_time) > pause))
 
 
 def get_host_audio_api_names():
@@ -614,6 +616,12 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
         start_rec_on_volume_threshold = False
 
         continue_recording = True
+
+        push_to_talk_key = settings.GetOption("push_to_talk_key")
+        if push_to_talk_key == "":
+            push_to_talk_key = None
+        keyboard_rec_force_stop = False
+
         while continue_recording:
             phrase_time_limit = settings.GetOption("phrase_time_limit")
             pause = settings.GetOption("pause")
@@ -646,7 +654,9 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
             # put frames with recognized speech into a list and send to whisper
             # if (clip_duration is not None and len(frames) > fps) or (elapsed_time > 3 and len(frames) > 0):
 
-            if (clip_duration is not None and len(frames) > fps) or (elapsed_time > pause and len(frames) > 0):
+            if (clip_duration is not None and len(frames) > fps) or (elapsed_time > pause and len(frames) > 0) or (
+                    keyboard_rec_force_stop and push_to_talk_key is not None and not keyboard.is_pressed(push_to_talk_key) and len(frames) > 0):
+
                 clip = []
                 # for i in range(0, fps):
                 for i in range(0, len(frames)):
@@ -679,9 +689,10 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                 frames = []
                 start_time = time.time()
                 intermediate_time_start = time.time()
+                keyboard_rec_force_stop = False
 
             # set start recording variable to true if the volume and voice confidence is above the threshold
-            if should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold):
+            if should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold, keyboard_key=push_to_talk_key):
                 if not start_rec_on_volume_threshold:
                     # clear frames on start of new recording
                     # frames = []
@@ -689,6 +700,8 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                     typing_indicator_thread = threading.Thread(target=typing_indicator_function,
                                                                args=(osc_ip, osc_port, True))
                     typing_indicator_thread.start()
+                if push_to_talk_key is not None and keyboard.is_pressed(push_to_talk_key):
+                    keyboard_rec_force_stop = True
                 start_rec_on_volume_threshold = True
                 pause_time = time.time()
 
@@ -721,9 +734,13 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                         intermediate_time_start = time.time()
 
             # stop recording if no speech is detected for pause seconds
-            if should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause):
+            if should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause, keyboard_key=push_to_talk_key):
                 start_rec_on_volume_threshold = False
                 intermediate_time_start = time.time()
+                if push_to_talk_key is not None and not keyboard.is_pressed(push_to_talk_key) and keyboard_rec_force_stop:
+                    keyboard_rec_force_stop = True
+                else:
+                    keyboard_rec_force_stop = False
 
             # save chunk as previous audio chunk to reuse later
             if not start_rec_on_volume_threshold and (
