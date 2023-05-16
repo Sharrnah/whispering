@@ -583,6 +583,8 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
 
         frames = []
 
+        is_mono = False
+
         default_sample_rate = SAMPLE_RATE
         recorded_sample_rate = SAMPLE_RATE
         needs_sample_rate_conversion = False
@@ -597,13 +599,27 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
             print("opening stream failed, falling back to default sample rate")
             dev_info = py_audio.get_device_info_by_index(device_index)
 
+            #channel_number = int(dev_info['maxInputChannels'])
+            #is_mono = False
             recorded_sample_rate = int(dev_info['defaultSampleRate'])
-            stream = py_audio.open(format=FORMAT,
-                                   channels=2,
-                                   rate=int(dev_info['defaultSampleRate']),
-                                   input=True,
-                                   input_device_index=device_index,
-                                   frames_per_buffer=CHUNK)
+            try:
+                stream = py_audio.open(format=FORMAT,
+                                       channels=2,
+                                       rate=int(dev_info['defaultSampleRate']),
+                                       input=True,
+                                       input_device_index=device_index,
+                                       frames_per_buffer=CHUNK)
+            except Exception as e:
+                print("opening stream failed, falling back to mono")
+                # try again with mono
+                is_mono = True
+                stream = py_audio.open(format=FORMAT,
+                                       channels=1,
+                                       rate=int(dev_info['defaultSampleRate']),
+                                       input=True,
+                                       input_device_index=device_index,
+                                       frames_per_buffer=CHUNK)
+
             needs_sample_rate_conversion = True
 
         audioprocessor.start_whisper_thread()
@@ -645,7 +661,7 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
             # special case which seems to be needed for WASAPI
             if needs_sample_rate_conversion:
                 audio_chunk = audio_tools.resample_audio(audio_chunk, recorded_sample_rate, default_sample_rate, -1,
-                                                         is_mono=False).tobytes()
+                                                         is_mono=is_mono).tobytes()
 
             new_confidence, peak_amplitude = process_audio_chunk(audio_chunk, vad_model, default_sample_rate)
             if verbose:
