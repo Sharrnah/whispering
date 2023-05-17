@@ -159,14 +159,14 @@ def process_audio_chunk(audio_chunk, vad_model, sample_rate):
 
 def should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold, keyboard_key=None):
     return ((keyboard_key is not None and keyboard.is_pressed(
-        keyboard_key)) or peak_amplitude >= energy) and new_confidence >= confidence_threshold
+        keyboard_key)) or (0 < energy <= peak_amplitude and new_confidence >= confidence_threshold))
 
 
 def should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, pause_time, pause,
                           keyboard_key=None):
-    return ((keyboard_key is not None and not keyboard.is_pressed(keyboard_key)) or (
-            (new_confidence < confidence_threshold or confidence_threshold == 0.0) and peak_amplitude < energy and (
-            time.time() - pause_time) > pause))
+    return (keyboard_key is not None and not keyboard.is_pressed(keyboard_key)) or (
+            0 < energy > peak_amplitude and (new_confidence < confidence_threshold or confidence_threshold == 0.0) and (
+            time.time() - pause_time) > pause > 0.0)
 
 
 def get_host_audio_api_names():
@@ -587,7 +587,7 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
             channels=CHANNELS,
             chunk=CHUNK,
             py_audio=py_audio,
-            )
+        )
 
         audioprocessor.start_whisper_thread()
 
@@ -635,9 +635,10 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                 print("new_confidence: " + str(new_confidence) + " peak_amplitude: " + str(peak_amplitude))
 
             # put frames with recognized speech into a list and send to whisper
-            if (clip_duration is not None and len(frames) > fps) or (elapsed_time > pause and len(frames) > 0) or (
+            if (clip_duration is not None and len(frames) > fps) or (
+                    elapsed_time > pause > 0.0 and len(frames) > 0) or (
                     keyboard_rec_force_stop and push_to_talk_key is not None and not keyboard.is_pressed(
-                push_to_talk_key) and len(frames) > 0):
+                    push_to_talk_key) and len(frames) > 0):
 
                 clip = []
                 for i in range(0, len(frames)):
