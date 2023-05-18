@@ -1,4 +1,6 @@
 import io
+import threading
+import time
 import wave
 
 import resampy
@@ -89,11 +91,27 @@ def convert_tensor_to_wav_buffer(audio, sample_rate=24000, channels=1, sample_wi
     return buff
 
 
+def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2, channels=2, sample_rate=44100):
+    try:
+        stream = p.open(format=audio_format,
+                        channels=channels,
+                        rate=int(sample_rate),
+                        output_device_index=device,
+                        output=True)
+
+        for i in range(0, len(audio_data), chunk * channels):
+            stream.write(audio_data[i:i + chunk * channels].tobytes())
+
+        stream.close()
+    except Exception as e:
+        print("Error playing audio: {}".format(e))
+
+
 # play wav binary audio to device, converting audio sample_rate and channels if necessary
 # audio can be bytes (in wav) or tensor
 # tensor_sample_with is the sample width of the tensor (if audio is tensor and not bytes) [default is 4 bytes]
 # tensor_channels is the number of channels of the tensor (if audio is tensor and not bytes) [default is 1 channel (mono)]
-def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channel_num=2, target_channels=2, is_mono=True, dtype="int16", tensor_sample_with=4, tensor_channels=1):
+def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channel_num=2, target_channels=2, is_mono=True, dtype="int16", tensor_sample_with=4, tensor_channels=1, secondary_device=None):
     if isinstance(audio, bytes):
         buff = _generate_binary_buffer(audio)
     else:
@@ -114,24 +132,37 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
     # Read all audio data and resample if necessary
     frame_data = wf.readframes(wf.getnframes())
 
+    # get audio sample width
+    audio_sample_width = wf.getsampwidth()
+
+    wf.close()
+
     # resample audio data
     audio_data = resample_audio(frame_data, source_sample_rate, closest_sample_rate, target_channels=target_channels, is_mono=is_mono, dtype=dtype)
 
+    audio_thread = None
+    if secondary_device is not None:
+        audio_thread = threading.Thread(target=play_stream, args=(
+            p, secondary_device, audio_data, chunk,
+            p.get_format_from_width(audio_sample_width),
+            audio_device_channel_num,
+            closest_sample_rate
+        ))
+        audio_thread.start()
+
     # Open a .Stream object to write the WAV file to
     # 'output = True' indicates that the sound will be played rather than recorded
-    stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
-                    channels=audio_device_channel_num,
-                    rate=int(closest_sample_rate),
-                    output_device_index=device,
-                    output=True)
+    play_stream(p=p, device=device, audio_data=audio_data, chunk=chunk,
+                audio_format=p.get_format_from_width(audio_sample_width),
+                channels=audio_device_channel_num,
+                sample_rate=closest_sample_rate
+                )
 
-    # Play the sound by writing the audio data to the stream in chunks
-    for i in range(0, len(audio_data), chunk * audio_device_channel_num):
-        stream.write(audio_data[i:i + chunk * audio_device_channel_num].tobytes())
+    # wait while audio thread is running
+    if audio_thread is not None:
+        while audio_thread.is_alive():
+            time.sleep(0.1)
 
-    # Close and terminate the stream
-    stream.close()
-    wf.close()
     p.terminate()
 
 

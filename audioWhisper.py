@@ -112,7 +112,8 @@ def call_plugin_timer(Plugins):
     timer.start()
     if not settings.GetOption("plugin_timer_stopped"):
         for plugin_inst in Plugins.plugins:
-            plugin_inst.timer()
+            if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'timer'):
+                plugin_inst.timer()
     else:
         if settings.GetOption("plugin_current_timer") <= 0.0:
             settings.SetOption("plugin_current_timer", settings.GetOption("plugin_timer_timeout"))

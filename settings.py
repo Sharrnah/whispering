@@ -90,6 +90,8 @@ TRANSLATE_SETTINGS = {
     "tts_voice": "en_0",  # TTS voice (one of silero tts voices, or "last" to use last used voice)
     "tts_prosody_rate": "",  # TTS voice speed. Can be "x-slow", "slow", "medium", "fast", "x-fast" or "" for default.
     "tts_prosody_pitch": "",  # TTS voice pitch. Can be "x-low", "low", "medium", "high", "x-high" or "" for default.
+    "tts_use_secondary_playback": False,  # Play TTS audio to a secondary audio device at the same time.
+    "tts_secondary_playback_device": -1,  # Play TTS audio to this specified audio device at the same time. (set to -1 to use default audio device)
 
     # Plugins
     "plugins": {},  # active plugins

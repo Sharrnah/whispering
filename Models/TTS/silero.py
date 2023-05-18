@@ -222,15 +222,25 @@ class Silero:
         if device is None:
             device = settings.GetOption("device_default_out_index")
 
+        secondary_audio_device = None
+        if settings.GetOption("tts_use_secondary_playback") and (
+                (settings.GetOption("tts_secondary_playback_device") == -1 and device != settings.GetOption("device_default_out_index")) or
+                (settings.GetOption("tts_secondary_playback_device") > -1 and device != settings.GetOption("tts_secondary_playback_device"))):
+            secondary_audio_device = settings.GetOption("tts_secondary_playback_device")
+            if secondary_audio_device == -1:
+                secondary_audio_device = settings.GetOption("device_default_out_index")
+
         # play audio tensor
         audio_tools.play_audio(audio, device,
                                source_sample_rate=source_sample_rate,
                                audio_device_channel_num=2,
                                target_channels=2,
                                is_mono=source_is_mono,
-                               tensor_channels=2,
+                               dtype="float32",
                                tensor_sample_with=4,
-                               dtype="float32")
+                               tensor_channels=2,
+                               secondary_device=secondary_audio_device
+                               )
 
     def return_wav_file_binary(self, audio):
         # convert pytorch tensor to numpy array
