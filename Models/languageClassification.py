@@ -22,6 +22,7 @@ MODEL_LINKS = {
 
 model = None
 
+
 def download_model():
     pretrained_lang_model_file = Path(ct_model_path / "lid218e.bin")
     if not pretrained_lang_model_file.is_file():
