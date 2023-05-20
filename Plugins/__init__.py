@@ -66,13 +66,11 @@ class Base:
             return default
 
     def set_plugin_setting(self, settings_name, value):
-        if self.__class__.__name__ not in settings.GetOption("plugin_settings"):
-            setting = copy.deepcopy(settings.GetOption("plugin_settings"))
-            setting[self.__class__.__name__][settings_name] = value
-            settings.SetOption("plugin_settings", setting)
-        else:
-            settings.GetOption("plugin_settings")[self.__class__.__name__][settings_name] = value
-            settings.SetOption("plugin_settings", settings.GetOption("plugin_settings"))
+        setting = copy.deepcopy(settings.GetOption("plugin_settings"))
+        if self.__class__.__name__ not in setting:
+            setting[self.__class__.__name__] = {}
+        setting[self.__class__.__name__][settings_name] = value
+        settings.SetOption("plugin_settings", setting)
 
     def on_enable(self):
         pass
