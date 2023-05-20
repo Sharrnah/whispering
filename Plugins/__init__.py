@@ -30,6 +30,23 @@ class Base:
 
         return settings.GetOption("plugins")[self.__class__.__name__]
 
+    # set plugins that do not yet exist and delete settings that are not given to init_plugin_settings where key is the settings_name and value the settings default value
+    def init_plugin_settings(self, init_settings=None):
+        if init_settings is None:
+            init_settings = {}
+
+        # set plugins that do not yet exist
+        for settings_name, default in init_settings.items():
+            self.get_plugin_setting(settings_name, default)
+
+        # delete settings that are not given to init_plugin_settings
+        plugin_settings = copy.deepcopy(settings.GetOption("plugin_settings"))
+        if self.__class__.__name__ in plugin_settings:
+            for settings_name in list(plugin_settings[self.__class__.__name__]):
+                if settings_name not in init_settings:
+                    del plugin_settings[self.__class__.__name__][settings_name]
+        settings.SetOption("plugin_settings", plugin_settings)
+
     def get_plugin_setting(self, settings_name, default=None):
         if self.__class__.__name__ in settings.GetOption("plugin_settings") and \
                 settings.GetOption("plugin_settings")[self.__class__.__name__] is not None and \
