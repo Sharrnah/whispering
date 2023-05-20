@@ -207,6 +207,24 @@ TOKENIZER_LINKS = {
 }
 
 
+def needs_download(model: str, compute_type: str = "float32"):
+    model_cache_path = Path(".cache/whisper")
+    model_path = Path(model_cache_path / (model + "-ct2"))
+    if compute_type == "float16" or compute_type == "int8_float16" or compute_type == "int16" or compute_type == "int8":
+        model_path = Path(model_cache_path / (model + "-ct2-fp16"))
+
+    pretrained_lang_model_file = Path(model_path / "model.bin")
+
+    if not model_cache_path.exists() or not Path(model_path).exists() or not pretrained_lang_model_file.is_file():
+        return True
+
+    tokenizer_file = Path(model_path / "tokenizer.json")
+    if not tokenizer_file.is_file():
+        return True
+
+    return False
+
+
 def download_model(model: str, compute_type: str = "float32"):
     model_cache_path = Path(".cache/whisper")
     os.makedirs(model_cache_path, exist_ok=True)

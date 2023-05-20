@@ -537,9 +537,10 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
         whisper_model = settings.GetOption("model")
         whisper_precision = settings.GetOption("whisper_precision")
         # download the model here since its only possible in the main thread
-        websocket.set_loading_state("downloading_whisper_model", True)
-        faster_whisper.download_model(whisper_model, whisper_precision)
-        websocket.set_loading_state("downloading_whisper_model", False)
+        if faster_whisper.needs_download(whisper_model, whisper_precision):
+            websocket.set_loading_state("downloading_whisper_model", True)
+            faster_whisper.download_model(whisper_model, whisper_precision)
+            websocket.set_loading_state("downloading_whisper_model", False)
 
     # prepare the plugin timer calls
     call_plugin_timer(Plugins)
