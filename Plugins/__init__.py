@@ -7,11 +7,14 @@ import copy
 
 import settings
 
+SUPPORTED_WIDGET_TYPES = ["button", "slider", "select", "textarea"]
 
 class Base:
     """Basic resource class. Concrete resources will inherit from this one
     """
     plugins = []
+
+    plugin_settings_default = {}
 
     # For every class that inherits from the current,
     # the class name will be added to plugins
@@ -35,27 +38,54 @@ class Base:
         if init_settings is None:
             init_settings = {}
 
+        self.plugin_settings_default = copy.deepcopy(init_settings)
+
         # set plugins that do not yet exist
         for settings_name, default in init_settings.items():
             self.get_plugin_setting(settings_name, default)
 
-        # delete settings that are not given to init_plugin_settings
         plugin_settings = copy.deepcopy(settings.GetOption("plugin_settings"))
         if self.__class__.__name__ in plugin_settings:
             for settings_name in list(plugin_settings[self.__class__.__name__]):
+                # delete settings that are not given to init_plugin_settings
                 if settings_name not in init_settings and settings_name != "settings_groups":
                     del plugin_settings[self.__class__.__name__][settings_name]
+
+                # set event widgets
+                if settings_name in init_settings and isinstance(init_settings[settings_name], dict) and \
+                        "type" in init_settings[settings_name] and init_settings[settings_name]["type"] in SUPPORTED_WIDGET_TYPES:
+                    if "value" in init_settings[settings_name] and isinstance(plugin_settings[self.__class__.__name__][settings_name], dict) and "value" in plugin_settings[self.__class__.__name__][settings_name]:
+                        # keep value
+                        init_settings[settings_name]["value"] = plugin_settings[self.__class__.__name__][settings_name]["value"]
+                    elif "value" in init_settings[settings_name] and type(plugin_settings[self.__class__.__name__][settings_name]) == type(init_settings[settings_name]["value"]):
+                        # keep value and convert to widget
+                        init_settings[settings_name]["value"] = plugin_settings[self.__class__.__name__][settings_name]
+
+                    plugin_settings[self.__class__.__name__][settings_name] = init_settings[settings_name]
 
             # set settings_groups
             plugin_settings[self.__class__.__name__]["settings_groups"] = settings_groups
 
         settings.SetOption("plugin_settings", plugin_settings)
 
-    def get_plugin_setting(self, settings_name, default=None):
+    # fetch plugin settings value, also supporting widgets
+    def _get_plugin_setting_value(self, settings_value):
+        if isinstance(settings_value, dict) and "type" in settings_value and settings_value["type"] in SUPPORTED_WIDGET_TYPES and "value" in settings_value:
+            return settings_value["value"]
+        return settings_value
+
+    def get_plugin_setting(self, *args):
+        if len(args) == 1:
+            return self._get_plugin_setting(args[0], self.plugin_settings_default[args[0]])
+        return self._get_plugin_setting(*args)
+
+    def _get_plugin_setting(self, settings_name, default=None):
         if self.__class__.__name__ in settings.GetOption("plugin_settings") and \
                 settings.GetOption("plugin_settings")[self.__class__.__name__] is not None and \
                 settings_name in settings.GetOption("plugin_settings")[self.__class__.__name__]:
-            return settings.GetOption("plugin_settings")[self.__class__.__name__][settings_name]
+            return self._get_plugin_setting_value(
+                settings.GetOption("plugin_settings")[self.__class__.__name__][settings_name]
+            )
         else:
             setting = copy.deepcopy(settings.GetOption("plugin_settings"))
             if self.__class__.__name__ not in setting or setting[self.__class__.__name__] is None:
@@ -63,7 +93,7 @@ class Base:
             elif settings_name not in setting[self.__class__.__name__]:
                 setting[self.__class__.__name__][settings_name] = default
             settings.SetOption("plugin_settings", setting)
-            return default
+            return self._get_plugin_setting_value(default)
 
     def set_plugin_setting(self, settings_name, value):
         setting = copy.deepcopy(settings.GetOption("plugin_settings"))

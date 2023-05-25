@@ -114,6 +114,15 @@ def ocr_req(msgObj, websocket):
             {"type": "ocr_result", "data": {"bounding_boxes": bounding_boxes, "image_data": image_data}}))
 
 
+def plugin_event_handler(msgObj):
+    pluginClassName = msgObj["name"]
+    for plugin_inst in Plugins.plugins:
+        if pluginClassName == type(plugin_inst).__name__:
+            if hasattr(plugin_inst, 'on_event_received'):
+                plugin_inst.on_event_received(msgObj)
+                return
+
+
 def websocketMessageHandler(msgObj, websocket):
     global UI_CONNECTED
     if msgObj["type"] == "setting_change":
@@ -179,6 +188,12 @@ def websocketMessageHandler(msgObj, websocket):
     if msgObj["type"] == "ui_connected":
         UI_CONNECTED["value"] = True
         UI_CONNECTED["websocket"] = websocket
+
+    # plugin event handler
+    if msgObj["type"] == "plugin_button_press":
+        plugin_event_thread = threading.Thread(target=plugin_event_handler, args=(msgObj,))
+        plugin_event_thread.start()
+        #plugin_event_handler(msgObj)
 
     if msgObj["type"] == "quit":
         print("Received quit command.")
