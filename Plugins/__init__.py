@@ -7,7 +7,9 @@ import copy
 
 import settings
 
-SUPPORTED_WIDGET_TYPES = ["button", "slider", "select", "textarea"]
+SUPPORTED_WIDGET_TYPES = ["button", "slider", "select", "textarea", "hyperlink", "label", "file_open", "file_save",
+                          "folder_open", "dir_open"]
+
 
 class Base:
     """Basic resource class. Concrete resources will inherit from this one
@@ -54,10 +56,15 @@ class Base:
                 # set event widgets
                 if settings_name in init_settings and isinstance(init_settings[settings_name], dict) and \
                         "type" in init_settings[settings_name] and init_settings[settings_name]["type"] in SUPPORTED_WIDGET_TYPES:
-                    if "value" in init_settings[settings_name] and isinstance(plugin_settings[self.__class__.__name__][settings_name], dict) and "value" in plugin_settings[self.__class__.__name__][settings_name]:
+                    if "value" in init_settings[settings_name] and isinstance(
+                            plugin_settings[self.__class__.__name__][settings_name], dict) and "value" in \
+                            plugin_settings[self.__class__.__name__][settings_name]:
                         # keep value
-                        init_settings[settings_name]["value"] = plugin_settings[self.__class__.__name__][settings_name]["value"]
-                    elif "value" in init_settings[settings_name] and type(plugin_settings[self.__class__.__name__][settings_name]) == type(init_settings[settings_name]["value"]):
+                        init_settings[settings_name]["value"] = plugin_settings[self.__class__.__name__][settings_name][
+                            "value"]
+                    elif "value" in init_settings[settings_name] and type(
+                            plugin_settings[self.__class__.__name__][settings_name]) == type(
+                        init_settings[settings_name]["value"]):
                         # keep value and convert to widget
                         init_settings[settings_name]["value"] = plugin_settings[self.__class__.__name__][settings_name]
 
@@ -70,13 +77,17 @@ class Base:
 
     # fetch plugin settings value, also supporting widgets
     def _get_plugin_setting_value(self, settings_value):
-        if isinstance(settings_value, dict) and "type" in settings_value and settings_value["type"] in SUPPORTED_WIDGET_TYPES and "value" in settings_value:
+        if isinstance(settings_value, dict) and "type" in settings_value and \
+                settings_value["type"] in SUPPORTED_WIDGET_TYPES and "value" in settings_value:
             return settings_value["value"]
         return settings_value
 
     def get_plugin_setting(self, *args):
         if len(args) == 1:
-            return self._get_plugin_setting(args[0], self.plugin_settings_default[args[0]])
+            if args[0] in self.plugin_settings_default:
+                return self._get_plugin_setting(args[0], self.plugin_settings_default[args[0]])
+            else:
+                return self._get_plugin_setting(args[0])
         return self._get_plugin_setting(*args)
 
     def _get_plugin_setting(self, settings_name, default=None):

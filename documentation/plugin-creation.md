@@ -33,13 +33,30 @@ The `Base` class provides some helper methods to make it easier to write plugins
 
 **IMPORTANT: Settings that are not initialized with `init_plugin_settings` are deleted when calling `init_plugin_settings`, so make sure to define every setting your Plugin needs.**
 
-`get_plugin_setting(self, setting, default=None)` - Get a plugin setting from the settings file. If the setting is not yet in the settings file, the default value is used.
+`get_plugin_setting(self, setting, default=None)` - Get a plugin setting from the settings file. If the setting is not yet in the settings file, the default value is used. (if default is not set, the default from _init_plugin_settings()_ is used)
 
 `set_plugin_setting(self, setting, value)` - Set a plugin setting in the settings file.
 
 __Note:__ _When using the *_plugin_setting methods, the settings are saved with the class name as the section name. So if you have a plugin called `ExamplePlugin`, the settings will be saved in the `ExamplePlugin` section._
 
 `is_enabled(self, default=True)` - Check if the plugin is enabled. If the plugin is not yet in the settings file, the default value is used. So by default, plugins will be enabled. Use this around your main functionality to allow enabling/disabling of your plugin even at runtime.
+
+
+## use specific Widgets in plugin settings
+
+To use specific widgets in plugin settings, you can add specific structs to the init_plugin_settings method.
+
+The following structs are available:
+- `{"type": "slider", "min": 0.0, "max": 1.0, "step": 0.01, "value": 0.7}` - A slider
+- `{"type": "button", "label": "Batch Generate", "style": "primary"}` - A button (style can be "primary" or "default")
+- `{"type": "select", "label": "Label", "value": "default value", "options": ["default value", "option2", "option3"]}` - A select box 
+- `{"type": "textarea", "rows": 5, "value": ""}` - A textarea
+- `{"type": "hyperlink", "label": "hyperlink", "value": "https://github.com/Sharrnah/whispering-ui"}`
+- `{"type": "label", "label": "Some infotext in a label.", "style": "center"}` - A label (style can be "left", "right" or "center")
+- `{"type": "file_open", "accept": ".wav", "value": "bark_clone_voice/clone_voice.wav"}` - A file open dialog (accept can be any file extension or a comma separated list of file extensions)
+- `{"type": "file_save", "accept": ".npz", "value": "last_prompt.npz"}` - A file save dialog (accept can be any file extension or a comma separated list of file extensions)
+- `{"type": "folder_open", "accept": "", "value": ""}` - A folder open dialog
+- `{"type": "dir_open", "accept": "", "value": ""}` - Alias for a folder open dialog
 
 
 ## Example plugin
@@ -53,8 +70,11 @@ class ExamplePlugin(Plugins.Base):
         # prepare all possible plugin settings and their default values
         self.init_plugin_settings(
             {
+                "hello_world": "default value",
+                "hello_world2": "foo bar",
                 "osc_auto_processing_enabled": False,
                 "tts_answer": False,
+                "homepage_link": {"label": "Whispering Tiger Link", "value": "https://github.com/Sharrnah/whispering-ui", "type": "hyperlink"},
 
                 "more_settings_a": "default value",
                 "more_settings_b": "default value\nmultiline",
@@ -62,7 +82,7 @@ class ExamplePlugin(Plugins.Base):
                 "more_settings_d": 60,
             },
             settings_groups={
-                "General": ["osc_auto_processing_enabled", "tts_answer"],
+                "General": ["osc_auto_processing_enabled", "tts_answer", "hello_world", "hello_world2", "homepage_link"],
                 "Second Group": ["more_settings_a", "more_settings_b", "more_settings_c", "more_settings_d"],
             }
         )
@@ -84,11 +104,14 @@ class ExamplePlugin(Plugins.Base):
 
     # called every x seconds (defined in plugin_timer)
     def timer(self):
+        # get the settings from the global app settings
         osc_ip = settings.GetOption("osc_ip")
         osc_address = settings.GetOption("osc_address")
         osc_port = settings.GetOption("osc_port")
 
         hello_world = self.get_plugin_setting("hello_world", "default foo bar")
+        hello_world2 = self.get_plugin_setting("hello_world2")
+        print(hello_world2)
 
         if self.is_enabled():
             VRC_OSCLib.Chat(hello_world, True, False, osc_address, IP=osc_ip, PORT=osc_port,
