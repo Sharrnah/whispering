@@ -14,7 +14,7 @@ from pydub import AudioSegment
 # set target_channels to '-1' to average the left and right channels to create mono audio (default)
 # set target_channels to '0' to extract the first channel (left channel) data
 # set target_channels to '1' to extract the second channel (right channel) data
-# set target_channels to '2' to keep stereo channels
+# set target_channels to '2' to keep stereo channels (or copy the mono channel to both channels if is_mono is True)
 # to Convert the int16 numpy array to bytes use .tobytes()
 def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16"):
     audio_data_dtype = np.int16

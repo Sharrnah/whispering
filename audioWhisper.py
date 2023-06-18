@@ -364,6 +364,36 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                     f"{device_list_name} [Sample Rate={device_list_sample_rate}, API={device_list_api}] (Index={device_list_index})")
         return
 
+    # is set to run energy detection
+    if detect_energy:
+        # get selected audio api
+        audio_api = "MME"
+        if settings.IsArgumentSetting(ctx, "audio_api"):
+            audio_api = ctx.params["audio_api"]
+        audio_api_index, audio_api_name = get_audio_api_index_by_name(audio_api)
+
+        # get selected audio input device
+        device_index = None
+        if settings.IsArgumentSetting(ctx, "device_index"):
+            device_index = ctx.params["device_index"]
+        device_default_in_index = get_default_audio_device_index_by_api(audio_api, True)
+
+        # get selected audio input device by name if possible
+        if settings.IsArgumentSetting(ctx, "audio_input_device"):
+            audio_input_device = ctx.params["audio_input_device"]
+            if audio_input_device is not None and audio_input_device != "":
+                if audio_input_device.lower() == "Default".lower():
+                    device_index = None
+                else:
+                    device_index = get_audio_device_index_by_name_and_api(audio_input_device, audio_api_index, True,
+                                                                          device_index)
+        if device_index is None or device_index < 0:
+            device_index = device_default_in_index
+
+        max_detected_energy = record_highest_peak_amplitude(device_index, detect_energy_time)
+        print("detected_energy: " + str(max_detected_energy))
+        return
+
     # Load settings from file
     if config is not None:
         settings.SETTINGS_PATH = Path(Path.cwd() / config)
@@ -427,22 +457,6 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
 
     energy = settings.SetOption("energy", settings.GetArgumentSettingFallback(ctx, "energy", "energy"))
 
-    # is set to run energy detection
-    if detect_energy:
-        if settings.IsArgumentSetting(ctx, "audio_input_device"):
-            audio_input_device = ctx.params["audio_input_device"]
-            if audio_input_device is not None and audio_input_device != "":
-                if audio_input_device.lower() == "Default".lower():
-                    device_index = None
-                else:
-                    device_index = get_audio_device_index_by_name_and_api(audio_input_device, audio_api_index, True,
-                                                                          device_index)
-        if device_index is None or device_index < 0:
-            device_index = device_default_in_index
-
-        max_detected_energy = record_highest_peak_amplitude(device_index, detect_energy_time)
-        print("detected_energy: " + str(max_detected_energy))
-        return
 
     print("###################################")
     print("# Whispering Tiger is starting... #")
