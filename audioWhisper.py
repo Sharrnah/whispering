@@ -547,7 +547,7 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
     languageClassification.download_model()
 
     # Download faster-whisper model
-    if settings.GetOption("faster_whisper"):
+    if settings.GetOption("stt_type") == "faster_whisper":
         whisper_model = settings.GetOption("model")
         whisper_precision = settings.GetOption("whisper_precision")
         realtime_whisper_model = settings.GetOption("realtime_whisper_model")

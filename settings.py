@@ -45,7 +45,8 @@ TRANSLATE_SETTINGS = {
     "logprob_threshold": "-1.0",
     "no_speech_threshold": "0.6",
     "whisper_precision": "float32",  # for original Whisper can be "float16" or "float32", for faster-whisper "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
-    "faster_whisper": True,  # Set to True to use faster whisper.
+    #"faster_whisper": True,  # Set to True to use faster whisper.
+    "stt_type": "faster_whisper",  # can be "faster_whisper", "original_whisper" or "speech_t5".
     "temperature_fallback": True,  # Set to False to disable temperature fallback which is the reason for some slowdowns, but decreases quality.
     "beam_size": 5,  # Beam size for beam search. (higher = more accurate, but slower)
     "whisper_cpu_threads": 0,  # Number of threads to use when running on CPU (4 by default)
@@ -174,6 +175,7 @@ def GetAvailableSettingValues():
         "ai_device": ["None", "cuda", "cpu"],
         "model": available_models(),
         "whisper_task": ["transcribe", "translate"],
+        "stt_type": ["faster_whisper", "original_whisper", "speech_t5"],
         "tts_ai_device": ["cuda", "cpu"],
         "txt_translator_device": ["cuda", "cpu"],
         "txt_translator": ["NLLB200_CT2", "NLLB200", "M2M100"],

@@ -17,6 +17,7 @@ from Models.TTS import silero
 
 # from faster_whisper import WhisperModel
 import Models.STT.faster_whisper as faster_whisper
+import Models.STT.speecht5 as speech_t5
 
 # Plugins
 import Plugins
@@ -186,29 +187,38 @@ def send_message(predicted_text, result_obj, final_audio):
 def load_whisper(model, ai_device):
     cpu_threads = settings.GetOption("whisper_cpu_threads")
     num_workers = settings.GetOption("whisper_num_workers")
-    if not settings.GetOption("faster_whisper"):
+    if settings.GetOption("stt_type") == "original_whisper":
         try:
             return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
         except Exception as e:
             print("Failed to load whisper model. Application exits. " + str(e))
             sys.exit(1)
-    else:
+    elif settings.GetOption("stt_type") == "faster_whisper":
         compute_dtype = settings.GetOption("whisper_precision")
 
         return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype,
                                             cpu_threads=cpu_threads, num_workers=num_workers)
+        #return whisperx.WhisperX(model, device=ai_device, compute_type=compute_dtype,
+        #                                    cpu_threads=cpu_threads, num_workers=num_workers)
+    elif settings.GetOption("stt_type") == "speech_t5":
+        try:
+            return speech_t5.SpeechT5STT(device=ai_device)
+        except Exception as e:
+            print("Failed to load speech t5 model. Application exits. " + str(e))
 
 
 def load_realtime_whisper(model, ai_device):
     cpu_threads = settings.GetOption("whisper_cpu_threads")
     num_workers = settings.GetOption("whisper_num_workers")
-    if not settings.GetOption("faster_whisper"):
+    if settings.GetOption("stt_type") == "original_whisper":
         return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
-    else:
+    elif settings.GetOption("stt_type") == "faster_whisper":
         compute_dtype = settings.GetOption("realtime_whisper_precision")
 
         return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype,
                                             cpu_threads=cpu_threads, num_workers=num_workers)
+    elif settings.GetOption("stt_type") == "speech_t5":
+        return speech_t5.SpeechT5STT(device=ai_device)
 
 
 def convert_audio(audio_bytes: bytes):
@@ -279,7 +289,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
         return
 
     try:
-        if not settings.GetOption("faster_whisper"):
+        if settings.GetOption("stt_type") == "original_whisper":
             # official whisper model
             whisper_fp16 = False
             if settings.GetOption("whisper_precision") == "float16":  # set precision
@@ -309,7 +319,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                 temperature=whisper_temperature_fallback_option,
                                                 beam_size=whisper_beam_size
                                                 )
-        else:
+        elif settings.GetOption("stt_type") == "faster_whisper":
             # faster whisper
             if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
                 result = audio_model_realtime.transcribe(audio_sample, task=whisper_task,
@@ -331,6 +341,9 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                 no_speech_threshold=whisper_no_speech_threshold,
                                                 temperature=whisper_temperature_fallback_option,
                                                 beam_size=whisper_beam_size)
+        elif settings.GetOption("stt_type") == "speech_t5":
+            # microsoft SpeechT5
+            result = audio_model.transcribe(audio_sample)
 
         if last_whisper_result == result.get('text').strip() and not final_audio:
             return
@@ -350,14 +363,14 @@ def whisper_worker():
     whisper_model = settings.GetOption("model")
 
     whisper_ai_device = settings.GetOption("ai_device")
-    websocket.set_loading_state("whisper_loading", True)
+    websocket.set_loading_state("speech2text_loading", True)
     audio_model = load_whisper(whisper_model, whisper_ai_device)
     # load realtime whisper model
     audio_model_realtime = None
     if settings.GetOption("realtime") and settings.GetOption("realtime_whisper_model") != "" and settings.GetOption(
             "realtime_whisper_model") is not None:
         audio_model_realtime = load_realtime_whisper(settings.GetOption("realtime_whisper_model"), whisper_ai_device)
-    websocket.set_loading_state("whisper_loading", False)
+    websocket.set_loading_state("speech2text_loading", False)
 
     last_audio_time = 0
 
