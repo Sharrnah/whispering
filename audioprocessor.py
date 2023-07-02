@@ -376,7 +376,7 @@ def whisper_worker():
 
     last_whisper_result = ""
 
-    print("Whisper AI Ready. You can now say something!")
+    print("Speech2Text AI Ready. You can now say something!")
 
     while True:
         final_audio = False

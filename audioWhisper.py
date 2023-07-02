@@ -457,21 +457,25 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
 
     energy = settings.SetOption("energy", settings.GetArgumentSettingFallback(ctx, "energy", "energy"))
 
-
     print("###################################")
     print("# Whispering Tiger is starting... #")
     print("###################################")
 
     print("using Audio API: " + audio_api_name)
 
-    # check if english only model is loaded, and configure whisper languages accordingly.
-    if model.endswith(".en") and language not in {"en", "English"}:
-        if language is not None:
+    # check if english only model is loaded, and configure STT languages accordingly.
+    if model.endswith(".en") and "_whisper" in settings.GetOption("stt_type"):
+        if language is not None and language not in {"en", "English"}:
             print(f"{model} is an English-only model but received '{language}' as language; using English instead.")
 
         print(f"{model} is an English-only model. only English speech is supported.")
+        settings.SetOption("whisper_languages", ({"code": "", "name": "Auto"}, {"code": "en", "name": "English"},))
         settings.SetOption("current_language", "en")
-        settings.SetOption("whisper_languages", [{"code": "en", "name": "English"}])
+    elif settings.GetOption("stt_type") == "speech_t5":
+        # speech t5 only supports english
+        print(f"speechT5 is an English-only model. only English speech is supported.")
+        settings.SetOption("whisper_languages", ({"code": "", "name": "Auto"}, {"code": "en", "name": "English"},))
+        settings.SetOption("current_language", "en")
     else:
         settings.SetOption("whisper_languages", audioprocessor.whisper_get_languages())
 
@@ -558,7 +562,8 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
             faster_whisper.download_model(whisper_model, whisper_precision)
             websocket.set_loading_state("downloading_whisper_model", False)
         # download possibly needed realtime model
-        if realtime_whisper_model != "" and faster_whisper.needs_download(realtime_whisper_model, realtime_whisper_precision):
+        if realtime_whisper_model != "" and faster_whisper.needs_download(realtime_whisper_model,
+                                                                          realtime_whisper_precision):
             websocket.set_loading_state("downloading_whisper_model", True)
             faster_whisper.download_model(realtime_whisper_model, realtime_whisper_precision)
             websocket.set_loading_state("downloading_whisper_model", False)
@@ -661,7 +666,7 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
             if (clip_duration is not None and len(frames) > fps) or (
                     elapsed_time > pause > 0.0 and len(frames) > 0) or (
                     keyboard_rec_force_stop and push_to_talk_key is not None and not keyboard.is_pressed(
-                    push_to_talk_key) and len(frames) > 0):
+                push_to_talk_key) and len(frames) > 0):
 
                 clip = []
                 for i in range(0, len(frames)):
