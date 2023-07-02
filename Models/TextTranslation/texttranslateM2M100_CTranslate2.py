@@ -140,7 +140,9 @@ os.makedirs(ct_model_path, exist_ok=True)
 # default small model path. (should be loaded using load_model function)
 model_path = Path(ct_model_path / "m2m100_418m")
 
-model = spm.SentencePieceProcessor()
+sentencepiece = spm.SentencePieceProcessor()
+
+translator = None
 
 
 def get_installed_language_names():
@@ -149,6 +151,9 @@ def get_installed_language_names():
 
 def load_model(size="small"):
     global model_path
+    global sentencepiece
+    global translator
+
     match size:
         case "small":
             model_file = "m2m100_418m"
@@ -166,7 +171,9 @@ def load_model(size="small"):
         print(f"Downloading {size} text translation model...")
         downloader.download_extract(MODEL_LINKS[size]["urls"], str(ct_model_path.resolve()), MODEL_LINKS[size]["checksum"], title="M2M100CT2")
 
-    model.load(str(sp_model_path.resolve()))
+    sentencepiece.load(str(sp_model_path.resolve()))
+
+    translator = ctranslate2.Translator(str(model_path.resolve()), device=device)
 
 
 def set_device(option):
@@ -175,21 +182,22 @@ def set_device(option):
 
 
 def translate_language(text, from_code, to_code):
+    global sentencepiece
+
     src_prefix = "__" + from_code + "__"
     tgt_prefix = "__" + to_code + "__"
     target_prefix = [[tgt_prefix]] * len(text)
 
     # Subword the source sentences
-    source_sents_subworded = model.encode(text, out_type="str")
+    source_sents_subworded = sentencepiece.encode(text, out_type=str)
     source_sents_subworded = [[src_prefix] + source_sents_subworded]
 
     # Translate the source sentences
-    translator = ctranslate2.Translator(str(model_path.resolve()), device=device)
-    translations = translator.translate_batch(source_sents_subworded, batch_type="tokens", max_batch_size=2024, beam_size=beam_size, target_prefix=target_prefix, normalize_scores=True, max_input_length=2048)
+    translations = translator.translate_batch(source_sents_subworded, target_prefix=target_prefix, batch_type="tokens", max_batch_size=2024, beam_size=beam_size, max_input_length=2048)
     translations = [translation[0]['tokens'] for translation in translations]
 
     # Desubword the target sentences
-    translations_desubword = model.decode(translations)
+    translations_desubword = sentencepiece.decode(translations)
     translations_desubword = [sent[len(tgt_prefix):] for sent in translations_desubword]
 
     return ' '.join(translations_desubword)

@@ -449,7 +449,8 @@ ct_model_path = Path(Path.cwd() / ".cache" / "nllb200")
 os.makedirs(ct_model_path, exist_ok=True)
 
 model = AutoModelForSeq2SeqLM
-tokenizer: models.nllb.NllbTokenizer = AutoTokenizer  # type: ignore
+#tokenizer: models.nllb.NllbTokenizer = AutoTokenizer  # type: ignore
+tokenizer = AutoTokenizer
 
 torch_device = "cuda" if torch.cuda.is_available() else "cpu"
 
