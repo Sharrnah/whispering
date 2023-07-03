@@ -178,7 +178,7 @@ def GetAvailableSettingValues():
         "stt_type": ["faster_whisper", "original_whisper", "speech_t5"],
         "tts_ai_device": ["cuda", "cpu"],
         "txt_translator_device": ["cuda", "cpu"],
-        "txt_translator": ["NLLB200_CT2", "NLLB200", "M2M100"],
+        "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100"],
         "txt_translator_size": ["small", "medium", "large"],
         "txt_translator_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
         "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],

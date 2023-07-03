@@ -129,7 +129,10 @@ def build_whisper_translation_osc_prefix(result_obj):
 
     if txt_translate_enabled and "txt_translation" in result_obj and "txt_translation_target" in result_obj:
         # replace {trg} with target language
-        prefix = prefix.replace("{trg}", texttranslate.iso3_to_iso1(result_obj["txt_translation_target"]))
+        target_language = texttranslate.iso3_to_iso1(result_obj["txt_translation_target"])
+        if target_language is None:
+            target_language = result_obj["txt_translation_target"]
+        prefix = prefix.replace("{trg}", target_language)
     else:
         if whisper_task == "transcribe":
             # replace {trg} with target language of whisper

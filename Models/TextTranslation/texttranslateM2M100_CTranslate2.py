@@ -3,6 +3,7 @@ import sentencepiece as spm
 import os
 import downloader
 from pathlib import Path
+import torch
 
 LANGUAGES = {
     "Afrikaans": "af",
@@ -130,7 +131,7 @@ MODEL_LINKS = {
 }
 
 # [Modify] Set the device and beam size
-device = "auto"  # "cpu" or "cuda" for GPU, auto = automatic
+torch_device = "cuda" if torch.cuda.is_available() else "cpu"  # "cpu" or "cuda" for GPU, auto = automatic
 beam_size = 5
 
 # [Modify] Set paths to the models
@@ -149,7 +150,7 @@ def get_installed_language_names():
     return tuple([{"code": code, "name": language} for language, code in LANGUAGES.items()])
 
 
-def load_model(size="small"):
+def load_model(size="small", compute_type="float32"):
     global model_path
     global sentencepiece
     global translator
@@ -167,18 +168,25 @@ def load_model(size="small"):
     model_path = Path(ct_model_path / model_file)
     sp_model_path = Path(ct_model_path / model_file / "sentencepiece.model")
 
-    if not sp_model_path.exists():
+    print(f"M2M100_CTranslate2 {size} is Loading to {torch_device} using {compute_type} precision...")
+
+    if not sp_model_path.exists() or not Path(ct_model_path / model_file / "model.bin").exists():
         print(f"Downloading {size} text translation model...")
-        downloader.download_extract(MODEL_LINKS[size]["urls"], str(ct_model_path.resolve()), MODEL_LINKS[size]["checksum"], title="M2M100CT2")
+        downloader.download_extract(MODEL_LINKS[size]["urls"], str(ct_model_path.resolve()),
+                                    MODEL_LINKS[size]["checksum"], title="M2M100CT2")
 
     sentencepiece.load(str(sp_model_path.resolve()))
 
-    translator = ctranslate2.Translator(str(model_path.resolve()), device=device)
+    translator = ctranslate2.Translator(str(model_path.resolve()), device=torch_device, compute_type="float32")
+
+    print(f"M2M100_CTranslate2 model loaded.")
 
 
-def set_device(option):
-    global device
-    device = option
+def set_device(device: str):
+    global torch_device
+    if device == "cuda" or device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    torch_device = device
 
 
 def translate_language(text, from_code, to_code):
@@ -193,7 +201,8 @@ def translate_language(text, from_code, to_code):
     source_sents_subworded = [[src_prefix] + source_sents_subworded]
 
     # Translate the source sentences
-    translations = translator.translate_batch(source_sents_subworded, target_prefix=target_prefix, batch_type="tokens", max_batch_size=2024, beam_size=beam_size, max_input_length=2048)
+    translations = translator.translate_batch(source_sents_subworded, target_prefix=target_prefix, batch_type="tokens",
+                                              max_batch_size=2024, beam_size=beam_size, max_input_length=2048)
     translations = [translation[0]['tokens'] for translation in translations]
 
     # Desubword the target sentences

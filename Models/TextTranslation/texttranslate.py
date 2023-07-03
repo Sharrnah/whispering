@@ -31,7 +31,7 @@ def convert_to_romaji(text):
 def InstallLanguages():
     match get_current_translator():
         case "M2M100":
-            texttranslateM2M100_CTranslate2.load_model(settings.GetOption("txt_translator_size"))
+            texttranslateM2M100_CTranslate2.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "NLLB200":
             texttranslateNLLB200.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "NLLB200_CT2":
