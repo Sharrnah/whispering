@@ -278,7 +278,7 @@ class FasterWhisper:
 
     def transcribe(self, audio_sample, task, language, condition_on_previous_text,
                    initial_prompt, logprob_threshold, no_speech_threshold,
-                   temperature, beam_size) -> dict:
+                   temperature, beam_size, word_timestamps, without_timestamps) -> dict:
 
         result_segments, audio_info = self.model.transcribe(audio_sample, task=task,
                                                             language=language,
@@ -288,7 +288,8 @@ class FasterWhisper:
                                                             no_speech_threshold=no_speech_threshold,
                                                             temperature=temperature,
                                                             beam_size=beam_size,
-                                                            without_timestamps=True
+                                                            word_timestamps=word_timestamps,
+                                                            without_timestamps=without_timestamps
                                                             )
 
         result = {

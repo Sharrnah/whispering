@@ -250,6 +250,8 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
     whisper_no_speech_threshold = settings.GetOption("no_speech_threshold")
     whisper_beam_size = settings.GetOption("beam_size")
     whisper_beam_size_realtime = settings.GetOption("realtime_whisper_beam_size")
+    whisper_word_timestamps = settings.GetOption("word_timestamps")
+    whisper_faster_without_timestamps = settings.GetOption("faster_without_timestamps")
 
     whisper_temperature_fallback = settings.GetOption("temperature_fallback")
     whisper_temperature_fallback_option = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
@@ -310,8 +312,8 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                          no_speech_threshold=whisper_no_speech_threshold,
                                                          fp16=realtime_whisper_fp16,
                                                          temperature=whisper_temperature_fallback_realtime_option,
-                                                         beam_size=whisper_beam_size_realtime
-                                                         )
+                                                         beam_size=whisper_beam_size_realtime,
+                                                         word_timestamps=whisper_word_timestamps)
             else:
                 result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
                                                 condition_on_previous_text=whisper_condition_on_previous_text,
@@ -320,8 +322,8 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                 no_speech_threshold=whisper_no_speech_threshold,
                                                 fp16=whisper_fp16,
                                                 temperature=whisper_temperature_fallback_option,
-                                                beam_size=whisper_beam_size
-                                                )
+                                                beam_size=whisper_beam_size,
+                                                word_timestamps=whisper_word_timestamps)
         elif settings.GetOption("stt_type") == "faster_whisper":
             # faster whisper
             if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
@@ -332,8 +334,9 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                          logprob_threshold=whisper_logprob_threshold,
                                                          no_speech_threshold=whisper_no_speech_threshold,
                                                          temperature=whisper_temperature_fallback_realtime_option,
-                                                         beam_size=whisper_beam_size_realtime
-                                                         )
+                                                         beam_size=whisper_beam_size_realtime,
+                                                         word_timestamps=whisper_word_timestamps,
+                                                         without_timestamps=whisper_faster_without_timestamps)
 
             else:
                 result = audio_model.transcribe(audio_sample, task=whisper_task,
@@ -343,7 +346,9 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                 logprob_threshold=whisper_logprob_threshold,
                                                 no_speech_threshold=whisper_no_speech_threshold,
                                                 temperature=whisper_temperature_fallback_option,
-                                                beam_size=whisper_beam_size)
+                                                beam_size=whisper_beam_size,
+                                                word_timestamps=whisper_word_timestamps,
+                                                without_timestamps=whisper_faster_without_timestamps)
         elif settings.GetOption("stt_type") == "speech_t5":
             # microsoft SpeechT5
             result = audio_model.transcribe(audio_sample)

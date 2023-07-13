@@ -45,7 +45,6 @@ TRANSLATE_SETTINGS = {
     "logprob_threshold": "-1.0",
     "no_speech_threshold": "0.6",
     "whisper_precision": "float32",  # for original Whisper can be "float16" or "float32", for faster-whisper "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
-    #"faster_whisper": True,  # Set to True to use faster whisper.
     "stt_type": "faster_whisper",  # can be "faster_whisper", "original_whisper" or "speech_t5".
     "temperature_fallback": True,  # Set to False to disable temperature fallback which is the reason for some slowdowns, but decreases quality.
     "beam_size": 5,  # Beam size for beam search. (higher = more accurate, but slower)
@@ -57,6 +56,8 @@ TRANSLATE_SETTINGS = {
     "vad_num_samples": 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
     "vad_thread_num": 1,  # number of threads to use for VAD.
     "push_to_talk_key": "",  # Push to talk key. (empty or None to disable)
+    "word_timestamps": False,  # if enabled, Whisper will add timestamps to the transcribed text.
+    "faster_without_timestamps": False,  # if enabled, faster whisper will only sample text tokens. (only when using stt_type=faster_whisper)
 
     "realtime": False,  # if enabled, Whisper will process audio in realtime.
     "realtime_whisper_model": "",  # model used for realtime transcription. (empty for using same model as model setting)
