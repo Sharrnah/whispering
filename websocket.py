@@ -21,6 +21,8 @@ UI_CONNECTED = {"value": False, "websocket": None}
 
 LOADING_QUEUE = {}
 
+DEBUG = False
+
 
 def tts_request(msgObj, websocket):
     silero_wav, sample_rate = silero.tts.tts(msgObj["value"]["text"])
@@ -114,12 +116,12 @@ def ocr_req(msgObj, websocket):
             {"type": "ocr_result", "data": {"bounding_boxes": bounding_boxes, "image_data": image_data}}))
 
 
-def plugin_event_handler(msgObj):
+def plugin_event_handler(msgObj, websocket):
     pluginClassName = msgObj["name"]
     for plugin_inst in Plugins.plugins:
         if pluginClassName == type(plugin_inst).__name__:
             if hasattr(plugin_inst, 'on_event_received'):
-                plugin_inst.on_event_received(msgObj)
+                plugin_inst.on_event_received(msgObj, websocket)
                 return
 
 
@@ -191,9 +193,13 @@ def websocketMessageHandler(msgObj, websocket):
 
     # plugin event handler
     if msgObj["type"] == "plugin_button_press":
-        plugin_event_thread = threading.Thread(target=plugin_event_handler, args=(msgObj,))
+        plugin_event_thread = threading.Thread(target=plugin_event_handler, args=(msgObj, websocket,))
         plugin_event_thread.start()
         #plugin_event_handler(msgObj)
+
+    if msgObj["type"] == "plugin_custom_event":
+        plugin_event_thread = threading.Thread(target=plugin_event_handler, args=(msgObj, websocket,))
+        plugin_event_thread.start()
 
     if msgObj["type"] == "quit":
         print("Received quit command.")
@@ -233,10 +239,19 @@ async def handler(websocket):
     try:
         async for message in websocket:
             msgObj = json.loads(message)
-            try:
-                print(message.encode('utf-8'))
-            except:
-                print("???")
+            # commented out as this can cause issues (especially base64 encoded data
+            # [new messages get silently ignored])
+            # try:
+            #     print(message.encode('utf-8'))
+            # except:
+            #     print("???")
+            if DEBUG:
+                try:
+                    if "type" in msgObj:
+                        print("Received WS message:", msgObj["type"])
+                except:
+                    print("Received WS message: ???")
+
             websocketMessageHandler(msgObj, websocket)
 
         await websocket.wait_closed()
@@ -251,6 +266,13 @@ async def handler(websocket):
 
 
 async def send(websocket, message):
+    if DEBUG:
+        try:
+            if "type" in message:
+                print("Send WS message:", message["type"])
+        except:
+            print("Send WS message: ???")
+
     try:
         await websocket.send(message)
     except websockets.ConnectionClosed:
@@ -258,6 +280,13 @@ async def send(websocket, message):
 
 
 async def broadcast(message, exclude_client=None):
+    if DEBUG:
+        try:
+            if "type" in message:
+                print("broadcast WS message:", message["type"])
+        except:
+            print("broadcast WS message: ???")
+
     for websocket in WS_CLIENTS:
         if websocket != exclude_client:
             asyncio.create_task(send(websocket, message))
@@ -290,7 +319,7 @@ def BroadcastMessage(message, exclude_client=None):
 
 
 async def server_program(ip, port):
-    async with websockets.serve(handler, ip, port):
+    async with websockets.serve(handler, ip, port, max_size=1_000_000_000, timeout=120, close_timeout=120):
         print('Websocket: Server started.')
         await asyncio.Future()  # run forever
 

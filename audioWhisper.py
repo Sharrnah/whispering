@@ -55,6 +55,8 @@ import sounddevice as sd
 
 import wave
 
+from Models.STS import DeepFilterNet
+
 
 def save_to_wav(data, filename, sample_rate, channels=1):
     with wave.open(filename, 'wb') as wf:
@@ -106,12 +108,12 @@ def int2float(sound):
     return sound
 
 
-def call_plugin_timer(Plugins):
+def call_plugin_timer(plugins):
     # Call the method every x seconds
-    timer = threading.Timer(settings.GetOption("plugin_timer"), call_plugin_timer, args=[Plugins])
+    timer = threading.Timer(settings.GetOption("plugin_timer"), call_plugin_timer, args=[plugins])
     timer.start()
     if not settings.GetOption("plugin_timer_stopped"):
-        for plugin_inst in Plugins.plugins:
+        for plugin_inst in plugins.plugins:
             if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'timer'):
                 plugin_inst.timer()
     else:
@@ -123,6 +125,12 @@ def call_plugin_timer(Plugins):
             if settings.GetOption("plugin_current_timer") <= 0.0:
                 settings.SetOption("plugin_timer_stopped", False)
                 settings.SetOption("plugin_current_timer", 0.0)
+
+
+def call_plugin_sts(plugins, wavefiledata, sample_rate):
+    for plugin_inst in plugins.plugins:
+        if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'sts'):
+            plugin_inst.sts(wavefiledata, sample_rate)
 
 
 def audio_bytes_to_wav(audio_bytes):
@@ -534,8 +542,13 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
 
     # initialize plugins
     import Plugins
+    print("initializing plugins...")
     for plugin_inst in Plugins.plugins:
         plugin_inst.init()
+        if plugin_inst.is_enabled(False):
+            print(plugin_inst.__class__.__name__ + " is enabled")
+        else:
+            print(plugin_inst.__class__.__name__ + " is disabled")
 
     # Load textual translation dependencies
     if txt_translator.lower() != "none" and txt_translator != "":
@@ -567,6 +580,14 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
             websocket.set_loading_state("downloading_whisper_model", True)
             faster_whisper.download_model(realtime_whisper_model, realtime_whisper_precision)
             websocket.set_loading_state("downloading_whisper_model", False)
+
+    # load audio filter model
+    audio_enhancer = None
+    if settings.GetOption("denoise_audio"):
+        websocket.set_loading_state("loading_denoiser", True)
+        post_filter = settings.GetOption("denoise_audio_post_filter")
+        audio_enhancer = DeepFilterNet.DeepFilterNet(post_filter=post_filter)
+        websocket.set_loading_state("loading_denoiser", False)
 
     # prepare the plugin timer calls
     call_plugin_timer(Plugins)
@@ -684,8 +705,15 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                     print(full_audio_confidence)
 
                 if (not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold):
+                    # denoise audio
+                    if settings.GetOption("denoise_audio") and audio_enhancer is not None:
+                        wavefiledata = audio_enhancer.enhance_audio(wavefiledata)
+
                     # debug save of audio clip
                     # save_to_wav(wavefiledata, "resampled_audio_chunk.wav", default_sample_rate)
+
+                    # call sts plugin methods
+                    call_plugin_sts(Plugins, wavefiledata, default_sample_rate)
 
                     audioprocessor.q.put(
                         {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': True})
@@ -736,6 +764,11 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                         for i in range(0, len(frames)):
                             clip.append(frames[i])
                         wavefiledata = b''.join(clip)
+
+                        # denoise audio
+                        if settings.GetOption("denoise_audio") and audio_enhancer is not None:
+                            wavefiledata = audio_enhancer.enhance_audio(wavefiledata)
+
                         audioprocessor.q.put(
                             {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': False})
 
@@ -785,6 +818,10 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                 audio = r.listen(source, phrase_time_limit=phrase_time_limit)
 
                 audio_data = audio.get_wav_data()
+
+                # denoise audio
+                if settings.GetOption("denoise_audio") and audio_enhancer is not None:
+                    wavefiledata = audio_enhancer.enhance_audio(wavefiledata)
 
                 # add audio data to the queue
                 audioprocessor.q.put({'time': time.time_ns(), 'data': audio_data, 'final': True})
