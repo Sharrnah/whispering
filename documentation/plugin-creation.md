@@ -21,6 +21,8 @@ So if you want to play a sound when the STT engine returns a result, you should 
 
 The `init` method is called at the initialization of whispering tiger, right after the settings file is loaded.
 
+The _optional_ method `sts` is called when a recording is finished (which is sent to the STT model). This function gets the audio recording to be processed by the plugin.
+
 The _optional_ methods `on_enable` and `on_disable` are called when the plugin is enabled or disabled.
 
 The _optional_ method `stt_intermediate` is only called when a live transcription result is available. Make sure to use the `stt` function for final results.
@@ -135,6 +137,25 @@ class ExamplePlugin(Plugins.Base):
     # called when the "send TTS" function is called
     def tts(self, text, device_index, websocket_connection=None, download=False):
         return
+    
+    # OPTIONAL - called when audio is finished recording and the audio is sent to the STT model
+    def sts(self, wavefiledata, sample_rate):
+        return
+    
+    # OPTIONAL - called when a websocket message is received.
+    # formats are: (where 'ExamplePlugin' is the plugin class name)
+    # {"name": "ExamplePlugin", "type": "plugin_button_press", "value": "button_name"}
+    # {"name": "ExamplePlugin", "type": "plugin_custom_event", "value": []}
+    def on_event_received(self, message, websocket_connection=None):
+        if "type" not in message:
+            return
+        if message["type"] == "plugin_button_press":
+            if message["value"] == "button_name":
+                print("button pressed")
+        if message["type"] == "plugin_custom_event":
+            if message["value"] == "other_event_name":
+                print("custom event received")
+        pass
     
     # OPTIONAL
     def on_enable(self):
