@@ -4,6 +4,7 @@ import asyncio
 import websockets
 import json
 import base64
+import processmanager
 
 from Models.TextTranslation import texttranslate
 from Models.OCR import easyocr
@@ -203,6 +204,7 @@ def websocketMessageHandler(msgObj, websocket):
 
     if msgObj["type"] == "quit":
         print("Received quit command.")
+        processmanager.cleanup_subprocesses()
         sys.exit(0)
 
 

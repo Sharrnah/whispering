@@ -2,10 +2,15 @@ import os
 import sys
 import json
 import traceback
+import processmanager
+import atexit
 
 # set environment variable CT2_CUDA_ALLOW_FP16 to 1 (before ctranslate2 is imported)
 # to allow using FP16 computation on GPU even if the device does not have efficient FP16 support.
 os.environ["CT2_CUDA_ALLOW_FP16"] = "1"
+
+
+atexit.register(processmanager.cleanup_subprocesses)
 
 
 def handle_exception(exc_type, exc_value, exc_traceback):
@@ -78,6 +83,8 @@ os.makedirs(cache_vad_path, exist_ok=True)
 
 
 def sigterm_handler(_signo, _stack_frame):
+    processmanager.cleanup_subprocesses()
+
     # reset process id
     settings.SetOption("process_id", 0)
 
@@ -88,6 +95,7 @@ def sigterm_handler(_signo, _stack_frame):
 
 signal.signal(signal.SIGTERM, sigterm_handler)
 signal.signal(signal.SIGINT, sigterm_handler)
+signal.signal(signal.SIGABRT, sigterm_handler)
 
 
 # Taken from utils_vad.py
