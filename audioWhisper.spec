@@ -6,7 +6,7 @@ import sys ; sys.setrecursionlimit(sys.getrecursionlimit() * 5)
 
 datas = []
 binaries = []
-hiddenimports = ['pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers.models.nllb', 'sentencepiece']
+hiddenimports = ['pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers.models.nllb', 'sentencepiece', 'df.deepfilternet3']
 datas += collect_data_files('torch')
 datas += collect_data_files('whisper')
 datas += collect_data_files('pykakasi')
@@ -21,6 +21,9 @@ datas += copy_metadata('tokenizers')
 datas += copy_metadata('rich')
 datas += copy_metadata('sentencepiece')
 datas += copy_metadata('transformers')
+datas += copy_metadata('huggingface-hub')
+datas += copy_metadata('safetensors')
+datas += copy_metadata('pyyaml')
 tmp_ret = collect_all('easyocr')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('winsdk')
@@ -42,6 +45,8 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('sentencepiece')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('transformers')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('df')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 

@@ -10,6 +10,7 @@ rem             --hidden-import=torchaudio.lib.libtorchaudio ^
 rem             --hidden-import=scipy.signal ^
 rem             --hidden-import=transformers.models.nllb ^
 rem             --hidden-import=sentencepiece ^
+rem             --hidden-import=df.deepfilternet3 ^
 rem             --copy-metadata tqdm ^
 rem             --copy-metadata regex ^
 rem             --copy-metadata requests ^
@@ -20,6 +21,9 @@ rem             --copy-metadata tokenizers ^
 rem             --copy-metadata rich ^
 rem             --copy-metadata sentencepiece ^
 rem             --copy-metadata transformers ^
+rem             --copy-metadata huggingface-hub ^
+rem             --copy-metadata safetensors ^
+rem             --copy-metadata pyyaml ^
 rem             --collect-data whisper ^
 rem             --collect-data pykakasi ^
 rem             --collect-all easyocr ^
@@ -33,6 +37,7 @@ rem             --collect-all librosa ^
 rem             --collect-all torchlibrosa ^
 rem             --collect-all sentencepiece ^
 rem             --collect-all transformers ^
+rem             --collect-all df ^
 rem             -i app-icon.ico
 
 rem set pyrecursivelimit=import sys ; sys.setrecursionlimit(sys.getrecursionlimit() * 5)

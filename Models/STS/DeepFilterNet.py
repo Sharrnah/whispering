@@ -1,8 +1,26 @@
+import os
+from pathlib import Path
+
 from df.enhance import enhance, init_df
 import numpy as np
 import torch
 import audio_tools
 from typing import Union
+
+import downloader
+
+cache_df_path = Path(Path.cwd() / ".cache" / "deepfilternet")
+
+DEEP_FILTER_LINK = {
+    "DeepFilterNet3": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/DeepFilterNet/DeepFilterNet3.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/DeepFilterNet/DeepFilterNet3.zip",
+            "https://s3.libs.space:9000/ai-models/DeepFilterNet/DeepFilterNet3.zip",
+        ],
+        "checksum": "49c52edc8947ae1f9bf50d81530beaf3a2c3245aeaf34b6f31ff535cd22284d2"
+    }
+}
 
 
 class DeepFilterNet:
@@ -10,7 +28,19 @@ class DeepFilterNet:
     df_state = None
 
     def __init__(self, post_filter=False, epoch: Union[str, int, None] = "best"):
-        self.df_model, self.df_state, _ = init_df(post_filter=post_filter, epoch=epoch)
+        os.makedirs(cache_df_path, exist_ok=True)
+
+        model = "DeepFilterNet3"
+        model_path = Path(cache_df_path / model / "checkpoints/model_120.ckpt.best")
+        model_config_path = Path(cache_df_path / model / "config.ini")
+        if not Path(cache_df_path).exists() or not model_path.is_file() or not model_config_path.is_file():
+            print("downloading DeepFilterNet3...")
+            if not downloader.download_extract(DEEP_FILTER_LINK[model]["urls"],
+                                               str(cache_df_path.resolve()),
+                                               DEEP_FILTER_LINK[model]["checksum"], title="DeepFilterNet3 (A.I. Denoise)"):
+                print("Model download failed")
+
+        self.df_model, self.df_state, _ = init_df(model_base_dir=str(Path(cache_df_path / model).resolve()), post_filter=post_filter, epoch=epoch, log_level="none")
         pass
 
     def int2float(self, sound):
