@@ -57,9 +57,7 @@ def subprocess_args(include_stdout=True):
     # with the ``--noconsole`` option requires redirecting everything
     # (stdin, stdout, stderr) to avoid an OSError exception
     # "[Error 6] the handle is invalid."
-    ret.update({'stdin': subprocess.PIPE,
-                'stderr': subprocess.PIPE,
-                'startupinfo': si,
+    ret.update({'startupinfo': si,
                 'env': env})
     return ret
 
