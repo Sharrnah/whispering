@@ -22,7 +22,6 @@ import Models.STT.speecht5 as speech_t5
 # Plugins
 import Plugins
 
-
 # some regular mistakenly recognized words/sentences on mostly silence audio, which are ignored in processing
 ignore_list_file = open(str(Path(Path.cwd() / "ignorelist.txt").resolve()), "r", encoding="utf-8")
 ignore_list = ignore_list_file.readlines()
@@ -162,15 +161,53 @@ def send_message(predicted_text, result_obj, final_audio):
     if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and predicted_text != "":
         osc_notify = final_audio and settings.GetOption("osc_typing_indicator")
 
+        osc_send_type = settings.GetOption("osc_send_type")
+        osc_chat_limit = settings.GetOption("osc_chat_limit")
+        osc_time_limit = settings.GetOption("osc_time_limit")
+        osc_scroll_time_limit = settings.GetOption("osc_scroll_time_limit")
+        osc_initial_time_limit = settings.GetOption("osc_initial_time_limit")
+        osc_scroll_size = settings.GetOption("osc_scroll_size")
+        osc_max_scroll_size = settings.GetOption("osc_max_scroll_size")
+
         osc_text = predicted_text
         if settings.GetOption("osc_type_transfer") == "source":
             osc_text = result_obj["text"]
         elif settings.GetOption("osc_type_transfer") == "both":
             osc_text = result_obj["text"] + settings.GetOption("osc_type_transfer_split") + predicted_text
 
-        VRC_OSCLib.Chat(build_whisper_translation_osc_prefix(result_obj) + osc_text, True, osc_notify, osc_address,
-                        IP=osc_ip, PORT=osc_port,
-                        convert_ascii=settings.GetOption("osc_convert_ascii"))
+        message = build_whisper_translation_osc_prefix(result_obj) + osc_text
+
+        if osc_send_type == "full":
+            VRC_OSCLib.Chat(message, True, osc_notify, osc_address,
+                            IP=osc_ip, PORT=osc_port,
+                            convert_ascii=settings.GetOption("osc_convert_ascii"))
+        elif osc_send_type == "chunks":
+            VRC_OSCLib.Chat_chunks(message,
+                                   nofify=osc_notify, address=osc_address, ip=osc_ip, port=osc_port,
+                                   chunk_size=osc_chat_limit, delay=osc_time_limit,
+                                   initial_delay=osc_initial_time_limit,
+                                   convert_ascii=settings.GetOption("osc_convert_ascii"))
+        elif osc_send_type == "scroll":
+            VRC_OSCLib.Chat_scrolling_chunks(message,
+                                             nofify=osc_notify, address=osc_address, ip=osc_ip, port=osc_port,
+                                             chunk_size=osc_max_scroll_size, delay=osc_scroll_time_limit,
+                                             initial_delay=osc_initial_time_limit,
+                                             scroll_size=osc_scroll_size,
+                                             convert_ascii=settings.GetOption("osc_convert_ascii"))
+        elif osc_send_type == "full_or_scroll":
+            # send full if message fits in osc_chat_limit, otherwise send scrolling chunks
+            if len(message.encode('utf-16le')) <= osc_chat_limit * 2:
+                VRC_OSCLib.Chat(message, True, osc_notify, osc_address,
+                                IP=osc_ip, PORT=osc_port,
+                                convert_ascii=settings.GetOption("osc_convert_ascii"))
+            else:
+                VRC_OSCLib.Chat_scrolling_chunks(message,
+                                                 nofify=osc_notify, address=osc_address, ip=osc_ip, port=osc_port,
+                                                 chunk_size=osc_chat_limit, delay=osc_scroll_time_limit,
+                                                 initial_delay=osc_initial_time_limit,
+                                                 scroll_size=osc_scroll_size,
+                                                 convert_ascii=settings.GetOption("osc_convert_ascii"))
+
         settings.SetOption("plugin_timer_stopped", True)
 
     # Send to Websocket
@@ -242,7 +279,8 @@ def whisper_result_thread(result, audio_timestamp, final_audio):
         websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": False}))
 
 
-def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio):
+def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_model_realtime, last_whisper_result,
+                      final_audio):
     whisper_task = settings.GetOption("whisper_task")
     whisper_language = settings.GetOption("current_language")
     whisper_condition_on_previous_text = settings.GetOption("condition_on_previous_text")
@@ -252,6 +290,9 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
     whisper_beam_size_realtime = settings.GetOption("realtime_whisper_beam_size")
     whisper_word_timestamps = settings.GetOption("word_timestamps")
     whisper_faster_without_timestamps = settings.GetOption("faster_without_timestamps")
+
+    whisper_faster_length_penalty = settings.GetOption("length_penalty")
+    whisper_faster_beam_search_patience = settings.GetOption("beam_search_patience")
 
     whisper_temperature_fallback = settings.GetOption("temperature_fallback")
     whisper_temperature_fallback_option = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
@@ -336,7 +377,9 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                          temperature=whisper_temperature_fallback_realtime_option,
                                                          beam_size=whisper_beam_size_realtime,
                                                          word_timestamps=whisper_word_timestamps,
-                                                         without_timestamps=whisper_faster_without_timestamps)
+                                                         without_timestamps=whisper_faster_without_timestamps,
+                                                         patience=whisper_faster_beam_search_patience,
+                                                         length_penalty=whisper_faster_length_penalty)
 
             else:
                 result = audio_model.transcribe(audio_sample, task=whisper_task,
@@ -348,7 +391,9 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                 temperature=whisper_temperature_fallback_option,
                                                 beam_size=whisper_beam_size,
                                                 word_timestamps=whisper_word_timestamps,
-                                                without_timestamps=whisper_faster_without_timestamps)
+                                                without_timestamps=whisper_faster_without_timestamps,
+                                                patience=whisper_faster_beam_search_patience,
+                                                length_penalty=whisper_faster_length_penalty)
         elif settings.GetOption("stt_type") == "speech_t5":
             # microsoft SpeechT5
             result = audio_model.transcribe(audio_sample)

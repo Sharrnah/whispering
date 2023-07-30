@@ -265,6 +265,259 @@ MODEL_LINKS = {
             "checksum": "c9e889f59cacfef9ebe76a1db5d80befdcf0043195c07734f6984d19e78c8253"
         }
     },
+    # Finetune Models
+    "small.de": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/small.de-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/small.de-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/small.de-ct2-fp16.zip",
+            ],
+            "checksum": "95395a303666f61fa679a7565492b0b852b01773d9aec16fdcda2d523910f1a9"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/small.de-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/small.de-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/small.de-ct2.zip",
+            ],
+            "checksum": "fb182c96410c935b6b15d76aa36e809cb676a454c39b173bce8d9ffd0c9b9bc0"
+        }
+    },
+    "medium.de": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/medium.de-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/medium.de-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/medium.de-ct2-fp16.zip",
+            ],
+            "checksum": "304c23ff13e9674a450efc2e7f7dc4f5ee8ab879c813cc82f1a9cb65f94ec684"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/medium.de-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/medium.de-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/medium.de-ct2.zip",
+            ],
+            "checksum": "f31cbd4771ad7dae5d9c7a3e6b516ca6053220fb0f35052dc0576733f8bec2a7"
+        }
+    },
+    "large-v2.de2": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/large-v2.de2-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/large-v2.de2-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/large-v2.de2-ct2-fp16.zip",
+            ],
+            "checksum": "1b95edeae4b38006f7b58ac3b356bc33a644ff2597f8a3502a0d3740937f2c2b"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/large-v2.de2-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/large-v2.de2-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/large-v2.de2-ct2.zip",
+            ],
+            "checksum": "59f4f4e4c9ab05a56e7169636c47268f873189a35e3e313393dd81cc0d4477ce"
+        }
+    },
+    "small.de-swiss": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/small.de-swiss-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/small.de-swiss-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/small.de-swiss-ct2-fp16.zip",
+            ],
+            "checksum": "3a78e7858798d2c544a78ca75886541d42d264497729605cbfad228b63bc0605"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/small.de-swiss-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/small.de-swiss-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/small.de-swiss-ct2.zip",
+            ],
+            "checksum": "43b80481a77893acee0d32275e388058569bbce8e2c610e502d32a8f1ebd57d4"
+        }
+    },
+    "medium.mix-jpv2": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/medium.mix-jpv2-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/medium.mix-jpv2-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/medium.mix-jpv2-ct2-fp16.zip",
+            ],
+            "checksum": "1ff8084947f2d0d549386763617c03e84ae7f0b5ce03e6ba609e2682842b4232"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/medium.mix-jpv2-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/medium.mix-jpv2-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/medium.mix-jpv2-ct2.zip",
+            ],
+            "checksum": "184c6d9d54327fb272e74f1ef66a59b22e795141cd2918eff7422370171b7601"
+        }
+    },
+    "large-v2.mix-jp": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/large-v2.mix-jp-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/large-v2.mix-jp-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/large-v2.mix-jp-ct2-fp16.zip",
+            ],
+            "checksum": "774c884ace5c4e0d21ed6c49a552bffc7e7bc7ea1d14e7eb46778bf45a1b6228"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/large-v2.mix-jp-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/large-v2.mix-jp-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/large-v2.mix-jp-ct2.zip",
+            ],
+            "checksum": "d91f73ba6a5eb7ab3c7527b51de51739476008befdd754fc8fc795065b580b12"
+        }
+    },
+    "small.jp": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/small.jp-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/small.jp-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/small.jp-ct2-fp16.zip",
+            ],
+            "checksum": "014227a27aeceaaf3b3fe62e99ab9869d70013bb084e3050e66bea4c13f4d4b2"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/small.jp-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/small.jp-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/small.jp-ct2.zip",
+            ],
+            "checksum": "6817811e7549eca3637d11329c251e0e410f3ce373505bec0bc1a524a5157782"
+        }
+    },
+    "medium.jp": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/medium.jp-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/medium.jp-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/medium.jp-ct2-fp16.zip",
+            ],
+            "checksum": "888d57b356bf910e93c4cc40ea124357d087c7f191d99a27211728a118882994"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/medium.jp-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/medium.jp-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/medium.jp-ct2.zip",
+            ],
+            "checksum": "ece7f37b0447aa08664df246ff6b449e6a77a27b645ce8ed22518bf5d12c1f10"
+        }
+    },
+    "large-v2.jp": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/large-v2.jp-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/large-v2.jp-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/large-v2.jp-ct2-fp16.zip",
+            ],
+            "checksum": "ae20c09d8698feb809a4f7e37aa1c3daea786d3bb0c572b5b861c722ef00082b"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/large-v2.jp-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/large-v2.jp-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/large-v2.jp-ct2.zip",
+            ],
+            "checksum": "a555221eada1c35b0df8d4241c988509a525947a6fa3bdcaf8fa8ce8b833fc8c"
+        }
+    },
+    "medium.ko": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/medium.ko-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/medium.ko-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/medium.ko-ct2-fp16.zip",
+            ],
+            "checksum": "e1c8ee9478eff971b0360ec000b2571c63f0b90e48c13aa1d91d79c168807173"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/medium.ko-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/medium.ko-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/medium.ko-ct2.zip",
+            ],
+            "checksum": "c93ac81a78a29da4acd10da6d7f5b6c92f0d495f12c5bbb60b7069fbed499834"
+        }
+    },
+    "large-v2.ko": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/large-v2.ko-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/large-v2.ko-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/large-v2.ko-ct2-fp16.zip",
+            ],
+            "checksum": "5c1638e38a3d8ffcbc2f09f92c381c7cca9a83fc5ad8f4e6fbe4891f10a91094"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/large-v2.ko-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/large-v2.ko-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/large-v2.ko-ct2.zip",
+            ],
+            "checksum": "8878633856ac109e203e11265de60424e0b7a4471f20d54d5b2cc23efc896e01"
+        }
+    },
+    "small.zh": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/small.zh-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/small.zh-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/small.zh-ct2-fp16.zip",
+            ],
+            "checksum": "80c62e46595ef69a57e35c67d7c80adda4fa7d5aa97bb8468c0a23d0d1877b8d"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/small.zh-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/small.zh-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/small.zh-ct2.zip",
+            ],
+            "checksum": "c349846850e13b68f64a851b3fda88113ad4e8f362dad92acd245fad434eece4"
+        }
+    },
+    "medium.zh": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/medium.zh-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/medium.zh-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/medium.zh-ct2-fp16.zip",
+            ],
+            "checksum": "3706cc6e5e2f6740cd34ababdb49191be69a3080b55e23e28d0c6bacae900fc8"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/medium.zh-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/medium.zh-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/medium.zh-ct2.zip",
+            ],
+            "checksum": "69fd0221d27f0b84ecab019db65712766efa184f0f7c888c89193a1c153435de"
+        }
+    },
+    "large-v2.zh": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/large-v2.zh-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/large-v2.zh-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/large-v2.zh-ct2-fp16.zip",
+            ],
+            "checksum": "8ab152261bec1805c7420ba23cfab0467d86e02995eca9ac8cb08b393eeff90a"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/large-v2.zh-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/large-v2.zh-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/large-v2.zh-ct2.zip",
+            ],
+            "checksum": "d12692bb38167d534247cb9aca60a5766435292d5820049f4f257785b7c22a96"
+        }
+    },
 }
 
 TOKENIZER_LINKS = {
@@ -366,7 +619,7 @@ class FasterWhisper:
 
     def transcribe(self, audio_sample, task, language, condition_on_previous_text,
                    initial_prompt, logprob_threshold, no_speech_threshold,
-                   temperature, beam_size, word_timestamps, without_timestamps) -> dict:
+                   temperature, beam_size, word_timestamps, without_timestamps, patience, length_penalty) -> dict:
 
         result_segments, audio_info = self.model.transcribe(audio_sample, task=task,
                                                             language=language,
@@ -377,7 +630,9 @@ class FasterWhisper:
                                                             temperature=temperature,
                                                             beam_size=beam_size,
                                                             word_timestamps=word_timestamps,
-                                                            without_timestamps=without_timestamps
+                                                            without_timestamps=without_timestamps,
+                                                            patience=patience,
+                                                            length_penalty=length_penalty
                                                             )
 
         result = {

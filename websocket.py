@@ -82,9 +82,46 @@ def osc_request(msgObj, websocket):
     osc_ip = settings.GetOption("osc_ip")
     osc_port = settings.GetOption("osc_port")
     osc_notify = settings.GetOption("osc_typing_indicator")
+
+    osc_send_type = settings.GetOption("osc_send_type")
+    osc_chat_limit = settings.GetOption("osc_chat_limit")
+    osc_time_limit = settings.GetOption("osc_time_limit")
+    osc_scroll_time_limit = settings.GetOption("osc_scroll_time_limit")
+    osc_initial_time_limit = settings.GetOption("osc_initial_time_limit")
+    osc_scroll_size = settings.GetOption("osc_scroll_size")
+    osc_max_scroll_size = settings.GetOption("osc_max_scroll_size")
+
     if osc_ip != "0":
-        VRC_OSCLib.Chat(msgObj["value"]["text"], True, osc_notify, osc_address, IP=osc_ip, PORT=osc_port,
-                        convert_ascii=settings.GetOption("osc_convert_ascii"))
+        if osc_send_type == "full":
+            VRC_OSCLib.Chat(msgObj["value"]["text"], True, osc_notify, osc_address, IP=osc_ip, PORT=osc_port,
+                            convert_ascii=settings.GetOption("osc_convert_ascii"))
+        elif osc_send_type == "chunks":
+            VRC_OSCLib.Chat_chunks(msgObj["value"]["text"],
+                                   nofify=osc_notify, address=osc_address, ip=osc_ip, port=osc_port,
+                                   chunk_size=osc_chat_limit, delay=osc_time_limit,
+                                   initial_delay=osc_initial_time_limit,
+                                   convert_ascii=settings.GetOption("osc_convert_ascii"))
+        elif osc_send_type == "scroll":
+            VRC_OSCLib.Chat_scrolling_chunks(msgObj["value"]["text"],
+                                             nofify=osc_notify, address=osc_address, ip=osc_ip, port=osc_port,
+                                             chunk_size=osc_max_scroll_size, delay=osc_scroll_time_limit,
+                                             initial_delay=osc_initial_time_limit,
+                                             scroll_size=osc_scroll_size,
+                                             convert_ascii=settings.GetOption("osc_convert_ascii"))
+        elif osc_send_type == "full_or_scroll":
+            # send full if message fits in osc_chat_limit, otherwise send scrolling chunks
+            if len(msgObj["value"]["text"].encode('utf-16le')) <= osc_chat_limit * 2:
+                VRC_OSCLib.Chat(msgObj["value"]["text"], True, osc_notify, osc_address,
+                                IP=osc_ip, PORT=osc_port,
+                                convert_ascii=settings.GetOption("osc_convert_ascii"))
+            else:
+                VRC_OSCLib.Chat_scrolling_chunks(msgObj["value"]["text"],
+                                                 nofify=osc_notify, address=osc_address, ip=osc_ip, port=osc_port,
+                                                 chunk_size=osc_chat_limit, delay=osc_scroll_time_limit,
+                                                 initial_delay=osc_initial_time_limit,
+                                                 scroll_size=osc_scroll_size,
+                                                 convert_ascii=settings.GetOption("osc_convert_ascii"))
+
         settings.SetOption("plugin_timer_stopped", True)
 
 
@@ -196,7 +233,7 @@ def websocketMessageHandler(msgObj, websocket):
     if msgObj["type"] == "plugin_button_press":
         plugin_event_thread = threading.Thread(target=plugin_event_handler, args=(msgObj, websocket,))
         plugin_event_thread.start()
-        #plugin_event_handler(msgObj)
+        # plugin_event_handler(msgObj)
 
     if msgObj["type"] == "plugin_custom_event":
         plugin_event_thread = threading.Thread(target=plugin_event_handler, args=(msgObj, websocket,))

@@ -33,6 +33,7 @@ TRANSLATE_SETTINGS = {
     "device_out_index": None,  # output device index for TTS
 
     # whisper settings
+    "stt_enabled": True,  # enable STT (if disabled, stops sending audio to whisper)
     "ai_device": None,  # can be None (auto), "cuda" or "cpu".
     "whisper_task": "transcribe",  # Whisper A.I. Can do "transcribe" or "translate"
     "current_language": None,  # can be None (auto) or any Whisper supported language.
@@ -44,6 +45,8 @@ TRANSLATE_SETTINGS = {
     "initial_prompt": "",  # initial prompt for Whisper. for example "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking." will give more filler words.
     "logprob_threshold": "-1.0",
     "no_speech_threshold": "0.6",
+    "length_penalty": 1.0,
+    "beam_search_patience": 1.0,
     "whisper_precision": "float32",  # for original Whisper can be "float16" or "float32", for faster-whisper "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
     "stt_type": "faster_whisper",  # can be "faster_whisper", "original_whisper" or "speech_t5".
     "temperature_fallback": True,  # Set to False to disable temperature fallback which is the reason for some slowdowns, but decreases quality.
@@ -77,6 +80,12 @@ TRANSLATE_SETTINGS = {
     "osc_convert_ascii": False,
     "osc_chat_prefix": "",  # Prefix for OSC messages.
     "osc_chat_limit": 144,  # defines the maximum length of a chat message.
+    "osc_time_limit": 8.0,  # defines the time between OSC messages in seconds.
+    "osc_scroll_time_limit": 1.3,  # defines the scroll time limit for scrolling OSC messages. (only used when osc_send_type is set to "scroll")
+    "osc_initial_time_limit": 10.0,  # defines the initial time after the first message is send.
+    "osc_scroll_size": 3,  # defines the scroll size for scrolling OSC messages. (only used when osc_send_type is set to "scroll")
+    "osc_max_scroll_size": 30,  # defines the maximum scroll size for scrolling OSC messages. ~30 to scroll on only a single line (only used when osc_send_type is set to "scroll")
+    "osc_send_type": "chunks",  # defines the type of OSC messages are send. Can be "scroll", "full_or_scroll", "chunks" or "full". Where "scroll" sends the text scrollung until all is send, "full_or_scroll" to only scroll if it is too long, "chunks" sends the text in chunks and "full" sends the whole text at once.
     "osc_auto_processing_enabled": True,  # Toggle auto sending of OSC messages on WhisperAI results. (not saved)
     "osc_type_transfer": "translation_result",  # defines which type of data to send. Can be "source", "translation_result" or "both".
     "osc_type_transfer_split": " 🌐 ",  # defines how source and translation results are split. (only used when osc_type_transfer is set to "both")
@@ -106,17 +115,24 @@ TRANSLATE_SETTINGS = {
     "plugin_current_timer": 0.0
 }
 
+NON_PERSISTENT_SETTINGS = ["stt_enabled", "whisper_languages", "lang_swap", "verbose",
+                           "transl_result_textarea_savetts_voice", "transl_result_textarea_sendtts_download",
+                           "plugin_timer_stopped", "plugin_current_timer", "websocket_final_messages",
+                           "device_default_in_index", "device_default_out_index", "ui_download"]
+
 
 def SetOption(setting, value):
     if setting in TRANSLATE_SETTINGS:
         if TRANSLATE_SETTINGS[setting] != value:
             TRANSLATE_SETTINGS[setting] = value
             # Save settings
-            SaveYaml(SETTINGS_PATH)
+            if TRANSLATE_SETTINGS[setting] not in NON_PERSISTENT_SETTINGS:
+                SaveYaml(SETTINGS_PATH)
     else:
         TRANSLATE_SETTINGS[setting] = value
         # Save settings
-        SaveYaml(SETTINGS_PATH)
+        if TRANSLATE_SETTINGS[setting] not in NON_PERSISTENT_SETTINGS:
+            SaveYaml(SETTINGS_PATH)
     return value
 
 
@@ -133,29 +149,10 @@ def LoadYaml(path):
 def SaveYaml(path):
     to_save_settings = TRANSLATE_SETTINGS.copy()
 
-    # Remove settings that are not saved
-    if "whisper_languages" in to_save_settings:
-        del to_save_settings['whisper_languages']
-    if "lang_swap" in to_save_settings:
-        del to_save_settings['lang_swap']
-    if "verbose" in to_save_settings:
-        del to_save_settings['verbose']
-    if "transl_result_textarea_savetts_voice" in to_save_settings:
-        del to_save_settings['transl_result_textarea_savetts_voice']
-    if "transl_result_textarea_sendtts_download" in to_save_settings:
-        del to_save_settings['transl_result_textarea_sendtts_download']
-    if "plugin_timer_stopped" in to_save_settings:
-        del to_save_settings['plugin_timer_stopped']
-    if "plugin_current_timer" in to_save_settings:
-        del to_save_settings['plugin_current_timer']
-    if "websocket_final_messages" in to_save_settings:
-        del to_save_settings['websocket_final_messages']
-    if "device_default_in_index" in to_save_settings:
-        del to_save_settings['device_default_in_index']
-    if "device_default_out_index" in to_save_settings:
-        del to_save_settings['device_default_out_index']
-    if "ui_download" in to_save_settings:
-        del to_save_settings['ui_download']
+    # Remove settings that are in NON_PERSISTENT_SETTINGS
+    for setting in NON_PERSISTENT_SETTINGS:
+        if setting in to_save_settings:
+            del to_save_settings[setting]
 
     with open(path, "w", encoding="utf-8") as f:
         yaml.dump(to_save_settings, f)
@@ -173,10 +170,32 @@ def GetArgumentSettingFallback(ctx, argument_name, fallback_setting_name):
         return GetOption(fallback_setting_name)
 
 
+def get_available_models():
+    available_models_list = available_models()
+
+    # add custom models to list
+    if GetOption("stt_type") == "faster_whisper":
+        available_models_list.insert(0, "small.de")
+        available_models_list.insert(0, "medium.de")
+        available_models_list.insert(0, "large-v2.de2")
+        available_models_list.insert(0, "small.de-swiss")
+        available_models_list.insert(0, "medium.mix-jpv2")
+        available_models_list.insert(0, "large-v2.mix-jp")
+        available_models_list.insert(0, "small.jp")
+        available_models_list.insert(0, "medium.jp")
+        available_models_list.insert(0, "large-v2.jp")
+        available_models_list.insert(0, "medium.ko")
+        available_models_list.insert(0, "large-v2.ko")
+        available_models_list.insert(0, "small.zh")
+        available_models_list.insert(0, "medium.zh")
+        available_models_list.insert(0, "large-v2.zh")
+    return available_models_list
+
+
 def GetAvailableSettingValues():
     possible_settings = {
         "ai_device": ["None", "cuda", "cpu"],
-        "model": available_models(),
+        "model": get_available_models(),
         "whisper_task": ["transcribe", "translate"],
         "stt_type": ["faster_whisper", "original_whisper", "speech_t5"],
         "tts_ai_device": ["cuda", "cpu"],
@@ -188,10 +207,11 @@ def GetAvailableSettingValues():
         "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
         #"whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16"],
         "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
-        "realtime_whisper_model": [""] + available_models(),
+        "realtime_whisper_model": [""] + get_available_models(),
         #"realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16"],
         "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
         "osc_type_transfer": ["source", "translation_result", "both"],
+        "osc_send_type": ["full", "full_or_scroll", "scroll", "chunks"],
     }
 
     return possible_settings

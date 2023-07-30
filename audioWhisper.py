@@ -420,6 +420,9 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
 
     settings.SetOption("ui_download", ui_download)
 
+    # enable stt by default
+    settings.SetOption("stt_enabled", True)
+
     # set initial settings
     settings.SetOption("whisper_task", settings.GetArgumentSettingFallback(ctx, "task", "whisper_task"))
 
@@ -663,6 +666,10 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
         keyboard_rec_force_stop = False
 
         while continue_recording:
+            if not settings.GetOption("stt_enabled"):
+                time.sleep(0.1)
+                continue
+
             phrase_time_limit = settings.GetOption("phrase_time_limit")
             pause = settings.GetOption("pause")
             energy = settings.GetOption("energy")
@@ -813,6 +820,10 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
             audioprocessor.start_whisper_thread()
 
             while True:
+                if not settings.GetOption("stt_enabled"):
+                    time.sleep(0.1)
+                    continue
+
                 phrase_time_limit = settings.GetOption("phrase_time_limit")
                 if phrase_time_limit == 0:
                     phrase_time_limit = None
