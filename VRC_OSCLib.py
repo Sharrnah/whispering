@@ -136,7 +136,7 @@ def Chat_chunks(data="example", chunk_size=144, delay=1., initial_delay=1., nofi
 
     stop_flag = False
 
-    thread = threading.Thread(target=send_chunks, args=(data, chunk_size, delay, initial_delay, nofify, address, ip, port, convert_ascii))
+    thread = threading.Thread(target=send_chunks_v2, args=(data, chunk_size, delay, initial_delay, nofify, address, ip, port, convert_ascii))
     thread.start()
 
 
@@ -176,6 +176,63 @@ def send_chunks(text, chunk_size=144, delay=1., initial_delay=1., nofify=True, a
 
         # Convert chunk back to string
         chunk = chunk_utf16.decode('utf-16le')
+
+        # Send the chunk to the API
+        Chat(chunk, send=True, nofify=(nofify and i == 0), address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)
+
+        # Wait for the specified delay
+        if i == 0:
+            time.sleep(initial_delay)
+        else:
+            time.sleep(delay)
+
+
+def split_words(text, chunk_size):
+    words = text.split()
+    chunks = []
+    current_chunk = ""
+
+    for word in words:
+        # If a word is longer than the chunk size, split it into parts
+        while len(word.encode('utf-16')) > (chunk_size - 6)*2:
+            part, word = word[:(chunk_size - 6)//2], word[(chunk_size - 6)//2:]
+            chunks.append(current_chunk + " " + part if current_chunk else part)
+            current_chunk = ""
+
+        # Adding 2 to account for the space that will be added, and 6 for the dots, all converted to UTF-16
+        if len((current_chunk + word + " ...").encode('utf-16')) <= chunk_size*2:
+            # Add the word to the current chunk
+            if current_chunk != "":
+                current_chunk += " "
+            current_chunk += word
+        else:
+            # The current word would make the chunk too long, so it's time to start a new chunk
+            chunks.append(current_chunk)
+            current_chunk = word
+
+    # Don't forget to add the last chunk
+    if current_chunk != "":
+        chunks.append(current_chunk)
+
+    return chunks
+
+
+def send_chunks_v2(text, chunk_size=144, delay=1., initial_delay=1., nofify=True, address="/chatbox/input", ip='127.0.0.1', port=9000, convert_ascii=False):
+    # Send the full text if it fits into a single chunk
+    if len(text.encode('utf-16')) <= chunk_size*2:
+        Chat(text, send=True, nofify=nofify, address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)
+        return
+
+    chunks = split_words(text, chunk_size)
+    for i, chunk in enumerate(chunks):
+        if stop_flag:
+            break
+
+        # Add dots to indicate continuation
+        if i != 0:
+            chunk = "..." + chunk
+        if i != len(chunks) - 1:
+            chunk = chunk + "..."
 
         # Send the chunk to the API
         Chat(chunk, send=True, nofify=(nofify and i == 0), address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)

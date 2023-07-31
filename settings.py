@@ -80,9 +80,9 @@ TRANSLATE_SETTINGS = {
     "osc_convert_ascii": False,
     "osc_chat_prefix": "",  # Prefix for OSC messages.
     "osc_chat_limit": 144,  # defines the maximum length of a chat message.
-    "osc_time_limit": 8.0,  # defines the time between OSC messages in seconds.
+    "osc_time_limit": 15.0,  # defines the time between OSC messages in seconds.
     "osc_scroll_time_limit": 1.3,  # defines the scroll time limit for scrolling OSC messages. (only used when osc_send_type is set to "scroll")
-    "osc_initial_time_limit": 10.0,  # defines the initial time after the first message is send.
+    "osc_initial_time_limit": 15.0,  # defines the initial time after the first message is send.
     "osc_scroll_size": 3,  # defines the scroll size for scrolling OSC messages. (only used when osc_send_type is set to "scroll")
     "osc_max_scroll_size": 30,  # defines the maximum scroll size for scrolling OSC messages. ~30 to scroll on only a single line (only used when osc_send_type is set to "scroll")
     "osc_send_type": "chunks",  # defines the type of OSC messages are send. Can be "scroll", "full_or_scroll", "chunks" or "full". Where "scroll" sends the text scrollung until all is send, "full_or_scroll" to only scroll if it is too long, "chunks" sends the text in chunks and "full" sends the whole text at once.

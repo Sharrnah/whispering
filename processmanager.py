@@ -57,15 +57,38 @@ def subprocess_args(include_stdout=True):
     # with the ``--noconsole`` option requires redirecting everything
     # (stdin, stdout, stderr) to avoid an OSError exception
     # "[Error 6] the handle is invalid."
+    #ret.update({'stdin': subprocess.PIPE,
+    #            'stderr': subprocess.PIPE,
+    #            'startupinfo': si,
+    #            'env': env})
     ret.update({'startupinfo': si,
                 'env': env})
     return ret
 
 
+# This function will be run in a separate thread for each stream (stdout, stderr)
+# It will read data from the stream in a loop and put it into the queue
+def reader_thread(stream):
+    for line in iter(stream.readline, b''):
+        try:
+            print(line.decode(errors='replace'), end='')
+        except UnicodeEncodeError:
+            continue
+
+
 def run_process(process_arguments, include_stdout=False):
     # run command line tool with parameters
     try:
-        process = subprocess.Popen(process_arguments, **subprocess_args(include_stdout), close_fds=True)
+        process = subprocess.Popen(process_arguments, **subprocess_args(include_stdout), close_fds=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        # Start the reader threads
+        if process.stdout is not None:
+            out_thread = threading.Thread(target=reader_thread, args=(process.stdout,))
+            out_thread.start()
+        if process.stderr is not None:
+            err_thread = threading.Thread(target=reader_thread, args=(process.stderr,))
+            err_thread.start()
+
         all_processes.append(process)
         return process
 
