@@ -126,69 +126,8 @@ def Chat(data="example", send=True, nofify=True, address="/chatbox/input", IP='1
     client.send(m)
 
 
-def Chat_chunks(data="example", chunk_size=144, delay=1., initial_delay=1., nofify=True, address="/chatbox/input", ip='127.0.0.1', port=9000, convert_ascii=False):
-    global thread, stop_flag
-
-    # stop thread
-    if thread and thread.is_alive():
-        stop_flag = True
-        thread.join()
-
-    stop_flag = False
-
-    thread = threading.Thread(target=send_chunks_v2, args=(data, chunk_size, delay, initial_delay, nofify, address, ip, port, convert_ascii))
-    thread.start()
-
-
-def Chat_scrolling_chunks(data="example", chunk_size=144, delay=1., initial_delay=1., scroll_size=1, nofify=True, address="/chatbox/input", ip='127.0.0.1', port=9000, convert_ascii=False):
-    global thread, stop_flag
-
-    # stop thread
-    if thread and thread.is_alive():
-        stop_flag = True
-        thread.join()
-
-    stop_flag = False
-
-    thread = threading.Thread(target=send_scrolling_chunks, args=(data, chunk_size, delay, initial_delay, scroll_size, nofify, address, ip, port, convert_ascii))
-    thread.start()
-
-
 def count_utf16_code_units(s):
     return len(s.encode('utf-16le')) // 2
-
-
-# send chat by chunks
-def send_chunks(text, chunk_size=144, delay=1., initial_delay=1., nofify=True, address="/chatbox/input", ip='127.0.0.1', port=9000, convert_ascii=False):
-    # Convert text to list of UTF-16 code units
-    text_utf16 = text.encode('utf-16le')
-
-    # Check if text is shorter than chunk_size
-    if count_utf16_code_units(text) <= chunk_size:
-        Chat(text, send=True, nofify=nofify, address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)
-        return
-
-    # Calculate the number of chunks
-    num_chunks = count_utf16_code_units(text) // chunk_size + (count_utf16_code_units(text) % chunk_size != 0)
-
-    for i in range(num_chunks):
-        if stop_flag:
-            break
-
-        # Get the current chunk
-        chunk = text[i*chunk_size:(i+1)*chunk_size]
-
-        # Convert chunk back to string
-        chunk = chunk.decode('utf-16le')
-
-        # Send the chunk to the API
-        Chat(chunk, send=True, nofify=(nofify and i == 0), address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)
-
-        # Wait for the specified delay
-        if i == 0:
-            time.sleep(initial_delay)
-        else:
-            time.sleep(delay)
 
 
 def split_words(text, chunk_size):
@@ -228,6 +167,75 @@ def split_words(text, chunk_size):
     return chunks
 
 
+def sleep_while_checking_stop_flag(delay):
+    start_time = time.time()
+    while time.time() - start_time < delay:
+        if stop_flag:
+            return
+        time.sleep(0.1)  # check every 100ms
+
+
+def Chat_chunks(data="example", chunk_size=144, delay=1., initial_delay=1., nofify=True, address="/chatbox/input", ip='127.0.0.1', port=9000, convert_ascii=False):
+    global thread, stop_flag
+
+    # stop thread
+    if thread and thread.is_alive():
+        stop_flag = True
+        thread.join()
+
+    stop_flag = False
+
+    thread = threading.Thread(target=send_chunks_v2, args=(data, chunk_size, delay, initial_delay, nofify, address, ip, port, convert_ascii))
+    thread.start()
+
+
+def Chat_scrolling_chunks(data="example", chunk_size=144, delay=1., initial_delay=1., scroll_size=1, nofify=True, address="/chatbox/input", ip='127.0.0.1', port=9000, convert_ascii=False):
+    global thread, stop_flag
+
+    # stop thread
+    if thread and thread.is_alive():
+        stop_flag = True
+        thread.join()
+
+    stop_flag = False
+
+    thread = threading.Thread(target=send_scrolling_chunks, args=(data, chunk_size, delay, initial_delay, scroll_size, nofify, address, ip, port, convert_ascii))
+    thread.start()
+
+
+# send chat by chunks
+def send_chunks(text, chunk_size=144, delay=1., initial_delay=1., nofify=True, address="/chatbox/input", ip='127.0.0.1', port=9000, convert_ascii=False):
+    # Convert text to list of UTF-16 code units
+    text_utf16 = text.encode('utf-16le')
+
+    # Check if text is shorter than chunk_size
+    if count_utf16_code_units(text) <= chunk_size:
+        Chat(text, send=True, nofify=nofify, address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)
+        return
+
+    # Calculate the number of chunks
+    num_chunks = count_utf16_code_units(text) // chunk_size + (count_utf16_code_units(text) % chunk_size != 0)
+
+    for i in range(num_chunks):
+        if stop_flag:
+            break
+
+        # Get the current chunk
+        chunk = text[i*chunk_size:(i+1)*chunk_size]
+
+        # Convert chunk back to string
+        chunk = chunk.decode('utf-16le')
+
+        # Send the chunk to the API
+        Chat(chunk, send=True, nofify=(nofify and i == 0), address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)
+
+        # Wait for the specified delay
+        if i == 0:
+            sleep_while_checking_stop_flag(initial_delay)
+        else:
+            sleep_while_checking_stop_flag(delay)
+
+
 def send_chunks_v2(text, chunk_size=144, delay=1., initial_delay=1., nofify=True, address="/chatbox/input", ip='127.0.0.1', port=9000, convert_ascii=False):
     # Send the full text if it fits into a single chunk
     if count_utf16_code_units(text) <= chunk_size:
@@ -250,9 +258,9 @@ def send_chunks_v2(text, chunk_size=144, delay=1., initial_delay=1., nofify=True
 
         # Wait for the specified delay
         if i == 0:
-            time.sleep(initial_delay)
+            sleep_while_checking_stop_flag(initial_delay)
         else:
-            time.sleep(delay)
+            sleep_while_checking_stop_flag(delay)
 
 
 # send chat by scrolling chunks
@@ -283,7 +291,7 @@ def send_scrolling_chunks(text, chunk_size=144, delay=1., initial_delay=1., scro
 
         # Wait for the specified delay
         if i == 0:
-            time.sleep(initial_delay)
+            sleep_while_checking_stop_flag(initial_delay)
         else:
-            time.sleep(delay)
+            sleep_while_checking_stop_flag(delay)
 
