@@ -266,6 +266,42 @@ MODEL_LINKS = {
         }
     },
     # Finetune Models
+    "small.eu": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/small.eu-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/small.eu-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/small.eu-ct2-fp16.zip",
+            ],
+            "checksum": "1995e89cd91f8905cc58af91ffca79ca357c8ed2deb76a9b8b9b37b973bb6686"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/small.eu-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/small.eu-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/small.eu-ct2.zip",
+            ],
+            "checksum": "56d4a47df698ba532569efe62951ca78ef8dc9f8e9565fe0b1605eea1f7f3d0e"
+        }
+    },
+    "medium.eu": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/medium.eu-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/medium.eu-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/medium.eu-ct2-fp16.zip",
+            ],
+            "checksum": "8a0e05afcf804b5c5c2a0de2fe028073d9f26c84f7da774c18ba4baa12aafb6e"
+        },
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/finetune/medium.eu-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/finetune/medium.eu-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/finetune/medium.eu-ct2.zip",
+            ],
+            "checksum": "d56fd31e48e0be8cadc93a1afa8193d4663cd8b6c13dc14a919f79c9c122d721"
+        }
+    },
     "small.de": {
         "float16": {
             "urls": [

@@ -56,7 +56,7 @@ TRANSLATE_SETTINGS = {
     "vad_enabled": True,  # Enable Voice activity detection (VAD)
     "vad_on_full_clip": False,  # Make an additional VAD check on the full clip (Not only on each frame).
     "vad_confidence_threshold": "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
-    "vad_num_samples": 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
+    "vad_num_samples": 1536,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
     "vad_thread_num": 1,  # number of threads to use for VAD.
     "push_to_talk_key": "",  # Push to talk key. (empty or None to disable)
     "word_timestamps": False,  # if enabled, Whisper will add timestamps to the transcribed text.
@@ -175,6 +175,8 @@ def get_available_models():
 
     # add custom models to list
     if GetOption("stt_type") == "faster_whisper":
+        available_models_list.insert(0, "small.eu")
+        available_models_list.insert(0, "medium.eu")
         available_models_list.insert(0, "small.de")
         available_models_list.insert(0, "medium.de")
         available_models_list.insert(0, "large-v2.de2")
