@@ -154,28 +154,32 @@ def Chat_scrolling_chunks(data="example", chunk_size=144, delay=1., initial_dela
     thread.start()
 
 
+def count_utf16_code_units(s):
+    return len(s.encode('utf-16le')) // 2
+
+
 # send chat by chunks
 def send_chunks(text, chunk_size=144, delay=1., initial_delay=1., nofify=True, address="/chatbox/input", ip='127.0.0.1', port=9000, convert_ascii=False):
     # Convert text to list of UTF-16 code units
     text_utf16 = text.encode('utf-16le')
 
     # Check if text is shorter than chunk_size
-    if len(text_utf16) <= chunk_size * 2:
+    if count_utf16_code_units(text) <= chunk_size:
         Chat(text, send=True, nofify=nofify, address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)
         return
 
     # Calculate the number of chunks
-    num_chunks = len(text_utf16) // (chunk_size * 2) + (len(text_utf16) % (chunk_size * 2) != 0)
+    num_chunks = count_utf16_code_units(text) // chunk_size + (count_utf16_code_units(text) % chunk_size != 0)
 
     for i in range(num_chunks):
         if stop_flag:
             break
 
         # Get the current chunk
-        chunk_utf16 = text_utf16[i*chunk_size*2:(i+1)*chunk_size*2]
+        chunk = text[i*chunk_size:(i+1)*chunk_size]
 
         # Convert chunk back to string
-        chunk = chunk_utf16.decode('utf-16le')
+        chunk = chunk.decode('utf-16le')
 
         # Send the chunk to the API
         Chat(chunk, send=True, nofify=(nofify and i == 0), address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)
@@ -192,15 +196,22 @@ def split_words(text, chunk_size):
     chunks = []
     current_chunk = ""
 
-    for word in words:
+    for i, word in enumerate(words):
         # If a word is longer than the chunk size, split it into parts
-        while len(word.encode('utf-16')) > (chunk_size - 6)*2:
-            part, word = word[:(chunk_size - 6)//2], word[(chunk_size - 6)//2:]
+        while count_utf16_code_units(word) > chunk_size - 6:
+            part, word = word[:chunk_size - 6], word[chunk_size - 6:]
             chunks.append(current_chunk + " " + part if current_chunk else part)
-            current_chunk = ""
+            current_chunk = word
 
-        # Adding 2 to account for the space that will be added, and 6 for the dots, all converted to UTF-16
-        if len((current_chunk + word + " ...").encode('utf-16')) <= chunk_size*2:
+        # Check if there is a previous chunk and will be a next chunk
+        if i != 0 and i != len(words) - 1:
+            # Adding 2 to account for the space that will be added, and 6 for the two dots
+            condition = count_utf16_code_units(current_chunk + word + " ... ...") <= chunk_size
+        else:
+            # Adding 1 to account for the space that will be added, and 3 for the dots
+            condition = count_utf16_code_units(current_chunk + word + " ...") <= chunk_size
+
+        if condition:
             # Add the word to the current chunk
             if current_chunk != "":
                 current_chunk += " "
@@ -210,7 +221,7 @@ def split_words(text, chunk_size):
             chunks.append(current_chunk)
             current_chunk = word
 
-    # Don't forget to add the last chunk
+    # Only add the last chunk if it's not an empty string
     if current_chunk != "":
         chunks.append(current_chunk)
 
@@ -219,7 +230,7 @@ def split_words(text, chunk_size):
 
 def send_chunks_v2(text, chunk_size=144, delay=1., initial_delay=1., nofify=True, address="/chatbox/input", ip='127.0.0.1', port=9000, convert_ascii=False):
     # Send the full text if it fits into a single chunk
-    if len(text.encode('utf-16')) <= chunk_size*2:
+    if count_utf16_code_units(text) <= chunk_size:
         Chat(text, send=True, nofify=nofify, address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)
         return
 
@@ -230,9 +241,9 @@ def send_chunks_v2(text, chunk_size=144, delay=1., initial_delay=1., nofify=True
 
         # Add dots to indicate continuation
         if i != 0:
-            chunk = "..." + chunk
+            chunk = "... " + chunk  # Add a space after the dots
         if i != len(chunks) - 1:
-            chunk = chunk + "..."
+            chunk = chunk + " ..."  # Add a space before the dots
 
         # Send the chunk to the API
         Chat(chunk, send=True, nofify=(nofify and i == 0), address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)
@@ -250,12 +261,12 @@ def send_scrolling_chunks(text, chunk_size=144, delay=1., initial_delay=1., scro
     text_utf16 = text.encode('utf-16le')
 
     # Check if text is shorter than chunk_size
-    if len(text_utf16) <= chunk_size * 2:
+    if count_utf16_code_units(text) <= chunk_size:
         Chat(text, send=True, nofify=nofify, address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)
         return
 
     # Calculate the number of chunks
-    num_chunks = (len(text_utf16) - chunk_size * 2) // (scroll_size * 2) + 1
+    num_chunks = (count_utf16_code_units(text) - chunk_size) // scroll_size + 1
 
     for i in range(num_chunks):
         if stop_flag:
