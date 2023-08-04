@@ -526,7 +526,8 @@ def load_model(size="small", compute_type="float32"):
     sentencepiece.load(str(sp_model_path.resolve()))
 
     # load nltk sentence splitting dependency
-    nltk.download('punkt')
+    if not Path(nltk_path / "tokenizers" / "punkt").is_dir() or not Path(nltk_path / "tokenizers" / "punkt" / "english.pickle").is_file():
+        nltk.download('punkt')
 
     # init NLLB 200 model
     model_path_string = str(model_path.resolve())
