@@ -209,3 +209,52 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
         needs_sample_rate_conversion = True
 
     return stream, needs_sample_rate_conversion, recorded_sample_rate, is_mono
+
+
+def remove_silence_parts(audio, sample_rate, silence_threshold=0.03, max_silence_length=30.0, keep_silence_length=0.20):
+        audio_abs = np.abs(audio)
+        above_threshold = audio_abs > silence_threshold
+
+        # Convert length parameters to number of samples
+        max_silence_samples = int(max_silence_length * sample_rate)
+        keep_silence_samples = int(keep_silence_length * sample_rate)
+
+        last_silence_end = 0
+        silence_start = None
+
+        chunks = []
+
+        chunks_count = 0
+
+        for i, sample in enumerate(above_threshold):
+            if not sample:
+                if silence_start is None:
+                    silence_start = i
+            else:
+                if silence_start is not None:
+                    silence_duration = i - silence_start
+                    if silence_duration > max_silence_samples:
+                        # Subtract keep_silence_samples from the start and add it to the end
+                        start = max(last_silence_end - keep_silence_samples, 0)
+                        end = min(silence_start + keep_silence_samples, len(audio))
+                        chunks.append(audio[start:end])
+                        chunks_count += 1
+                        last_silence_end = i
+                    silence_start = None
+
+        # Append the final chunk of audio after the last silence
+        if last_silence_end < len(audio):
+            start = max(last_silence_end - keep_silence_samples, 0)
+            end = len(audio)
+            if silence_start is not None and silence_start < end:
+                # If there is silence at the end of the audio, trim it
+                end = silence_start + keep_silence_samples
+            chunks.append(audio[start:end])
+            chunks_count += 1
+
+        if len(chunks) == 0:
+            print("No non-silent sections found in audio.")
+            return np.array([])
+        else:
+            print(f"found {chunks_count} non-silent sections in audio")
+            return np.concatenate(chunks)

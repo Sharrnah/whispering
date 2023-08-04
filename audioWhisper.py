@@ -676,6 +676,10 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
             if phrase_time_limit == 0:
                 phrase_time_limit = None
 
+            silence_threshold = settings.GetOption("silence_threshold")
+            max_silence_length = settings.GetOption("max_silence_length")
+            keep_silence_length = settings.GetOption("keep_silence_length")
+
             clip_duration = phrase_time_limit
             fps = 0
             if clip_duration is not None:
@@ -710,6 +714,14 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
 
                 wavefiledata = b''.join(clip)
 
+                # remove silence from audio
+                if silence_threshold > 0.0:
+                    wavefiledata = audio_tools.remove_silence_parts(
+                        np.frombuffer(wavefiledata, np.int16), default_sample_rate,
+                        silence_threshold=silence_threshold, max_silence_length=max_silence_length, keep_silence_length=keep_silence_length
+                    )
+                    wavefiledata = wavefiledata.tobytes()
+
                 # check if the full audio clip is above the confidence threshold
                 vad_clip_test = settings.GetOption("vad_on_full_clip")
                 full_audio_confidence = 0.
@@ -719,13 +731,14 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                     full_audio_confidence = vad_model(torch.from_numpy(audio_full_float32), default_sample_rate).item()
                     print(full_audio_confidence)
 
-                if (not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold):
+                if (not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold) and len(
+                        wavefiledata) > 0:
                     # denoise audio
                     if settings.GetOption("denoise_audio") and audio_enhancer is not None:
                         wavefiledata = audio_enhancer.enhance_audio(wavefiledata).tobytes()
 
                     # debug save of audio clip
-                    save_to_wav(wavefiledata, "resampled_audio_chunk.wav", default_sample_rate)
+                    # save_to_wav(wavefiledata, "resampled_audio_chunk.wav", default_sample_rate)
 
                     # call sts plugin methods
                     call_plugin_sts(Plugins, wavefiledata, default_sample_rate)
@@ -780,12 +793,23 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                             clip.append(frames[i])
                         wavefiledata = b''.join(clip)
 
-                        # denoise audio
-                        if settings.GetOption("denoise_audio") and audio_enhancer is not None:
-                            wavefiledata = audio_enhancer.enhance_audio(wavefiledata).tobytes()
+                        # remove silence from audio
+                        if silence_threshold > 0.0:
+                            wavefiledata = audio_tools.remove_silence_parts(
+                                np.frombuffer(wavefiledata, np.int16), default_sample_rate,
+                                silence_threshold=silence_threshold, max_silence_length=max_silence_length, keep_silence_length=keep_silence_length
+                            )
+                            wavefiledata = wavefiledata.tobytes()
 
-                        audioprocessor.q.put(
-                            {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': False})
+                        if wavefiledata is not None and len(wavefiledata) > 0:
+                            # denoise audio
+                            if settings.GetOption("denoise_audio") and audio_enhancer is not None:
+                                wavefiledata = audio_enhancer.enhance_audio(wavefiledata).tobytes()
+
+                            audioprocessor.q.put(
+                                {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': False})
+                        else:
+                            frames = []
 
                         intermediate_time_start = time.time()
 
