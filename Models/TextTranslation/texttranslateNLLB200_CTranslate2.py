@@ -1,5 +1,3 @@
-import re
-
 import torch
 import ctranslate2
 import sentencepiece as spm
@@ -7,6 +5,12 @@ import os
 import downloader
 from pathlib import Path
 from Models import languageClassification
+
+nltk_path = Path(Path.cwd() / ".cache" / "nltk")
+os.makedirs(nltk_path, exist_ok=True)
+os.environ["NLTK_DATA"] = str(nltk_path.resolve())
+from nltk.tokenize import sent_tokenize
+import nltk
 
 LANGUAGES = {
     "Achinese (Arab)": "ace_Arab",
@@ -413,6 +417,30 @@ LANGUAGES_ISO1_TO_ISO3 = {
     "zu": ["zul_Latn"]
 }
 
+# List from https://github.com/nltk/nltk_data/blob/gh-pages/packages/tokenizers/punkt.xml
+NLTK_LANGUAGE_CODES = {
+    "ces_Latn": "Czech",
+    "dan_Latn": "Danish",
+    "nld_Latn": "Dutch",
+    "eng_Latn": "English",
+    "est_Latn": "Estonian",
+    "fin_Latn": "Finnish",
+    "fra_Latn": "French",
+    "deu_Latn": "German",
+    "ell_Grek": "Greek",
+    "ita_Latn": "Italian",
+    "mal_Mlym": "Malayalam",
+    "nno_Latn": "Norwegian",
+    "nob_Latn": "Norwegian",
+    "pol_Latn": "Polish",
+    "por_Latn": "Portuguese",
+    "rus_Cyrl": "Russian",
+    "slv_Latn": "Slovene",
+    "spa_Latn": "Spanish",
+    "swe_Latn": "Swedish",
+    "tur_Latn": "Turkish",
+}
+
 SUPPORTED_LANGUAGES = set()
 for lang_codes in LANGUAGES_ISO1_TO_ISO3.values():
     SUPPORTED_LANGUAGES.update(lang_codes)
@@ -497,6 +525,10 @@ def load_model(size="small", compute_type="float32"):
     sentencepiece = spm.SentencePieceProcessor()
     sentencepiece.load(str(sp_model_path.resolve()))
 
+    # load nltk sentence splitting dependency
+    nltk.download('punkt')
+
+    # init NLLB 200 model
     model_path_string = str(model_path.resolve())
     model = ctranslate2.Translator(model_path_string, device=torch_device, compute_type=compute_type)
 
@@ -528,17 +560,30 @@ def translate_language(text, from_code, to_code, as_iso1=False):
     if from_code == to_code:
         return text, from_code, to_code
 
-    # Tokenize the source text
-    source_text_subworded = sentencepiece.encode([text], out_type=str)[0] + ["</s>", from_code]
+    # Split the source text into sentences
+    nltk_sentence_split_lang = "english"
+    if from_code in NLTK_LANGUAGE_CODES:
+        nltk_sentence_split_lang = NLTK_LANGUAGE_CODES[from_code]
+    sentences = sent_tokenize(text, language=nltk_sentence_split_lang)
+    translated_sentences = []
 
-    # Add target language code as the target prefix
-    source_sents_target_prefix = [[to_code]]
+    for sentence in sentences:
+        # Tokenize the source text
+        source_text_subworded = sentencepiece.encode([sentence], out_type=str)[0] + ["</s>", from_code]
 
-    translated_tokens = model.translate_batch([source_text_subworded], batch_type="tokens", max_batch_size=2024, target_prefix=source_sents_target_prefix, beam_size=4)
-    translated_tokens = [translation[0]['tokens'] for translation in translated_tokens]
-    for translation in translated_tokens:
-        if to_code in translation:
-            translation.remove(to_code)
+        # Add target language code as the target prefix
+        source_sents_target_prefix = [[to_code]]
 
-    translation = sentencepiece.decode(translated_tokens[0])
+        translated_tokens = model.translate_batch([source_text_subworded], batch_type="tokens", max_batch_size=2024, target_prefix=source_sents_target_prefix, beam_size=4)
+        translated_tokens = [translation[0]['tokens'] for translation in translated_tokens]
+        for translation in translated_tokens:
+            if to_code in translation:
+                translation.remove(to_code)
+
+        translated_sentence = sentencepiece.decode(translated_tokens[0])
+        translated_sentences.append(translated_sentence)
+
+    # Join the translated sentences into a single text
+    translation = ' '.join(translated_sentences)
+
     return translation, from_code, to_code
