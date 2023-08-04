@@ -722,10 +722,10 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                 if (not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold):
                     # denoise audio
                     if settings.GetOption("denoise_audio") and audio_enhancer is not None:
-                        wavefiledata = audio_enhancer.enhance_audio(wavefiledata)
+                        wavefiledata = audio_enhancer.enhance_audio(wavefiledata).tobytes()
 
                     # debug save of audio clip
-                    # save_to_wav(wavefiledata, "resampled_audio_chunk.wav", default_sample_rate)
+                    save_to_wav(wavefiledata, "resampled_audio_chunk.wav", default_sample_rate)
 
                     # call sts plugin methods
                     call_plugin_sts(Plugins, wavefiledata, default_sample_rate)
@@ -782,7 +782,7 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
 
                         # denoise audio
                         if settings.GetOption("denoise_audio") and audio_enhancer is not None:
-                            wavefiledata = audio_enhancer.enhance_audio(wavefiledata)
+                            wavefiledata = audio_enhancer.enhance_audio(wavefiledata).tobytes()
 
                         audioprocessor.q.put(
                             {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': False})
@@ -840,7 +840,7 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
 
                 # denoise audio
                 if settings.GetOption("denoise_audio") and audio_enhancer is not None:
-                    wavefiledata = audio_enhancer.enhance_audio(wavefiledata)
+                    wavefiledata = audio_enhancer.enhance_audio(wavefiledata).tobytes()
 
                 # add audio data to the queue
                 audioprocessor.q.put({'time': time.time_ns(), 'data': audio_data, 'final': True})
