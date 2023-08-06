@@ -66,7 +66,7 @@ whisper_num_workers: 1  # When transcribe() is called from multiple Python threa
 vad_enabled: True,  # Enable Voice activity detection (VAD)
 vad_on_full_clip: False,  # If enabled,  an additional VAD check will be applied to the full clip, not just the frames.
 vad_confidence_threshold: "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
-vad_num_samples: 3000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
+vad_frames_per_buffer: 2000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
 vad_thread_num: 1,  # number of threads to use for VAD.
 
 realtime: false  # if enabled, Whisper will process audio in realtime.

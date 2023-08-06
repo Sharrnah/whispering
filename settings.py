@@ -56,14 +56,20 @@ TRANSLATE_SETTINGS = {
     "vad_enabled": True,  # Enable Voice activity detection (VAD)
     "vad_on_full_clip": False,  # Make an additional VAD check on the full clip (Not only on each frame).
     "vad_confidence_threshold": "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
-    "vad_num_samples": 1536,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
+    "vad_frames_per_buffer": 2000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
     "vad_thread_num": 1,  # number of threads to use for VAD.
     "push_to_talk_key": "",  # Push to talk key. (empty or None to disable)
     "word_timestamps": False,  # if enabled, Whisper will add timestamps to the transcribed text.
     "faster_without_timestamps": False,  # if enabled, faster whisper will only sample text tokens. (only when using stt_type=faster_whisper)
-    "silence_threshold": 0.05,
+
+    "silence_cutting_enabled": True,
+    "silence_offset": -40.0,
     "max_silence_length": 30.0,
-    "keep_silence_length": 0.10,
+    "keep_silence_length": 0.20,
+    "normalize_enabled": True,
+    "normalize_lower_threshold": -24.0,
+    "normalize_upper_threshold": -16.0,
+    "normalize_gain_factor": 2.0,
     "denoise_audio": True,  # if enabled, audio will be de-noised before processing.
     "denoise_audio_post_filter": False,  # Enable post filter for some minor, extra noise reduction.
 
@@ -210,11 +216,11 @@ def GetAvailableSettingValues():
         "txt_translator_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16"],
         "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
         "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
-        #"whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16"],
-        "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
+        "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16"],
+        #"whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
         "realtime_whisper_model": [""] + get_available_models(),
-        #"realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16"],
-        "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
+        "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16"],
+        #"realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
         "osc_type_transfer": ["source", "translation_result", "both"],
         "osc_send_type": ["full", "full_or_scroll", "scroll", "chunks"],
     }

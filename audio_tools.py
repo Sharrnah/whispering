@@ -3,6 +3,7 @@ import threading
 import time
 import wave
 
+import pyloudnorm
 import resampy
 import numpy as np
 import pyaudio
@@ -16,7 +17,8 @@ from pydub import AudioSegment
 # set target_channels to '1' to extract the second channel (right channel) data
 # set target_channels to '2' to keep stereo channels (or copy the mono channel to both channels if is_mono is True)
 # to Convert the int16 numpy array to bytes use .tobytes()
-def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16"):
+# filter can be sync_window, kaiser_fast, kaiser_best
+def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16", filter="kaiser_best"):
     audio_data_dtype = np.int16
     if dtype == "int16":
         audio_data_dtype = np.int16
@@ -45,7 +47,7 @@ def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target
         audio_data = audio_data.flatten()
 
     # Resample the audio data to the desired sample rate
-    audio_data = resampy.resample(audio_data, recorded_sample_rate, target_sample_rate)
+    audio_data = resampy.resample(audio_data, recorded_sample_rate, target_sample_rate, filter=filter)
     # Convert the resampled data back to int16 dtype
     return np.asarray(audio_data, dtype=audio_data_dtype)
 
@@ -166,7 +168,7 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
     p.terminate()
 
 
-def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt16, sample_rate=16000, channels=1, chunk=int(16000/10), py_audio=None):
+def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt16, sample_rate=16000, channels=1, chunk=int(16000/10), py_audio=None, audio_processor=None):
     if py_audio is None:
         py_audio = pyaudio.PyAudio()
 
@@ -175,86 +177,216 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
 
     recorded_sample_rate = sample_rate
 
+    callback = None
+    if audio_processor is not None and "callback" in dir(audio_processor):
+        callback = audio_processor.callback
+
     try:
+        if callback is not None:
+            audio_processor.needs_sample_rate_conversion = needs_sample_rate_conversion
+            audio_processor.recorded_sample_rate = recorded_sample_rate
+            audio_processor.is_mono = is_mono
+
         stream = py_audio.open(format=sample_format,
                                channels=channels,
                                rate=sample_rate,
                                input=True,
                                input_device_index=device_index,
-                               frames_per_buffer=chunk)
+                               frames_per_buffer=chunk,
+                               stream_callback=callback)
     except Exception as e:
         print("opening stream failed, falling back to default sample rate")
         dev_info = py_audio.get_device_info_by_index(device_index)
 
         #channel_number = int(dev_info['maxInputChannels'])
         recorded_sample_rate = int(dev_info['defaultSampleRate'])
+        print("default sample rate: {}".format(recorded_sample_rate))
+        needs_sample_rate_conversion = True
         try:
+            if callback is not None:
+                audio_processor.needs_sample_rate_conversion = needs_sample_rate_conversion
+                audio_processor.recorded_sample_rate = recorded_sample_rate
+                audio_processor.is_mono = is_mono
+
             stream = py_audio.open(format=sample_format,
                                    channels=2,
                                    rate=recorded_sample_rate,
                                    input=True,
                                    input_device_index=device_index,
-                                   frames_per_buffer=chunk)
+                                   frames_per_buffer=chunk,
+                                   stream_callback=callback)
         except Exception as e:
             print("opening stream failed, falling back to mono")
             # try again with mono
             is_mono = True
+
+            if callback is not None:
+                audio_processor.needs_sample_rate_conversion = needs_sample_rate_conversion
+                audio_processor.recorded_sample_rate = recorded_sample_rate
+                audio_processor.is_mono = is_mono
             stream = py_audio.open(format=sample_format,
                                    channels=1,
                                    rate=recorded_sample_rate,
                                    input=True,
                                    input_device_index=device_index,
-                                   frames_per_buffer=chunk)
-
-        needs_sample_rate_conversion = True
+                                   frames_per_buffer=chunk,
+                                   stream_callback=callback)
 
     return stream, needs_sample_rate_conversion, recorded_sample_rate, is_mono
 
 
-def remove_silence_parts(audio, sample_rate, silence_threshold=0.03, max_silence_length=30.0, keep_silence_length=0.20):
-        audio_abs = np.abs(audio)
-        above_threshold = audio_abs > silence_threshold
+# Function to calculate LUFS
+def calculate_lufs(audio, sample_rate):
+    meter = pyloudnorm.Meter(sample_rate)  # create BS.1770 meter
+    loudness = meter.integrated_loudness(audio)
+    return loudness
 
-        # Convert length parameters to number of samples
-        max_silence_samples = int(max_silence_length * sample_rate)
-        keep_silence_samples = int(keep_silence_length * sample_rate)
 
-        last_silence_end = 0
-        silence_start = None
+# Function to normalize the audio based on LUFS
+def normalize_audio_lufs(audio, sample_rate, lower_threshold=-24.0, upper_threshold=-16.0, gain_factor=2.0, verbose=False):
+    block_size_samples = int(sample_rate * 0.400)  # calculate block size in samples. (0.400 is the default block size of pyloudnorm)
+    if len(audio) < block_size_samples:
+        if verbose:
+            print(f"audio is too short to calculate lufs")
+        return audio, None
 
-        chunks = []
+    lufs = calculate_lufs(audio, sample_rate)
 
-        chunks_count = 0
+    if verbose:
+        print(f"LUFS: {lufs}")
 
-        for i, sample in enumerate(above_threshold):
-            if not sample:
-                if silence_start is None:
-                    silence_start = i
-            else:
-                if silence_start is not None:
-                    silence_duration = i - silence_start
-                    if silence_duration > max_silence_samples:
-                        # Subtract keep_silence_samples from the start and add it to the end
-                        start = max(last_silence_end - keep_silence_samples, 0)
-                        end = min(silence_start + keep_silence_samples, len(audio))
-                        chunks.append(audio[start:end])
-                        chunks_count += 1
-                        last_silence_end = i
-                    silence_start = None
+    # If LUFS is lower than the lower threshold, increase volume
+    if lufs < lower_threshold:
+        if verbose:
+            print(f"audio is too quiet, increasing volume")
+        gain = (lower_threshold - lufs) / gain_factor
+        audio = audio * np.power(10.0, gain/20.0)
 
-        # Append the final chunk of audio after the last silence
-        if last_silence_end < len(audio):
-            start = max(last_silence_end - keep_silence_samples, 0)
-            end = len(audio)
-            if silence_start is not None and silence_start < end:
-                # If there is silence at the end of the audio, trim it
-                end = silence_start + keep_silence_samples
-            chunks.append(audio[start:end])
-            chunks_count += 1
+    # If LUFS is higher than the upper threshold, decrease volume
+    elif lufs > upper_threshold:
+        if verbose:
+            print(f"audio is too loud, decreasing volume")
+        gain = (upper_threshold - lufs) * gain_factor
+        audio = audio * np.power(10.0, gain/20.0)
+    else:
+        if verbose:
+            print(f"audio is within the desired range")
+        return audio, lufs
 
-        if len(chunks) == 0:
-            print("No non-silent sections found in audio.")
-            return np.array([])
+    # Limit audio values to [-1, 1] (this is important to avoid clipping when converting to 16-bit PCM)
+    audio = np.clip(audio, -1, 1)
+
+    return audio, lufs
+
+
+def convert_audio_datatype_to_float(audio):
+    """
+    Convert audio data to floating-point representation.
+
+    The function checks if the audio data is an integer type. If it is, the function converts the data to a floating-point
+    range between -1.0 and 1.0. If the data is already in floating-point format, it leaves the data unchanged.
+
+    Parameters:
+    audio (numpy array): The audio data to be converted.
+
+    Returns:
+    audio (numpy array): The audio data in floating-point representation.
+    """
+    if np.issubdtype(audio.dtype, np.integer):
+        audio = audio.astype(np.float32) / np.iinfo(audio.dtype).max
+    return audio
+
+
+def convert_audio_datatype_to_integer(audio, dtype=np.int16):
+    """
+    Convert audio data to integer representation.
+
+    The function checks if the audio data is in floating-point format. If it is, the function converts the data to the
+    specified integer type, scaling it based on the maximum value for that integer type. If the data is already in integer
+    format, it leaves the data unchanged.
+
+    Parameters:
+    audio (numpy array): The audio data to be converted.
+    dtype (numpy dtype, optional): The desired integer data type for the output. Defaults to np.int16.
+
+    Returns:
+    audio (numpy array): The audio data in integer representation.
+    """
+    if np.issubdtype(audio.dtype, np.floating):
+        audio = (audio * np.iinfo(dtype).max).astype(dtype)
+    return audio
+
+
+# remove silence parts from audio. Make sure that keep_silence_length is less than or equal to half of
+# max_silence_length, or else the entire silent section will be kept.
+# fallback_silence_threshold is used if the audio is too short to calculate the LUFS
+def remove_silence_parts(audio, sample_rate, silence_offset=-40.0, max_silence_length=30.0, keep_silence_length=0.20, fallback_silence_threshold=0.15, trim_silence_end=True, verbose=False):
+    # Store the original data type
+    original_dtype = audio.dtype
+
+    # Convert audio to floating-point if necessary
+    if np.issubdtype(original_dtype, np.integer):
+        audio = audio.astype(np.float32) / np.iinfo(original_dtype).max
+
+    # Calculate LUFS and define silence threshold
+    block_size_samples = int(sample_rate * 0.400)  # calculate block size in samples. (0.400 is the default block size of pyloudnorm)
+    if len(audio) >= block_size_samples:
+        try:
+            lufs = calculate_lufs(audio, sample_rate)
+            silence_threshold = 10 ** ((lufs + silence_offset) / 20)
+        except Exception as e:
+            print(f"Could not calculate LUFS due to error: {str(e)}. Falling back to fixed silence threshold.")
+            silence_threshold = fallback_silence_threshold
+    else:
+        silence_threshold = fallback_silence_threshold
+
+    audio_abs = np.abs(audio)
+    above_threshold = audio_abs > silence_threshold
+
+    # Convert length parameters to number of samples
+    max_silence_samples = int(max_silence_length * sample_rate)
+    keep_silence_samples = int((keep_silence_length / 2.0) * sample_rate)
+
+    last_silence_end = 0
+    silence_start = None
+
+    chunks = []
+
+    for i, sample in enumerate(above_threshold):
+        if not sample:
+            if silence_start is None:
+                silence_start = i
         else:
-            print(f"found {chunks_count} non-silent sections in audio")
-            return np.concatenate(chunks)
+            if silence_start is not None:
+                silence_duration = i - silence_start
+                if silence_duration > max_silence_samples:
+                    # Keep silence at the start and end
+                    start = max(0, last_silence_end)
+                    end = min(len(audio), silence_start + keep_silence_samples)
+                    chunks.append(audio[start:end])
+
+                    # Define the start of the next chunk as the end of the current silence minus keep_silence_samples
+                    last_silence_end = i - keep_silence_samples
+                silence_start = None
+
+    # Append the final chunk of audio after the last silence
+    if last_silence_end < len(audio):
+        start = last_silence_end
+        end = len(audio)
+        # If the audio ends in a silent section, trim the silence beyond keep_silence_samples
+        if silence_start is not None and trim_silence_end:
+            end = min(end, silence_start + keep_silence_samples)
+        chunks.append(audio[start:end])
+
+    if len(chunks) == 0:
+        if verbose:
+            print("No non-silent sections found in audio.")
+        return np.array([])
+    else:
+        if verbose:
+            print(f"found {len(chunks)} non-silent sections in audio")
+        audio = np.concatenate(chunks)
+        # Convert the audio back to the original data type if it was integer
+        if np.issubdtype(original_dtype, np.integer):
+            audio = (audio * np.iinfo(original_dtype).max).astype(original_dtype)
+        return audio

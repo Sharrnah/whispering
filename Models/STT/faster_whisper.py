@@ -14,14 +14,6 @@ MODEL_LINKS = {
             ],
             "checksum": "3c7c0512b7b881ecb4cb0693d543aed2a9178968bef255fa0ca8b880541ec789"
         },
-        #"bfloat16": {
-        #    "urls": [
-        #        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/tiny-ct2-bfp16.zip",
-        #        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/tiny-ct2-bfp16.zip",
-        #        "https://s3.libs.space:9000/ai-models/Whisper-CT2/tiny-ct2-bfp16.zip",
-        #    ],
-        #    "checksum": "a9967e0c2c2fae9385443d32db05f51e8695444d75ae0aee92b644adb57592f6"
-        #},
         "float32": {
             "urls": [
                 "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/tiny-ct2.zip",
@@ -40,14 +32,6 @@ MODEL_LINKS = {
             ],
             "checksum": "a14fedc8e57090505ec46119d346895604f5a6b5a8a44a7a137c44169544ea99"
         },
-        #"bfloat16": {
-        #    "urls": [
-        #        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/tiny.en-ct2-bfp16.zip",
-        #        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/tiny.en-ct2-bfp16.zip",
-        #        "https://s3.libs.space:9000/ai-models/Whisper-CT2/tiny.en-ct2-bfp16.zip",
-        #    ],
-        #    "checksum": "14362200375ed60a0f341f6076cd31302ac11752aedc5ca32d8d6b0bb6761f60"
-        #},
         "float32": {
             "urls": [
                 "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/tiny.en-ct2.zip",
@@ -66,14 +50,6 @@ MODEL_LINKS = {
             ],
             "checksum": "fa863d01b4ef07bab0467d13b33221c8e6273362078ec6268bbc6398f40c0ab4"
         },
-        #"bfloat16": {
-        #    "urls": [
-        #        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/base-ct2-bfp16.zip",
-        #        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/base-ct2-bfp16.zip",
-        #        "https://s3.libs.space:9000/ai-models/Whisper-CT2/base-ct2-bfp16.zip",
-        #    ],
-        #    "checksum": "ffea322cf2d5a19b0fed1b14084f62fcaa20b9445b09dec0223ae6ddfcf386f6"
-        #},
         "float32": {
             "urls": [
                 "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/base-ct2.zip",
@@ -92,14 +68,6 @@ MODEL_LINKS = {
             ],
             "checksum": "ec00c31ef78f035950c276ff01e5da96b4e9761bc15e872b2ec02371ac357484"
         },
-        #"bfloat16": {
-        #    "urls": [
-        #        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/base.en-ct2-bfp16.zip",
-        #        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/base.en-ct2-bfp16.zip",
-        #        "https://s3.libs.space:9000/ai-models/Whisper-CT2/base.en-ct2-bfp16.zip",
-        #    ],
-        #    "checksum": "61d9c0e1e03a0de5a676baebae5afd4bea8c31b58d8a8545eafe46fd39af4223"
-        #},
         "float32": {
             "urls": [
                 "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/base.en-ct2.zip",
@@ -118,14 +86,6 @@ MODEL_LINKS = {
             ],
             "checksum": "9f0618523bf19dc68d99109ba319f2faba2c94ef9d063aa300115935f3d09f14"
         },
-        #"bfloat16": {
-        #    "urls": [
-        #        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/small-ct2-bfp16.zip",
-        #        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/small-ct2-bfp16.zip",
-        #        "https://s3.libs.space:9000/ai-models/Whisper-CT2/small-ct2-bfp16.zip",
-        #    ],
-        #    "checksum": "e8144f9f11a661e0f4acf38b218007fe138b8600906275cfec25bb1a1fb2e8fe"
-        #},
         "float32": {
             "urls": [
                 "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/small-ct2.zip",
@@ -144,14 +104,6 @@ MODEL_LINKS = {
             ],
             "checksum": "9f0618523bf19dc68d99109ba319f2faba2c94ef9d063aa300115935f3d09f14"
         },
-        #"bfloat16": {
-        #    "urls": [
-        #        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/small.en-ct2-bfp16.zip",
-        #        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/small.en-ct2-bfp16.zip",
-        #        "https://s3.libs.space:9000/ai-models/Whisper-CT2/small.en-ct2-bfp16.zip",
-        #    ],
-        #    "checksum": "5c761c734fa8a84823341fb6484dc04ae0e35a7cea8c8fd7749f248ac1a191ae"
-        #},
         "float32": {
             "urls": [
                 "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/small.en-ct2.zip",
@@ -170,14 +122,6 @@ MODEL_LINKS = {
             ],
             "checksum": "13d2d91bdd2c3722c0592cbffca468992257eb3ddb782b1779c59091a4d91dd4"
         },
-        #"bfloat16": {
-        #    "urls": [
-        #        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/medium-ct2-bfp16.zip",
-        #        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/medium-ct2-bfp16.zip",
-        #        "https://s3.libs.space:9000/ai-models/Whisper-CT2/medium-ct2-bfp16.zip",
-        #    ],
-        #    "checksum": "3b002336f5fcd025a0358c0dd57f96fd5ac8696951f4b17ed7744aec6cca8cf2"
-        #},
         "float32": {
             "urls": [
                 "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/medium-ct2.zip",
@@ -196,14 +140,6 @@ MODEL_LINKS = {
             ],
             "checksum": "13d2d91bdd2c3722c0592cbffca468992257eb3ddb782b1779c59091a4d91dd4"
         },
-        #"bfloat16": {
-        #    "urls": [
-        #        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/medium.en-ct2-bfp16.zip",
-        #        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/medium.en-ct2-bfp16.zip",
-        #        "https://s3.libs.space:9000/ai-models/Whisper-CT2/medium.en-ct2-bfp16.zip",
-        #    ],
-        #    "checksum": "07065633915b1d64e4e3d977043d4c61e20469ee26fe1e8fa2333611147c3605"
-        #},
         "float32": {
             "urls": [
                 "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/medium.en-ct2.zip",
@@ -222,14 +158,6 @@ MODEL_LINKS = {
             ],
             "checksum": "42ecc70522602e69fe6365ef73173bbb1178ff8fd99210b96ea9025a205014bb"
         },
-        #"bfloat16": {
-        #    "urls": [
-        #        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/large-v1-ct2-bfp16.zip",
-        #        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/large-v1-ct2-bfp16.zip",
-        #        "https://s3.libs.space:9000/ai-models/Whisper-CT2/large-v1-ct2-bfp16.zip",
-        #    ],
-        #    "checksum": "4d66ab08d2410711b82f529ab72d16a6b8806864d278cf20657e30ba59851667"
-        #},
         "float32": {
             "urls": [
                 "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/large-v1-ct2.zip",
@@ -248,14 +176,6 @@ MODEL_LINKS = {
             ],
             "checksum": "2397ed6433a08d4b6968852bc1b761b488c3149a3a52f49b62b2ac60d1d5cef0"
         },
-        #"bfloat16": {
-        #    "urls": [
-        #        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/large-v2-ct2-bfp16.zip",
-        #        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/large-v2-ct2-bfp16.zip",
-        #        "https://s3.libs.space:9000/ai-models/Whisper-CT2/large-v2-ct2-bfp16.zip",
-        #    ],
-        #    "checksum": "220190ce2b0b3a4512b742b8c439798ef6f6b04ac83b8c130da2f0a35569a2d7"
-        #},
         "float32": {
             "urls": [
                 "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/large-v2-ct2.zip",
@@ -581,8 +501,6 @@ def needs_download(model: str, compute_type: str = "float32"):
     model_path = Path(model_cache_path / (model + "-ct2"))
     if compute_type == "float16" or compute_type == "int8_float16" or compute_type == "int16" or compute_type == "int8":
         model_path = Path(model_cache_path / (model + "-ct2-fp16"))
-    #if compute_type == "bfloat16" or compute_type == "int8_bfloat16":
-    #    model_path = Path(model_cache_path / (model + "-ct2-bfp16"))
 
     pretrained_lang_model_file = Path(model_path / "model.bin")
 
@@ -603,9 +521,6 @@ def download_model(model: str, compute_type: str = "float32"):
     if compute_type == "float16" or compute_type == "int8_float16" or compute_type == "int16" or compute_type == "int8":
         compute_type = "float16"
         model_path = Path(model_cache_path / (model + "-ct2-fp16"))
-    #if compute_type == "bfloat16" or compute_type == "int8_bfloat16":
-    #    compute_type = "bfloat16"
-    #    model_path = Path(model_cache_path / (model + "-ct2-bfp16"))
 
 
     pretrained_lang_model_file = Path(model_path / "model.bin")
@@ -643,13 +558,12 @@ class FasterWhisper:
                    num_workers: int = 1):
         model_cache_path = Path(".cache/whisper")
         os.makedirs(model_cache_path, exist_ok=True)
-        model_path = Path(model_cache_path / (model + "-ct2"))
+        model_folder_name = model + "-ct2"
         if compute_type == "float16" or compute_type == "int8_float16":
-            model_path = Path(model_cache_path / (model + "-ct2-fp16"))
-        #if compute_type == "bfloat16" or compute_type == "int8_bfloat16":
-        #    model_path = Path(model_cache_path / (model + "-ct2-bfp16"))
+            model_folder_name = model + "-ct2-fp16"
+        model_path = Path(model_cache_path / model_folder_name)
 
-        print(f"faster-whisper {model} is Loading to {device} using {compute_type} precision...")
+        print(f"faster-whisper {model_folder_name} is Loading to {device} using {compute_type} precision...")
         self.model = WhisperModel(str(Path(model_path).resolve()), device=device, compute_type=compute_type,
                                   cpu_threads=cpu_threads, num_workers=num_workers)
 
