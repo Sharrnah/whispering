@@ -227,24 +227,28 @@ def send_message(predicted_text, result_obj, final_audio):
 def load_whisper(model, ai_device):
     cpu_threads = settings.GetOption("whisper_cpu_threads")
     num_workers = settings.GetOption("whisper_num_workers")
-    if settings.GetOption("stt_type") == "original_whisper":
+    stt_type = settings.GetOption("stt_type")
+    if stt_type == "original_whisper":
         try:
             return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
         except Exception as e:
             print("Failed to load whisper model. Application exits. " + str(e))
             sys.exit(1)
-    elif settings.GetOption("stt_type") == "faster_whisper":
+    elif stt_type == "faster_whisper":
         compute_dtype = settings.GetOption("whisper_precision")
 
         return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype,
                                             cpu_threads=cpu_threads, num_workers=num_workers)
-        #return whisperx.WhisperX(model, device=ai_device, compute_type=compute_dtype,
+        # return whisperx.WhisperX(model, device=ai_device, compute_type=compute_dtype,
         #                                    cpu_threads=cpu_threads, num_workers=num_workers)
-    elif settings.GetOption("stt_type") == "speech_t5":
+    elif stt_type == "speech_t5":
         try:
             return speech_t5.SpeechT5STT(device=ai_device)
         except Exception as e:
             print("Failed to load speech t5 model. Application exits. " + str(e))
+
+    # return None if no stt model is loaded
+    return None
 
 
 def load_realtime_whisper(model, ai_device):
@@ -463,10 +467,11 @@ def whisper_worker():
         if audio_timestamp < last_audio_time and not final_audio:
             continue
 
-        # start processing audio thread
-        threading.Thread(target=whisper_ai_thread, args=(
-            audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio),
-                         daemon=True).start()
+        # start processing audio thread if audio_model is not None
+        if audio_model is not None:
+            threading.Thread(target=whisper_ai_thread, args=(
+                audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio),
+                             daemon=True).start()
 
 
 def start_whisper_thread():

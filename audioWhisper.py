@@ -561,6 +561,7 @@ class AudioProcessor:
 
         return in_data, pyaudio.paContinue
 
+
 @click.command()
 @click.option('--detect_energy', default=False, is_flag=True,
               help='detect energy level after set time of seconds recording.', type=bool)
@@ -775,13 +776,16 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
         print(f"{model} is an English-only model. only English speech is supported.")
         settings.SetOption("whisper_languages", ({"code": "", "name": "Auto"}, {"code": "en", "name": "English"},))
         settings.SetOption("current_language", "en")
+    elif "_whisper" in settings.GetOption("stt_type"):
+        settings.SetOption("whisper_languages", audioprocessor.whisper_get_languages())
     elif settings.GetOption("stt_type") == "speech_t5":
         # speech t5 only supports english
         print(f"speechT5 is an English-only model. only English speech is supported.")
         settings.SetOption("whisper_languages", ({"code": "", "name": "Auto"}, {"code": "en", "name": "English"},))
         settings.SetOption("current_language", "en")
     else:
-        settings.SetOption("whisper_languages", audioprocessor.whisper_get_languages())
+        # show no language if unspecified STT type
+        settings.SetOption("whisper_languages", {"": ""})
 
     settings.SetOption("ai_device", settings.GetArgumentSettingFallback(ctx, "ai_device", "ai_device"))
     settings.SetOption("verbose", verbose)
