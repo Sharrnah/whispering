@@ -136,7 +136,6 @@ class WhisperVoiceMarker:
                                              without_timestamps=whisper_faster_without_timestamps,
                                              patience=whisper_faster_beam_search_patience,
                                              length_penalty=whisper_faster_length_penalty)
-
         return result
 
     def voice_marker_transcribe(self, try_count=0, last_result="", **kwargs):
