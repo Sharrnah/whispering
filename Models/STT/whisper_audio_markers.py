@@ -60,6 +60,9 @@ class WhisperVoiceMarker:
         return voice_marker_prompt
 
     def apply_voice_markers(self, lng: str, try_count=0):
+        if try_count == -1:
+            return self.audio_sample
+
         lngInput = lng
 
         if lng == "":
