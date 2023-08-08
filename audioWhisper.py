@@ -171,6 +171,12 @@ def process_audio_chunk(audio_chunk, vad_model, sample_rate):
     else:
         new_confidence = 9.9
     peak_amplitude = np.max(np.abs(audio_int16))
+
+    # clear the variables
+    audio_int16 = None
+    del audio_int16
+    audio_float32 = None
+    del audio_float32
     return new_confidence, peak_amplitude
 
 
@@ -329,235 +335,237 @@ class AudioProcessor:
         if not settings.GetOption("stt_enabled"):
             return in_data, pyaudio.paContinue
 
-        phrase_time_limit = settings.GetOption("phrase_time_limit")
-        pause = settings.GetOption("pause")
-        energy = settings.GetOption("energy")
-        if phrase_time_limit == 0:
-            phrase_time_limit = None
+        # disable gradient calculation
+        with torch.no_grad():
+            phrase_time_limit = settings.GetOption("phrase_time_limit")
+            pause = settings.GetOption("pause")
+            energy = settings.GetOption("energy")
+            if phrase_time_limit == 0:
+                phrase_time_limit = None
 
-        silence_cutting_enabled = settings.GetOption("silence_cutting_enabled")
-        silence_offset = settings.GetOption("silence_offset")
-        max_silence_length = settings.GetOption("max_silence_length")
-        keep_silence_length = settings.GetOption("keep_silence_length")
+            silence_cutting_enabled = settings.GetOption("silence_cutting_enabled")
+            silence_offset = settings.GetOption("silence_offset")
+            max_silence_length = settings.GetOption("max_silence_length")
+            keep_silence_length = settings.GetOption("keep_silence_length")
 
-        normalize_enabled = settings.GetOption("normalize_enabled")
-        normalize_lower_threshold = settings.GetOption("normalize_lower_threshold")
-        normalize_upper_threshold = settings.GetOption("normalize_upper_threshold")
-        normalize_gain_factor = settings.GetOption("normalize_gain_factor")
+            normalize_enabled = settings.GetOption("normalize_enabled")
+            normalize_lower_threshold = settings.GetOption("normalize_lower_threshold")
+            normalize_upper_threshold = settings.GetOption("normalize_upper_threshold")
+            normalize_gain_factor = settings.GetOption("normalize_gain_factor")
 
-        clip_duration = phrase_time_limit
-        fps = 0
-        if clip_duration is not None:
-            fps = int(self.default_sample_rate / CHUNK * clip_duration)
+            clip_duration = phrase_time_limit
+            fps = 0
+            if clip_duration is not None:
+                fps = int(self.default_sample_rate / CHUNK * clip_duration)
 
-        end_time = time.time()
-        elapsed_time = end_time - self.start_time
-        elapsed_intermediate_time = end_time - self.intermediate_time_start
+            end_time = time.time()
+            elapsed_time = end_time - self.start_time
+            elapsed_intermediate_time = end_time - self.intermediate_time_start
 
-        confidence_threshold = float(settings.GetOption("vad_confidence_threshold"))
+            confidence_threshold = float(settings.GetOption("vad_confidence_threshold"))
 
-        #if settings.GetOption("denoise_audio") and audio_enhancer is not None and num_samples < DeepFilterNet.ModelParams().hop_size:
-        #    #print("increase num_samples for denoising")
-        #    num_samples = DeepFilterNet.ModelParams().hop_size
+            #if settings.GetOption("denoise_audio") and audio_enhancer is not None and num_samples < DeepFilterNet.ModelParams().hop_size:
+            #    #print("increase num_samples for denoising")
+            #    num_samples = DeepFilterNet.ModelParams().hop_size
 
-        #audio_chunk = stream.read(num_samples, exception_on_overflow=False)
+            #audio_chunk = stream.read(num_samples, exception_on_overflow=False)
 
-        # denoise audio chunk
-        #if settings.GetOption("denoise_audio") and audio_enhancer is not None:
-        # record more audio to denoise if it's too short
-        #if len(audio_chunk) < DeepFilterNet.ModelParams().hop_size:
-        #while len(audio_chunk) < DeepFilterNet.ModelParams().hop_size:
-        #    audio_chunk += stream.read(num_samples, exception_on_overflow=False)
-        #audio_chunk = audio_enhancer.enhance_audio(audio_chunk, recorded_sample_rate, default_sample_rate, is_mono=is_mono)
-        #needs_sample_rate_conversion = False
+            # denoise audio chunk
+            #if settings.GetOption("denoise_audio") and audio_enhancer is not None:
+            # record more audio to denoise if it's too short
+            #if len(audio_chunk) < DeepFilterNet.ModelParams().hop_size:
+            #while len(audio_chunk) < DeepFilterNet.ModelParams().hop_size:
+            #    audio_chunk += stream.read(num_samples, exception_on_overflow=False)
+            #audio_chunk = audio_enhancer.enhance_audio(audio_chunk, recorded_sample_rate, default_sample_rate, is_mono=is_mono)
+            #needs_sample_rate_conversion = False
 
-        # denoise audio chunk
-        #if settings.GetOption("denoise_audio") and audio_enhancer is not None:
-        #    #if len(audio_chunk) < DeepFilterNet.ModelParams().hop_size:
-        #    #    while len(audio_chunk) < DeepFilterNet.ModelParams().hop_size * 2:
-        #    #        audio_chunk += stream.read(num_samples, exception_on_overflow=False)
-        #    audio_chunk = audio_enhancer.enhance_audio(audio_chunk, recorded_sample_rate, default_sample_rate, is_mono=is_mono)
-        #    needs_sample_rate_conversion = False
-        #    #recorded_sample_rate = audio_enhancer.df_state.sr()
+            # denoise audio chunk
+            #if settings.GetOption("denoise_audio") and audio_enhancer is not None:
+            #    #if len(audio_chunk) < DeepFilterNet.ModelParams().hop_size:
+            #    #    while len(audio_chunk) < DeepFilterNet.ModelParams().hop_size * 2:
+            #    #        audio_chunk += stream.read(num_samples, exception_on_overflow=False)
+            #    audio_chunk = audio_enhancer.enhance_audio(audio_chunk, recorded_sample_rate, default_sample_rate, is_mono=is_mono)
+            #    needs_sample_rate_conversion = False
+            #    #recorded_sample_rate = audio_enhancer.df_state.sr()
 
-        test_audio_chunk = in_data
-        audio_chunk = in_data
-        # special case which seems to be needed for WASAPI
-        if self.needs_sample_rate_conversion:
-            test_audio_chunk = audio_tools.resample_audio(test_audio_chunk, self.recorded_sample_rate, self.default_sample_rate, -1,
-                                                     is_mono=self.is_mono, filter="kaiser_fast").tobytes()
-
-        new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.vad_model, self.default_sample_rate)
-
-        # put frames with recognized speech into a list and send to whisper
-        if (clip_duration is not None and len(self.frames) > fps) or (
-                elapsed_time > pause > 0.0 and len(self.frames) > 0) or (
-                self.keyboard_rec_force_stop and self.push_to_talk_key is not None and not keyboard.is_pressed(
-            self.push_to_talk_key) and len(self.frames) > 0):
-
-            clip = []
-            # merge all frames to one audio clip
-            for i in range(0, len(self.frames)):
-                clip.append(self.frames[i])
-
-            wavefiledata = b''.join(clip)
-
+            test_audio_chunk = in_data
+            audio_chunk = in_data
+            # special case which seems to be needed for WASAPI
             if self.needs_sample_rate_conversion:
-                wavefiledata = audio_tools.resample_audio(wavefiledata, self.recorded_sample_rate, self.default_sample_rate, -1,
-                                                         is_mono=self.is_mono).tobytes()
+                test_audio_chunk = audio_tools.resample_audio(test_audio_chunk, self.recorded_sample_rate, self.default_sample_rate, -1,
+                                                         is_mono=self.is_mono, filter="kaiser_fast").tobytes()
 
-            # normalize audio (and make sure it's longer or equal the default block size by pyloudnorm)
-            if normalize_enabled and len(wavefiledata) >= self.block_size_samples:
-                wavefiledata = audio_tools.convert_audio_datatype_to_float(np.frombuffer(wavefiledata, np.int16))
-                wavefiledata, lufs = audio_tools.normalize_audio_lufs(
-                    wavefiledata, self.default_sample_rate, normalize_lower_threshold, normalize_upper_threshold,
-                    normalize_gain_factor, verbose=self.verbose
-                )
-                wavefiledata = audio_tools.convert_audio_datatype_to_integer(wavefiledata, np.int16)
-                wavefiledata = wavefiledata.tobytes()
+            new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.vad_model, self.default_sample_rate)
 
-            # remove silence from audio
-            if silence_cutting_enabled:
-                wavefiledata_np = np.frombuffer(wavefiledata, np.int16)
-                if len(wavefiledata_np) >= self.block_size_samples:
-                    wavefiledata = audio_tools.remove_silence_parts(
-                        wavefiledata_np, self.default_sample_rate,
-                        silence_offset=silence_offset, max_silence_length=max_silence_length, keep_silence_length=keep_silence_length,
-                        verbose=self.verbose
+            # put frames with recognized speech into a list and send to whisper
+            if (clip_duration is not None and len(self.frames) > fps) or (
+                    elapsed_time > pause > 0.0 and len(self.frames) > 0) or (
+                    self.keyboard_rec_force_stop and self.push_to_talk_key is not None and not keyboard.is_pressed(
+                self.push_to_talk_key) and len(self.frames) > 0):
+
+                clip = []
+                # merge all frames to one audio clip
+                for i in range(0, len(self.frames)):
+                    clip.append(self.frames[i])
+
+                wavefiledata = b''.join(clip)
+
+                if self.needs_sample_rate_conversion:
+                    wavefiledata = audio_tools.resample_audio(wavefiledata, self.recorded_sample_rate, self.default_sample_rate, -1,
+                                                             is_mono=self.is_mono).tobytes()
+
+                # normalize audio (and make sure it's longer or equal the default block size by pyloudnorm)
+                if normalize_enabled and len(wavefiledata) >= self.block_size_samples:
+                    wavefiledata = audio_tools.convert_audio_datatype_to_float(np.frombuffer(wavefiledata, np.int16))
+                    wavefiledata, lufs = audio_tools.normalize_audio_lufs(
+                        wavefiledata, self.default_sample_rate, normalize_lower_threshold, normalize_upper_threshold,
+                        normalize_gain_factor, verbose=self.verbose
                     )
+                    wavefiledata = audio_tools.convert_audio_datatype_to_integer(wavefiledata, np.int16)
                     wavefiledata = wavefiledata.tobytes()
 
-            # debug save of audio clip
-            # save_to_wav(wavefiledata, "resampled_audio_chunk.wav", self.default_sample_rate)
-
-            # check if the full audio clip is above the confidence threshold
-            vad_clip_test = settings.GetOption("vad_on_full_clip")
-            full_audio_confidence = 0.
-            if vad_clip_test:
-                audio_full_int16 = np.frombuffer(wavefiledata, np.int16)
-                audio_full_float32 = int2float(audio_full_int16)
-                full_audio_confidence = self.vad_model(torch.from_numpy(audio_full_float32), self.default_sample_rate).item()
-                print(full_audio_confidence)
-
-            if (not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold) and len(
-                    wavefiledata) > 0:
-                # denoise audio
-                if settings.GetOption("denoise_audio") and self.audio_enhancer is not None:
-                    wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata).tobytes()
-
-                # call sts plugin methods
-                call_plugin_sts(self.Plugins, wavefiledata, self.default_sample_rate)
-
-                audioprocessor.q.put(
-                    {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': True})
-                # vad_iterator.reset_states()  # reset model states after each audio
-
-                # set typing indicator for VRChat and Websocket clients
-                typing_indicator_thread = threading.Thread(target=typing_indicator_function,
-                                                           args=(self.osc_ip, self.osc_port, True))
-                typing_indicator_thread.start()
-
-            self.frames = []
-            self.start_time = time.time()
-            self.intermediate_time_start = time.time()
-            self.keyboard_rec_force_stop = False
-
-        # set start recording variable to true if the volume and voice confidence is above the threshold
-        if should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold,
-                                  keyboard_key=self.push_to_talk_key):
-            if self.verbose:
-                print("start recording - new_confidence: " + str(new_confidence) + " peak_amplitude: " + str(peak_amplitude))
-            if not self.start_rec_on_volume_threshold:
-                # start processing_start event
-                typing_indicator_thread = threading.Thread(target=typing_indicator_function,
-                                                           args=(self.osc_ip, self.osc_port, True))
-                typing_indicator_thread.start()
-            if self.push_to_talk_key is not None and keyboard.is_pressed(self.push_to_talk_key):
-                self.keyboard_rec_force_stop = True
-            self.start_rec_on_volume_threshold = True
-            self.pause_time = time.time()
-
-        # append audio frame to the list if the recording var is set and voice confidence is above the threshold (So it only adds the audio parts with speech)
-        if self.start_rec_on_volume_threshold and new_confidence >= confidence_threshold:
-            if self.verbose:
-                print("add chunk - new_confidence: " + str(new_confidence) + " peak_amplitude: " + str(peak_amplitude))
-            # append previous audio chunk to improve recognition on too late audio recording starts
-            if self.previous_audio_chunk is not None:
-                self.frames.append(self.previous_audio_chunk)
-
-            self.frames.append(audio_chunk)
-            self.start_time = time.time()
-            if settings.GetOption("realtime"):
-                clip = []
-                frame_count = len(self.frames)
-                # send realtime intermediate results every x frames and every x seconds (making sure its at least x frame length)
-                if frame_count % settings.GetOption(
-                        "realtime_frame_multiply") == 0 and elapsed_intermediate_time > settings.GetOption(
-                    "realtime_frequency_time"):
-                    # set typing indicator for VRChat but not websocket
-                    typing_indicator_thread = threading.Thread(target=typing_indicator_function,
-                                                               args=(self.osc_ip, self.osc_port, False))
-                    typing_indicator_thread.start()
-                    # merge all frames to one audio clip
-                    for i in range(0, len(self.frames)):
-                        clip.append(self.frames[i])
-                    wavefiledata = b''.join(clip)
-
-                    if self.needs_sample_rate_conversion:
-                        wavefiledata = audio_tools.resample_audio(wavefiledata, self.recorded_sample_rate, self.default_sample_rate, -1,
-                                                                  is_mono=self.is_mono).tobytes()
-
-                    # normalize audio (and make sure it's longer or equal the default block size by pyloudnorm)
-                    if normalize_enabled and len(wavefiledata) >= self.block_size_samples:
-                        wavefiledata = audio_tools.convert_audio_datatype_to_float(np.frombuffer(wavefiledata, np.int16))
-                        wavefiledata, lufs = audio_tools.normalize_audio_lufs(
-                            wavefiledata, self.default_sample_rate, normalize_lower_threshold,
-                            normalize_upper_threshold, normalize_gain_factor,
+                # remove silence from audio
+                if silence_cutting_enabled:
+                    wavefiledata_np = np.frombuffer(wavefiledata, np.int16)
+                    if len(wavefiledata_np) >= self.block_size_samples:
+                        wavefiledata = audio_tools.remove_silence_parts(
+                            wavefiledata_np, self.default_sample_rate,
+                            silence_offset=silence_offset, max_silence_length=max_silence_length, keep_silence_length=keep_silence_length,
                             verbose=self.verbose
                         )
-                        wavefiledata = audio_tools.convert_audio_datatype_to_integer(wavefiledata, np.int16)
                         wavefiledata = wavefiledata.tobytes()
 
-                    # remove silence from audio
-                    if silence_cutting_enabled:
-                        wavefiledata_np = np.frombuffer(wavefiledata, np.int16)
-                        if len(wavefiledata_np) >= self.block_size_samples:
-                            wavefiledata = audio_tools.remove_silence_parts(
-                                wavefiledata_np, self.default_sample_rate,
-                                silence_offset=silence_offset, max_silence_length=max_silence_length, keep_silence_length=keep_silence_length,
-                                verbose=self.verbose
-                            )
-                            wavefiledata = wavefiledata.tobytes()
+                # debug save of audio clip
+                # save_to_wav(wavefiledata, "resampled_audio_chunk.wav", self.default_sample_rate)
 
-                    if wavefiledata is not None and len(wavefiledata) > 0:
-                        # denoise audio
-                        if settings.GetOption("denoise_audio") and self.audio_enhancer is not None:
-                            wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata).tobytes()
+                # check if the full audio clip is above the confidence threshold
+                vad_clip_test = settings.GetOption("vad_on_full_clip")
+                full_audio_confidence = 0.
+                if vad_clip_test:
+                    audio_full_int16 = np.frombuffer(wavefiledata, np.int16)
+                    audio_full_float32 = int2float(audio_full_int16)
+                    full_audio_confidence = self.vad_model(torch.from_numpy(audio_full_float32), self.default_sample_rate).item()
+                    print(full_audio_confidence)
 
-                        audioprocessor.q.put(
-                            {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': False})
-                    else:
-                        self.frames = []
+                if (not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold) and len(
+                        wavefiledata) > 0:
+                    # denoise audio
+                    if settings.GetOption("denoise_audio") and self.audio_enhancer is not None:
+                        wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata).tobytes()
 
-                    self.intermediate_time_start = time.time()
+                    # call sts plugin methods
+                    call_plugin_sts(self.Plugins, wavefiledata, self.default_sample_rate)
 
-        # stop recording if no speech is detected for pause seconds
-        if should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, self.pause_time, pause,
-                                 keyboard_key=self.push_to_talk_key):
-            self.start_rec_on_volume_threshold = False
-            self.intermediate_time_start = time.time()
-            if self.push_to_talk_key is not None and not keyboard.is_pressed(
-                    self.push_to_talk_key) and self.keyboard_rec_force_stop:
-                self.keyboard_rec_force_stop = True
-            else:
+                    audioprocessor.q.put(
+                        {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': True})
+                    # vad_iterator.reset_states()  # reset model states after each audio
+
+                    # set typing indicator for VRChat and Websocket clients
+                    typing_indicator_thread = threading.Thread(target=typing_indicator_function,
+                                                               args=(self.osc_ip, self.osc_port, True))
+                    typing_indicator_thread.start()
+
+                self.frames = []
+                self.start_time = time.time()
+                self.intermediate_time_start = time.time()
                 self.keyboard_rec_force_stop = False
 
-        # save chunk as previous audio chunk to reuse later
-        if not self.start_rec_on_volume_threshold and (
-                new_confidence < confidence_threshold or confidence_threshold == 0.0):
-            self.previous_audio_chunk = audio_chunk
-        else:
-            self.previous_audio_chunk = None
+            # set start recording variable to true if the volume and voice confidence is above the threshold
+            if should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold,
+                                      keyboard_key=self.push_to_talk_key):
+                if self.verbose:
+                    print("start recording - new_confidence: " + str(new_confidence) + " peak_amplitude: " + str(peak_amplitude))
+                if not self.start_rec_on_volume_threshold:
+                    # start processing_start event
+                    typing_indicator_thread = threading.Thread(target=typing_indicator_function,
+                                                               args=(self.osc_ip, self.osc_port, True))
+                    typing_indicator_thread.start()
+                if self.push_to_talk_key is not None and keyboard.is_pressed(self.push_to_talk_key):
+                    self.keyboard_rec_force_stop = True
+                self.start_rec_on_volume_threshold = True
+                self.pause_time = time.time()
+
+            # append audio frame to the list if the recording var is set and voice confidence is above the threshold (So it only adds the audio parts with speech)
+            if self.start_rec_on_volume_threshold and new_confidence >= confidence_threshold:
+                if self.verbose:
+                    print("add chunk - new_confidence: " + str(new_confidence) + " peak_amplitude: " + str(peak_amplitude))
+                # append previous audio chunk to improve recognition on too late audio recording starts
+                if self.previous_audio_chunk is not None:
+                    self.frames.append(self.previous_audio_chunk)
+
+                self.frames.append(audio_chunk)
+                self.start_time = time.time()
+                if settings.GetOption("realtime"):
+                    clip = []
+                    frame_count = len(self.frames)
+                    # send realtime intermediate results every x frames and every x seconds (making sure its at least x frame length)
+                    if frame_count % settings.GetOption(
+                            "realtime_frame_multiply") == 0 and elapsed_intermediate_time > settings.GetOption(
+                        "realtime_frequency_time"):
+                        # set typing indicator for VRChat but not websocket
+                        typing_indicator_thread = threading.Thread(target=typing_indicator_function,
+                                                                   args=(self.osc_ip, self.osc_port, False))
+                        typing_indicator_thread.start()
+                        # merge all frames to one audio clip
+                        for i in range(0, len(self.frames)):
+                            clip.append(self.frames[i])
+                        wavefiledata = b''.join(clip)
+
+                        if self.needs_sample_rate_conversion:
+                            wavefiledata = audio_tools.resample_audio(wavefiledata, self.recorded_sample_rate, self.default_sample_rate, -1,
+                                                                      is_mono=self.is_mono).tobytes()
+
+                        # normalize audio (and make sure it's longer or equal the default block size by pyloudnorm)
+                        if normalize_enabled and len(wavefiledata) >= self.block_size_samples:
+                            wavefiledata = audio_tools.convert_audio_datatype_to_float(np.frombuffer(wavefiledata, np.int16))
+                            wavefiledata, lufs = audio_tools.normalize_audio_lufs(
+                                wavefiledata, self.default_sample_rate, normalize_lower_threshold,
+                                normalize_upper_threshold, normalize_gain_factor,
+                                verbose=self.verbose
+                            )
+                            wavefiledata = audio_tools.convert_audio_datatype_to_integer(wavefiledata, np.int16)
+                            wavefiledata = wavefiledata.tobytes()
+
+                        # remove silence from audio
+                        if silence_cutting_enabled:
+                            wavefiledata_np = np.frombuffer(wavefiledata, np.int16)
+                            if len(wavefiledata_np) >= self.block_size_samples:
+                                wavefiledata = audio_tools.remove_silence_parts(
+                                    wavefiledata_np, self.default_sample_rate,
+                                    silence_offset=silence_offset, max_silence_length=max_silence_length, keep_silence_length=keep_silence_length,
+                                    verbose=self.verbose
+                                )
+                                wavefiledata = wavefiledata.tobytes()
+
+                        if wavefiledata is not None and len(wavefiledata) > 0:
+                            # denoise audio
+                            if settings.GetOption("denoise_audio") and self.audio_enhancer is not None:
+                                wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata).tobytes()
+
+                            audioprocessor.q.put(
+                                {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': False})
+                        else:
+                            self.frames = []
+
+                        self.intermediate_time_start = time.time()
+
+            # stop recording if no speech is detected for pause seconds
+            if should_stop_recording(new_confidence, confidence_threshold, peak_amplitude, energy, self.pause_time, pause,
+                                     keyboard_key=self.push_to_talk_key):
+                self.start_rec_on_volume_threshold = False
+                self.intermediate_time_start = time.time()
+                if self.push_to_talk_key is not None and not keyboard.is_pressed(
+                        self.push_to_talk_key) and self.keyboard_rec_force_stop:
+                    self.keyboard_rec_force_stop = True
+                else:
+                    self.keyboard_rec_force_stop = False
+
+            # save chunk as previous audio chunk to reuse later
+            if not self.start_rec_on_volume_threshold and (
+                    new_confidence < confidence_threshold or confidence_threshold == 0.0):
+                self.previous_audio_chunk = audio_chunk
+            else:
+                self.previous_audio_chunk = None
 
         return in_data, pyaudio.paContinue
 

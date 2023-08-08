@@ -390,3 +390,16 @@ def remove_silence_parts(audio, sample_rate, silence_offset=-40.0, max_silence_l
         if np.issubdtype(original_dtype, np.integer):
             audio = (audio * np.iinfo(original_dtype).max).astype(original_dtype)
         return audio
+
+
+# loads a wav file and resamples it to the target sample rate and converts it to mono if necessary
+def load_wav_to_bytes(wav_path, target_sample_rate=16000):
+    # Open the existing wav file
+    with wave.open(wav_path, 'rb') as wave_file:
+        params = wave_file.getparams()
+        audio_bytes = wave_file.readframes(params.nframes)
+        # get audio sample width
+        audio_sample_width = wave_file.getframerate()
+        channels = wave_file.getnchannels()
+
+    return resample_audio(audio_bytes, audio_sample_width, target_sample_rate, target_channels=-1, is_mono=channels == 1, dtype="int16")

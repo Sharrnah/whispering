@@ -61,6 +61,7 @@ TRANSLATE_SETTINGS = {
     "push_to_talk_key": "",  # Push to talk key. (empty or None to disable)
     "word_timestamps": False,  # if enabled, Whisper will add timestamps to the transcribed text.
     "faster_without_timestamps": False,  # if enabled, faster whisper will only sample text tokens. (only when using stt_type=faster_whisper)
+    "whisper_apply_voice_markers": False,  # if enabled, Whisper will apply voice markers.
 
     "silence_cutting_enabled": True,
     "silence_offset": -40.0,
