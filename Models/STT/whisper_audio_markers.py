@@ -9,21 +9,27 @@ import audio_tools
 class WhisperVoiceMarker:
     audio_sample = None
     audio_model = None
+    try_count = 0
+    last_result = ""
 
     def __init__(self, audio_sample, audio_model):
         self.audio_sample = audio_sample
         self.audio_model = audio_model
+        self.try_count = 0
+        self.last_result = ""
 
-    def get_voice_marker_prompt(self, lng: str):
+    def get_voice_marker_prompt(self, lng: str, task: str):
         voice_marker_prompt = ""
 
-        if lng == "en":
+        if lng == "en" or task == "translate":
+            # use english prompt for translation task, so we don't lose translation capabilities.
             voice_marker_prompt = "Whisper, Ok. " \
                                   + "A pertinent sentence for your purpose in your language. " \
                                   + "Ok, Whisper. Whisper, Ok. Ok, Whisper. Whisper, Ok. " \
                                   + "Please find here, an unlikely ordinary sentence. " \
                                   + "This is to avoid a repetition to be deleted. " \
                                   + "Ok, Whisper. "
+            return voice_marker_prompt
 
         if lng == "zh":
             voice_marker_prompt = "Whisper, Ok. " \
@@ -57,10 +63,26 @@ class WhisperVoiceMarker:
                                   + "यह हटाए जाने की पुनरावृत्ति से बचने के लिए है। " \
                                   + "ओके, विस्पर. "
 
+        if lng == "de":
+            voice_marker_prompt = "Whisper, Okay. " \
+                                  + "Ein passender Satz für Ihren Zweck in Ihrer Sprache. " \
+                                  + "Okay, Whisper. Whisper, Okay. Okay, Whisper. Whisper, Okay. " \
+                                  + "Finden Sie hier einen ungewöhnlich gewöhnlichen Satz. " \
+                                  + "Dadurch soll verhindert werden, dass eine Wiederholung gelöscht wird. " \
+                                  + "Okay, Whisper. "
+
+        if lng == "ja":
+            voice_marker_prompt = "Whisper, Ok. " \
+                                  + "あなたの言語であなたの目的に適した文章。 " \
+                                  + "Ok, Whisper. Whisper, Ok. Ok, Whisper. Whisper, Ok. " \
+                                  + "ここで、ありそうでない普通の文を見つけてください。 " \
+                                  + "これは、重複して削除されないようにするためです。 " \
+                                  + "Ok, Whisper. "
+
         return voice_marker_prompt
 
-    def apply_voice_markers(self, lng: str, try_count=0):
-        if try_count == -1:
+    def apply_voice_markers(self, lng: str):
+        if self.try_count == -1:
             return self.audio_sample
 
         lngInput = lng
@@ -78,7 +100,7 @@ class WhisperVoiceMarker:
             mark2 = "markers/OKW-MRK.wav"
 
         # switch markers if try_count is 1
-        if try_count == 1:
+        if self.try_count == 1:
             mark = mark1
             mark1 = mark2
             mark2 = mark
@@ -105,7 +127,7 @@ class WhisperVoiceMarker:
 
         return audio_sample
 
-    def transcribe(self, try_count=0, **kwargs):
+    def transcribe(self, **kwargs):
         result = None
 
         whisper_task = kwargs["task"]
@@ -121,11 +143,11 @@ class WhisperVoiceMarker:
         whisper_faster_beam_search_patience = kwargs["patience"]
         whisper_faster_length_penalty = kwargs["length_penalty"]
 
-        whisper_initial_prompt = self.get_voice_marker_prompt(whisper_language)
+        whisper_initial_prompt = self.get_voice_marker_prompt(whisper_language, whisper_task)
         if kwargs["initial_prompt"] is not None and kwargs["initial_prompt"] != "":
             whisper_initial_prompt += " " + kwargs["initial_prompt"]
 
-        audio_sample = self.apply_voice_markers(whisper_language, try_count=try_count)
+        audio_sample = self.apply_voice_markers(whisper_language)
 
         result = self.audio_model.transcribe(audio_sample, task=whisper_task,
                                              language=whisper_language,
@@ -141,26 +163,28 @@ class WhisperVoiceMarker:
                                              length_penalty=whisper_faster_length_penalty)
         return result
 
-    def voice_marker_transcribe(self, try_count=0, last_result="", **kwargs):
+    def voice_marker_transcribe(self, **kwargs):
         result = {}
         result["text"] = ""
 
-        result = self.transcribe(**kwargs, try_count=try_count)
+        result = self.transcribe(**kwargs)
         aWhisper = "(Whisper|Wisper|Wyspę|Wysper|Wispa|Уіспер|Ου ίσπερ|위스퍼드|ウィスパー|विस्पर|विसपर)"
         aOk = "(okay|oké|okej|Окей|οκέι|오케이|オーケー|ओके|o[.]?k[.]?)"
         aSep = "[.,!?。， ]*"
 
-        if try_count == -1:
+        if self.try_count == -1:
             return result
 
-        if try_count == 0:
+        if self.try_count == 0:
             aCleaned = re.sub(r"(^ *" + aWhisper + aSep + aOk + aSep + "|" + aOk + aSep + aWhisper + aSep + " *$)", "",
                               result["text"], 2, re.IGNORECASE)
             if re.match(
                     r"^ *(" + aOk + "|" + aSep + "|" + aWhisper + ")*" + aWhisper + "(" + aOk + "|" + aSep + "|" + aWhisper + ")* *$",
                     result["text"], re.IGNORECASE):
                 # Empty sound ?
-                return self.voice_marker_transcribe(try_count=1, last_result="", **kwargs)
+                self.try_count = 1
+                self.last_result = ""
+                return self.voice_marker_transcribe(**kwargs)
 
             if re.match(r"^ *" + aWhisper + aSep + aOk + aSep + ".*" + aOk + aSep + aWhisper + aSep + " *$",
                         result["text"], re.IGNORECASE):
@@ -168,12 +192,14 @@ class WhisperVoiceMarker:
                 result["text"] = aCleaned
                 return result
 
-            return self.voice_marker_transcribe(try_count=1, last_result=aCleaned, **kwargs)
+            self.try_count = 1
+            self.last_result = aCleaned
+            return self.voice_marker_transcribe(**kwargs)
 
-        if try_count == 1:
+        if self.try_count == 1:
             aCleaned = re.sub(r"(^ *" + aOk + aSep + aWhisper + aSep + "|" + aWhisper + aSep + aOk + aSep + " *$)", "",
                               result["text"], 2, re.IGNORECASE)
-            if aCleaned == last_result:
+            if aCleaned == self.last_result:
                 # CONFIRMED!
                 result["text"] = aCleaned
                 return result
@@ -192,4 +218,6 @@ class WhisperVoiceMarker:
                 return result
 
             # retry
-            return self.voice_marker_transcribe(try_count=-1, last_result=aCleaned, **kwargs)
+            self.try_count = -1
+            self.last_result = aCleaned
+            return self.voice_marker_transcribe(**kwargs)
