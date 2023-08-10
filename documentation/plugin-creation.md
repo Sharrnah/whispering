@@ -12,6 +12,17 @@ Plugins are loaded from the `Plugins` directory in the root of the project. The 
 
 Plugins are written as Python classes. The class must inherit from `Plugins.Base` and implement the `init`, `timer`, `stt` and `tts` methods.
 
+At the very top of the file, you should add a comment with a short description and most importantly, a version line, so the version can be compared inside the UI application.
+example:
+```python
+# ============================================================
+# This is the plugin xyz for Whispering Tiger
+# Version: 1.0.0
+# some more information about the plugin
+# ============================================================
+```
+The format of the version line can start with `Version: `, `Version `, `V`, `V: ` followed by `<major>.<minor>.<patch>`
+
 The `timer` method is called every x seconds (defined in `plugin_timer`) and is paused for x seconds (defined in `plugin_timer_timeout`) when the STT engine returned a result.
 
 The `stt` method is called when the STT engine returns a result.
@@ -63,6 +74,11 @@ The following structs are available:
 
 ## Example plugin
 ```python
+# ============================================================
+# This is the example plugin for Whispering Tiger
+# Version: 1.0.0
+# some more information about the plugin
+# ============================================================
 import Plugins
 import settings
 import VRC_OSCLib
