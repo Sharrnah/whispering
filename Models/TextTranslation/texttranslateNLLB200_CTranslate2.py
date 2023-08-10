@@ -1,3 +1,5 @@
+import sys
+
 import torch
 import ctranslate2
 import sentencepiece as spm
@@ -9,8 +11,8 @@ from Models import languageClassification
 nltk_path = Path(Path.cwd() / ".cache" / "nltk")
 os.makedirs(nltk_path, exist_ok=True)
 os.environ["NLTK_DATA"] = str(nltk_path.resolve())
-from nltk.tokenize import sent_tokenize
 import nltk
+
 
 LANGUAGES = {
     "Achinese (Arab)": "ace_Arab",
@@ -525,9 +527,11 @@ def load_model(size="small", compute_type="float32"):
     sentencepiece = spm.SentencePieceProcessor()
     sentencepiece.load(str(sp_model_path.resolve()))
 
-    # load nltk sentence splitting dependency
-    if not Path(nltk_path / "tokenizers" / "punkt").is_dir() or not Path(nltk_path / "tokenizers" / "punkt" / "english.pickle").is_file():
-        nltk.download('punkt')
+    # only if not running as pyinstaller bundle (pyinstaller places tokenizer folder in distribution "nlpk_data")
+    if not getattr(sys, 'frozen', False) and not hasattr(sys, '_MEIPASS'):
+        # load nltk sentence splitting dependency
+        if not Path(nltk_path / "tokenizers" / "punkt").is_dir() or not Path(nltk_path / "tokenizers" / "punkt" / "english.pickle").is_file():
+            nltk.download('punkt', download_dir=str(nltk_path.resolve()))
 
     # init NLLB 200 model
     model_path_string = str(model_path.resolve())
@@ -565,7 +569,7 @@ def translate_language(text, from_code, to_code, as_iso1=False):
     nltk_sentence_split_lang = "english"
     if from_code in NLTK_LANGUAGE_CODES:
         nltk_sentence_split_lang = NLTK_LANGUAGE_CODES[from_code]
-    sentences = sent_tokenize(text, language=nltk_sentence_split_lang)
+    sentences = nltk.tokenize.sent_tokenize(text, language=nltk_sentence_split_lang)
     translated_sentences = []
 
     for sentence in sentences:

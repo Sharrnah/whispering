@@ -24,6 +24,8 @@ datas += copy_metadata('transformers')
 datas += copy_metadata('huggingface-hub')
 datas += copy_metadata('safetensors')
 datas += copy_metadata('pyyaml')
+datas += copy_metadata('pyloudnorm')
+datas += copy_metadata('nltk')
 tmp_ret = collect_all('easyocr')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('winsdk')
@@ -48,6 +50,10 @@ tmp_ret = collect_all('transformers')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('df')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('nltk')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
+datas += [('.cache/nltk/tokenizers/punkt', './nltk_data/tokenizers/punkt')]
 
 
 block_cipher = None

@@ -24,6 +24,8 @@ rem             --copy-metadata transformers ^
 rem             --copy-metadata huggingface-hub ^
 rem             --copy-metadata safetensors ^
 rem             --copy-metadata pyyaml ^
+rem             --copy-metadata pyloudnorm ^
+rem             --copy-metadata nltk ^
 rem             --collect-data whisper ^
 rem             --collect-data pykakasi ^
 rem             --collect-all easyocr ^
@@ -38,6 +40,8 @@ rem             --collect-all torchlibrosa ^
 rem             --collect-all sentencepiece ^
 rem             --collect-all transformers ^
 rem             --collect-all df ^
+rem             --collect-all nltk ^
+rem             --add-data ".cache/nltk/tokenizers/punkt;./nltk_data/tokenizers/punkt" ^
 rem             -i app-icon.ico
 
 rem set pyrecursivelimit=import sys ; sys.setrecursionlimit(sys.getrecursionlimit() * 5)
