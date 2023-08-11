@@ -4,6 +4,10 @@ import os
 from pathlib import Path
 from click import core
 from whisper import available_models
+import threading
+
+DEBOUNCE_TIME = 1.0  # 1 second, adjust as necessary
+_save_timer = None
 
 SETTINGS_PATH = Path(Path.cwd() / 'settings.yaml')
 
@@ -137,12 +141,12 @@ def SetOption(setting, value):
             TRANSLATE_SETTINGS[setting] = value
             # Save settings
             if TRANSLATE_SETTINGS[setting] not in NON_PERSISTENT_SETTINGS:
-                SaveYaml(SETTINGS_PATH)
+                debounced_save_yaml(SETTINGS_PATH)
     else:
         TRANSLATE_SETTINGS[setting] = value
         # Save settings
         if TRANSLATE_SETTINGS[setting] not in NON_PERSISTENT_SETTINGS:
-            SaveYaml(SETTINGS_PATH)
+            debounced_save_yaml(SETTINGS_PATH)
     return value
 
 
@@ -156,7 +160,26 @@ def LoadYaml(path):
             TRANSLATE_SETTINGS.update(yaml.safe_load(f))
 
 
+def debounced_save_yaml(path):
+    global _save_timer
+
+    # Cancel the existing timer if it exists
+    if _save_timer is not None:
+        _save_timer.cancel()
+
+    # Start a new timer
+    _save_timer = threading.Timer(DEBOUNCE_TIME, SaveYaml, [path])
+    _save_timer.start()
+
+
 def SaveYaml(path):
+    global _save_timer
+
+    # If this function was called directly, cancel the timer
+    if _save_timer is not None:
+        _save_timer.cancel()
+        _save_timer = None
+
     to_save_settings = TRANSLATE_SETTINGS.copy()
 
     # Remove settings that are in NON_PERSISTENT_SETTINGS
