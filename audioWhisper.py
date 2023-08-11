@@ -356,7 +356,7 @@ class AudioProcessor:
             clip_duration = phrase_time_limit
             fps = 0
             if clip_duration is not None:
-                fps = int(self.default_sample_rate / CHUNK * clip_duration)
+                fps = int(self.recorded_sample_rate / CHUNK * clip_duration)
 
             end_time = time.time()
             elapsed_time = end_time - self.start_time
