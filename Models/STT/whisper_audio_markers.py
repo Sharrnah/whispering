@@ -11,6 +11,7 @@ class WhisperVoiceMarker:
     audio_model = None
     try_count = 0
     last_result = ""
+    verbose = False
 
     def __init__(self, audio_sample, audio_model):
         self.audio_sample = audio_sample
@@ -20,6 +21,8 @@ class WhisperVoiceMarker:
 
     def get_voice_marker_prompt(self, lng: str, task: str):
         voice_marker_prompt = ""
+        if self.try_count == -1:
+            return voice_marker_prompt
 
         if lng == "en" or task == "translate":
             # use english prompt for translation task, so we don't lose translation capabilities.
@@ -105,6 +108,9 @@ class WhisperVoiceMarker:
             mark1 = mark2
             mark2 = mark
 
+        if self.verbose:
+            print("Using markers: start: " + mark1 + " and end: " + mark2)
+
         marker1_audio = audio_tools.load_wav_to_bytes(mark1)
 
         # convert audio to 16 bit numpy array
@@ -161,6 +167,9 @@ class WhisperVoiceMarker:
                                              without_timestamps=whisper_faster_without_timestamps,
                                              patience=whisper_faster_beam_search_patience,
                                              length_penalty=whisper_faster_length_penalty)
+        if self.verbose:
+            print("Result: " + str(result))
+
         return result
 
     def voice_marker_transcribe(self, **kwargs):
@@ -173,6 +182,8 @@ class WhisperVoiceMarker:
         aSep = "[.,!?。， ]*"
 
         if self.try_count == -1:
+            if self.verbose:
+                print("try_count == -1")
             return result
 
         if self.try_count == 0:
@@ -184,12 +195,16 @@ class WhisperVoiceMarker:
                 # Empty sound ?
                 self.try_count = 1
                 self.last_result = ""
+                if self.verbose:
+                    print("Empty sound ? 1")
                 return self.voice_marker_transcribe(**kwargs)
 
             if re.match(r"^ *" + aWhisper + aSep + aOk + aSep + ".*" + aOk + aSep + aWhisper + aSep + " *$",
                         result["text"], re.IGNORECASE):
                 # GOOD!
                 result["text"] = aCleaned
+                if self.verbose:
+                    print("GOOD! 1")
                 return result
 
             self.try_count = 1
@@ -202,6 +217,8 @@ class WhisperVoiceMarker:
             if aCleaned == self.last_result:
                 # CONFIRMED!
                 result["text"] = aCleaned
+                if self.verbose:
+                    print("CONFIRMED!")
                 return result
 
             if re.match(
@@ -209,15 +226,21 @@ class WhisperVoiceMarker:
                     result["text"], re.IGNORECASE):
                 # Empty sound ?
                 result["text"] = ""
+                if self.verbose:
+                    print("Empty sound ? 2")
                 return result
 
             if re.match(r"^ *" + aOk + aSep + aWhisper + aSep + ".*" + aWhisper + aSep + aOk + aSep + " *$",
                         result["text"], re.IGNORECASE):
                 # GOOD!
                 result["text"] = aCleaned
+                if self.verbose:
+                    print("GOOD! 2")
                 return result
 
             # retry
             self.try_count = -1
             self.last_result = aCleaned
+            if self.verbose:
+                print("retry count -1")
             return self.voice_marker_transcribe(**kwargs)
