@@ -793,7 +793,7 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
         settings.SetOption("current_language", "en")
     else:
         # show no language if unspecified STT type
-        settings.SetOption("whisper_languages", {"": ""})
+        settings.SetOption("whisper_languages", ({"code": "", "name": ""},))
 
     settings.SetOption("ai_device", settings.GetArgumentSettingFallback(ctx, "ai_device", "ai_device"))
     settings.SetOption("verbose", verbose)

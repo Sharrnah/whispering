@@ -59,7 +59,7 @@ TRANSLATE_SETTINGS = {
     "whisper_num_workers": 1,  # When transcribe() is called from multiple Python threads
     "vad_enabled": True,  # Enable Voice activity detection (VAD)
     "vad_on_full_clip": False,  # Make an additional VAD check on the full clip (Not only on each frame).
-    "vad_confidence_threshold": "0.4",  # Voice activity detection (VAD) confidence threshold. Can be 0-1
+    "vad_confidence_threshold": 0.4,  # Voice activity detection (VAD) confidence threshold. Can be 0-1
     "vad_frames_per_buffer": 2000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
     "vad_thread_num": 1,  # number of threads to use for VAD.
     "push_to_talk_key": "",  # Push to talk key. (empty or None to disable)
