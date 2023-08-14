@@ -93,6 +93,11 @@ def convert_tensor_to_wav_buffer(audio, sample_rate=24000, channels=1, sample_wi
     return buff
 
 
+stop_flag = threading.Event()
+audio_threads = []  # List to manage all audio threads
+audio_thread_lock = threading.Lock()
+
+
 def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2, channels=2, sample_rate=44100):
     try:
         stream = p.open(format=audio_format,
@@ -102,6 +107,8 @@ def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2
                         output=True)
 
         for i in range(0, len(audio_data), chunk * channels):
+            if stop_flag.is_set():
+                break
             stream.write(audio_data[i:i + chunk * channels].tobytes())
 
         stream.close()
@@ -113,7 +120,14 @@ def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2
 # audio can be bytes (in wav) or tensor
 # tensor_sample_with is the sample width of the tensor (if audio is tensor and not bytes) [default is 4 bytes]
 # tensor_channels is the number of channels of the tensor (if audio is tensor and not bytes) [default is 1 channel (mono)]
-def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channel_num=2, target_channels=2, is_mono=True, dtype="int16", tensor_sample_with=4, tensor_channels=1, secondary_device=None):
+def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channel_num=2, target_channels=2, is_mono=True, dtype="int16", tensor_sample_with=4, tensor_channels=1, secondary_device=None, stop_play=True):
+    global audio_threads
+
+    if stop_play:
+        stop_audio()
+
+    stop_flag.clear()
+
     if isinstance(audio, bytes):
         buff = _generate_binary_buffer(audio)
     else:
@@ -134,6 +148,8 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
     # Read all audio data and resample if necessary
     frame_data = wf.readframes(wf.getnframes())
 
+    channels = wf.getnchannels()
+
     # get audio sample width
     audio_sample_width = wf.getsampwidth()
 
@@ -142,30 +158,58 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
     # resample audio data
     audio_data = resample_audio(frame_data, source_sample_rate, closest_sample_rate, target_channels=target_channels, is_mono=is_mono, dtype=dtype)
 
-    audio_thread = None
+    current_threads = []
+
     if secondary_device is not None:
-        audio_thread = threading.Thread(target=play_stream, args=(
+        secondary_audio_thread = threading.Thread(target=play_stream, args=(
             p, secondary_device, audio_data, chunk,
             p.get_format_from_width(audio_sample_width),
             audio_device_channel_num,
             closest_sample_rate
         ))
-        audio_thread.start()
+        secondary_audio_thread.start()
+        current_threads.append(secondary_audio_thread)
+        #audio_threads.append(secondary_audio_thread)
 
     # Open a .Stream object to write the WAV file to
     # 'output = True' indicates that the sound will be played rather than recorded
-    play_stream(p=p, device=device, audio_data=audio_data, chunk=chunk,
-                audio_format=p.get_format_from_width(audio_sample_width),
-                channels=audio_device_channel_num,
-                sample_rate=closest_sample_rate
-                )
+    main_audio_thread = threading.Thread(target=play_stream, args=(
+        p, device, audio_data, chunk,
+        p.get_format_from_width(audio_sample_width),
+        audio_device_channel_num,
+        closest_sample_rate
+    ))
+    main_audio_thread.start()
+    current_threads.append(main_audio_thread)
+    #audio_threads.append(main_audio_thread)
 
-    # wait while audio thread is running
-    if audio_thread is not None:
-        while audio_thread.is_alive():
-            time.sleep(0.1)
+    # Add the current threads to the global list
+    audio_threads.extend(current_threads)
+
+    # Wait only for the threads that this invocation of play_audio has started
+    for thread in current_threads:
+        thread.join()
 
     p.terminate()
+
+    # Cleanup: Remove threads that have completed from the global list
+    for thread in current_threads:
+        audio_threads.remove(thread)
+
+    stop_flag.clear()
+
+    audio_threads.clear()
+
+
+def stop_audio():
+    """
+    Stop the audio playback.
+    """
+    with audio_thread_lock:
+        stop_flag.set()
+        for thread in audio_threads:
+            thread.join()  # Wait for each thread to complete its execution
+        audio_threads.clear()  # Clear the list after all threads have completed
 
 
 def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt16, sample_rate=16000, channels=1, chunk=int(16000/10), py_audio=None, audio_processor=None):
