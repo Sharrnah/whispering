@@ -56,7 +56,7 @@ class Base:
                 # set event widgets
                 if settings_name in init_settings and isinstance(init_settings[settings_name], dict) and \
                         "type" in init_settings[settings_name] and init_settings[settings_name]["type"] in SUPPORTED_WIDGET_TYPES:
-                    if "value" in init_settings[settings_name] and isinstance(
+                    if "value" in init_settings[settings_name] and init_settings[settings_name].get("type") != "button" and isinstance(
                             plugin_settings[self.__class__.__name__][settings_name], dict) and "value" in \
                             plugin_settings[self.__class__.__name__][settings_name]:
                         # keep value
