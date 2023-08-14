@@ -96,6 +96,7 @@ def convert_tensor_to_wav_buffer(audio, sample_rate=24000, channels=1, sample_wi
 stop_flag = threading.Event()
 audio_threads = []  # List to manage all audio threads
 audio_thread_lock = threading.Lock()
+audio_list_lock = threading.Lock()  # Lock to protect the audio_threads list
 
 
 def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2, channels=2, sample_rate=44100):
@@ -169,7 +170,6 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
         ))
         secondary_audio_thread.start()
         current_threads.append(secondary_audio_thread)
-        #audio_threads.append(secondary_audio_thread)
 
     # Open a .Stream object to write the WAV file to
     # 'output = True' indicates that the sound will be played rather than recorded
@@ -181,24 +181,25 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
     ))
     main_audio_thread.start()
     current_threads.append(main_audio_thread)
-    #audio_threads.append(main_audio_thread)
 
     # Add the current threads to the global list
-    audio_threads.extend(current_threads)
+    with audio_list_lock:
+        audio_threads.extend(current_threads)
 
     # Wait only for the threads that this invocation of play_audio has started
     for thread in current_threads:
         thread.join()
 
-    p.terminate()
-
     # Cleanup: Remove threads that have completed from the global list
-    for thread in current_threads:
-        audio_threads.remove(thread)
+    with audio_list_lock:
+        for thread in current_threads:
+            if thread in audio_threads:
+                audio_threads.remove(thread)
 
+    p.terminate()
     stop_flag.clear()
 
-    audio_threads.clear()
+    current_threads.clear()
 
 
 def stop_audio():
@@ -207,9 +208,10 @@ def stop_audio():
     """
     with audio_thread_lock:
         stop_flag.set()
-        for thread in audio_threads:
-            thread.join()  # Wait for each thread to complete its execution
-        audio_threads.clear()  # Clear the list after all threads have completed
+        with audio_list_lock:
+            for thread in audio_threads:
+                thread.join()  # Wait for each thread to complete its execution
+            audio_threads.clear()  # Clear the list after all threads have completed
 
 
 def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt16, sample_rate=16000, channels=1, chunk=int(16000/10), py_audio=None, audio_processor=None):
