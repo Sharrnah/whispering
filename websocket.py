@@ -1,9 +1,13 @@
 import sys
 import threading
 import asyncio
+import time
+
 import websockets
 import json
 import base64
+
+import audio_tools
 import processmanager
 
 from Models.TextTranslation import texttranslate
@@ -45,6 +49,18 @@ def tts_request(msgObj, websocket):
 
 
 def translate_request(msgObj, websocket):
+    def send_osc_request(msg_obj, websocket):
+        # delay sending message if it is the final audio and until TTS starts playing
+        if settings.GetOption("osc_delay_until_audio_playback"):
+            # wait until is_audio_playing is True or timeout is reached
+            delay_timeout = time.time() + settings.GetOption("osc_delay_timeout")
+            tag = settings.GetOption("osc_delay_until_audio_playback_tag")
+            tts_answer = settings.GetOption("tts_answer")
+            if tag == "tts" and tts_answer:
+                while not audio_tools.is_audio_playing(tag=tag) and time.time() < delay_timeout:
+                    time.sleep(0.05)
+        osc_request(msg_obj, websocket)
+
     ignore_send_options = True
     if "ignore_send_options" in msgObj["value"]:
         ignore_send_options = msgObj["value"]["ignore_send_options"]
@@ -65,7 +81,9 @@ def translate_request(msgObj, websocket):
                 msgObj["value"]["text"] = orig_text
             elif settings.GetOption("osc_type_transfer") == "both":
                 msgObj["value"]["text"] = orig_text + settings.GetOption("osc_type_transfer_split") + text
-            osc_request(msgObj, websocket)
+            elif settings.GetOption("osc_type_transfer") == "both_inverted":
+                msgObj["value"]["text"] = text + settings.GetOption("osc_type_transfer_split") + orig_text
+            threading.Thread(target=send_osc_request, args=(msgObj, websocket,)).start()
 
         if settings.GetOption("tts_answer"):
             msgObj["value"]["text"] = text
@@ -91,6 +109,8 @@ def osc_request(msgObj, websocket):
     osc_scroll_size = settings.GetOption("osc_scroll_size")
     osc_max_scroll_size = settings.GetOption("osc_max_scroll_size")
 
+    VRC_OSCLib.set_min_time_between_messages(settings.GetOption("osc_min_time_between_messages"))
+    
     if osc_ip != "0":
         if osc_send_type == "full":
             VRC_OSCLib.Chat(msgObj["value"]["text"], True, osc_notify, osc_address, IP=osc_ip, PORT=osc_port,
@@ -210,6 +230,12 @@ def websocketMessageHandler(msgObj, websocket):
                 download = True
             tts_thread = threading.Thread(target=tts_plugin_process, args=(msgObj, websocket, download))
             tts_thread.start()
+
+    if msgObj["type"] == "audio_stop":
+        tag = None
+        if "value" in msgObj:
+            tag = msgObj["value"]
+        audio_tools.stop_audio(tag=tag)
 
     if msgObj["type"] == "tts_voice_save_req":
         if silero.init():

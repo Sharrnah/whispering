@@ -6,7 +6,7 @@ from click import core
 from whisper import available_models
 import threading
 
-DEBOUNCE_TIME = 1.0  # 1 second, adjust as necessary
+DEBOUNCE_TIME = 1.5  # 1.5 second, adjust as necessary
 _save_timer = None
 
 SETTINGS_PATH = Path(Path.cwd() / 'settings.yaml')
@@ -90,12 +90,13 @@ TRANSLATE_SETTINGS = {
     "osc_ip": "127.0.0.1",  # OSC IP address. set to "0" to disable.
     "osc_port": 9000,
     "osc_address": "/chatbox/input",
+    "osc_min_time_between_messages": 1.5,  # defines the minimum time between OSC messages in seconds.
     "osc_typing_indicator": True,
     "osc_convert_ascii": False,
     "osc_chat_prefix": "",  # Prefix for OSC messages.
     "osc_chat_limit": 144,  # defines the maximum length of a chat message.
     "osc_time_limit": 15.0,  # defines the time between OSC messages in seconds.
-    "osc_scroll_time_limit": 1.3,  # defines the scroll time limit for scrolling OSC messages. (only used when osc_send_type is set to "scroll")
+    "osc_scroll_time_limit": 1.5,  # defines the scroll time limit for scrolling OSC messages. (only used when osc_send_type is set to "scroll")
     "osc_initial_time_limit": 15.0,  # defines the initial time after the first message is send.
     "osc_scroll_size": 3,  # defines the scroll size for scrolling OSC messages. (only used when osc_send_type is set to "scroll")
     "osc_max_scroll_size": 30,  # defines the maximum scroll size for scrolling OSC messages. ~30 to scroll on only a single line (only used when osc_send_type is set to "scroll")
@@ -103,6 +104,9 @@ TRANSLATE_SETTINGS = {
     "osc_auto_processing_enabled": True,  # Toggle auto sending of OSC messages on WhisperAI results. (not saved)
     "osc_type_transfer": "translation_result",  # defines which type of data to send. Can be "source", "translation_result" or "both".
     "osc_type_transfer_split": " 🌐 ",  # defines how source and translation results are split. (only used when osc_type_transfer is set to "both")
+    "osc_delay_until_audio_playback": False,  # if enabled, OSC messages will be delayed until audio playback starts. (if no TTS is used, this will prevent messages from being send.)
+    "osc_delay_until_audio_playback_tag": "tts",  # defines the tag used for detecting audio playback. (only used when osc_delay_until_audio_playback is enabled. Set empty to detect any audio playback)
+    "osc_delay_timeout": 10,  # defines the timeout for delayed OSC messages. (only used when osc_delay_until_audio_playback is enabled)
 
     # websocket settings
     "websocket_ip": "127.0.0.1",
@@ -119,6 +123,7 @@ TRANSLATE_SETTINGS = {
     "tts_prosody_pitch": "",  # TTS voice pitch. Can be "x-low", "low", "medium", "high", "x-high" or "" for default.
     "tts_use_secondary_playback": False,  # Play TTS audio to a secondary audio device at the same time.
     "tts_secondary_playback_device": -1,  # Play TTS audio to this specified audio device at the same time. (set to -1 to use default audio device)
+    "tts_allow_overlapping_audio": False,  # Allow overlapping audio (if disabled, TTS will stop previous audio before playing new audio)
 
     # Plugins
     "plugins": {},  # active plugins
@@ -245,7 +250,7 @@ def GetAvailableSettingValues():
         "realtime_whisper_model": [""] + get_available_models(),
         "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16"],
         #"realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
-        "osc_type_transfer": ["source", "translation_result", "both"],
+        "osc_type_transfer": ["source", "translation_result", "both", "both_inverted"],
         "osc_send_type": ["full", "full_or_scroll", "scroll", "chunks"],
     }
 

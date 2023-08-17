@@ -230,6 +230,8 @@ class Silero:
             if secondary_audio_device == -1:
                 secondary_audio_device = settings.GetOption("device_default_out_index")
 
+        allow_overlapping_audio = settings.GetOption("tts_allow_overlapping_audio")
+
         # play audio tensor
         audio_tools.play_audio(audio, device,
                                source_sample_rate=source_sample_rate,
@@ -239,7 +241,9 @@ class Silero:
                                dtype="float32",
                                tensor_sample_with=4,
                                tensor_channels=2,
-                               secondary_device=secondary_audio_device
+                               secondary_device=secondary_audio_device,
+                               stop_play=not allow_overlapping_audio,
+                               tag="tts"
                                )
 
     def return_wav_file_binary(self, audio):

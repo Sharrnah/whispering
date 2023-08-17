@@ -11,9 +11,15 @@ from pythonosc import udp_client
 from pythonosc.osc_message_builder import OscMessageBuilder
 from unidecode import unidecode
 import threading
+import queue
 
+# Variables and locks for thread safety and message queuing
+send_message_lock = threading.Lock()
+osc_queue = queue.Queue()
+last_message_sent_time = 0
 stop_flag = False
 thread = None
+min_time_between_messages = 1.5
 
 
 def AV3_SetInt(data=0, Parameter="example", IP='127.0.0.1', PORT=9000):
@@ -97,6 +103,46 @@ def Bool(data=False, address="/input/Jump", IP='127.0.0.1', PORT=9000):
     client.send(m)
 
 
+def set_min_time_between_messages(time_in_seconds):
+    global min_time_between_messages
+    min_time_between_messages = time_in_seconds
+
+
+def _send_osc_message():
+    global last_message_sent_time, min_time_between_messages
+    print("min_time_between_messages: " + str(min_time_between_messages))
+    while True:
+        try:
+            # Wait for a message to be available in the queue. This will block until a message is available.
+            message_data = osc_queue.get()
+
+            # Discard all but the latest message in the queue.
+            while not osc_queue.empty():
+                message_data = osc_queue.get()
+
+            current_time = time.time()
+            time_since_last_message = current_time - last_message_sent_time
+            if time_since_last_message < min_time_between_messages:
+                time_to_wait = min_time_between_messages - time_since_last_message
+                time.sleep(time_to_wait)
+
+            # Send the actual OSC message here using the original Chat function
+            _direct_osc_send(**message_data)
+
+            last_message_sent_time = time.time()
+
+        except Exception as e:
+            # This can be useful for debugging any exceptions that might occur
+            print(f"Error in OSC sender thread: {e}")
+            time.sleep(0.1)
+
+
+# Start the OSC message sender thread
+osc_sender_thread = threading.Thread(target=_send_osc_message)
+osc_sender_thread.daemon = True
+osc_sender_thread.start()
+
+
 # OSC Send Command
 def Message(data="example", address="/example", IP='127.0.0.1', PORT=9000):
     # OSC Bild
@@ -109,10 +155,25 @@ def Message(data="example", address="/example", IP='127.0.0.1', PORT=9000):
     client.send(m)
 
 
-# OSC Send Chat
 def Chat(data="example", send=True, nofify=True, address="/chatbox/input", IP='127.0.0.1', PORT=9000, convert_ascii=False):
+    with send_message_lock:
+        # Enqueue the message for sending
+        osc_queue.put({
+            "data": data,
+            "send": send,
+            "nofify": nofify,
+            "address": address,
+            "IP": IP,
+            "PORT": PORT,
+            "convert_ascii": convert_ascii
+        })
+
+
+# OSC Send Chat
+def _direct_osc_send(data="example", send=True, nofify=True, address="/chatbox/input", IP='127.0.0.1', PORT=9000, convert_ascii=False):
     # OSC Bild
     client = udp_client.UDPClient(IP, PORT)
+
     msg = OscMessageBuilder(address=address)
     if convert_ascii:
         msg.add_arg(unidecode(data))

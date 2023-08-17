@@ -803,6 +803,8 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
     settings.SetOption("osc_address", settings.GetArgumentSettingFallback(ctx, "osc_address", "osc_address"))
     settings.SetOption("osc_convert_ascii",
                        str2bool(settings.GetArgumentSettingFallback(ctx, "osc_convert_ascii", "osc_convert_ascii")))
+    osc_min_time_between_messages = settings.SetOption("osc_min_time_between_messages", settings.GetArgumentSettingFallback(ctx, "osc_min_time_between_messages", "osc_min_time_between_messages"))
+    VRC_OSCLib.set_min_time_between_messages(osc_min_time_between_messages)
 
     websocket_ip = settings.SetOption("websocket_ip",
                                       settings.GetArgumentSettingFallback(ctx, "websocket_ip", "websocket_ip"))

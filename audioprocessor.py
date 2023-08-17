@@ -1,8 +1,11 @@
 import sys
 import threading
 import queue
+import time
 
 import whisper
+
+import audio_tools
 import settings
 import VRC_OSCLib
 from Models.TextTranslation import texttranslate
@@ -149,6 +152,9 @@ def send_message(predicted_text, result_obj, final_audio):
     osc_port = settings.GetOption("osc_port")
     websocket_ip = settings.GetOption("websocket_ip")
 
+    # Update osc_min_time_between_messages option
+    VRC_OSCLib.set_min_time_between_messages(settings.GetOption("osc_min_time_between_messages"))
+
     # WORKAROUND: prevent it from outputting the initial prompt.
     if predicted_text == settings.GetOption("initial_prompt"):
         return
@@ -175,8 +181,20 @@ def send_message(predicted_text, result_obj, final_audio):
             osc_text = result_obj["text"]
         elif settings.GetOption("osc_type_transfer") == "both":
             osc_text = result_obj["text"] + settings.GetOption("osc_type_transfer_split") + predicted_text
+        elif settings.GetOption("osc_type_transfer") == "both_inverted":
+            osc_text = predicted_text + settings.GetOption("osc_type_transfer_split") + result_obj["text"]
 
         message = build_whisper_translation_osc_prefix(result_obj) + osc_text
+
+        # delay sending message if it is the final audio and until TTS starts playing
+        if final_audio and settings.GetOption("osc_delay_until_audio_playback"):
+            # wait until is_audio_playing is True or timeout is reached
+            delay_timeout = time.time() + settings.GetOption("osc_delay_timeout")
+            tag = settings.GetOption("osc_delay_until_audio_playback_tag")
+            tts_answer = settings.GetOption("tts_answer")
+            if tag == "tts" and tts_answer:
+                while not audio_tools.is_audio_playing(tag=tag) and time.time() < delay_timeout:
+                    time.sleep(0.05)
 
         if osc_send_type == "full":
             VRC_OSCLib.Chat(message, True, osc_notify, osc_address,
