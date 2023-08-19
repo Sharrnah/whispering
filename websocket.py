@@ -109,7 +109,7 @@ def osc_request(msgObj, websocket):
     osc_scroll_size = settings.GetOption("osc_scroll_size")
     osc_max_scroll_size = settings.GetOption("osc_max_scroll_size")
 
-    VRC_OSCLib.set_min_time_between_messages(settings.GetOption("osc_min_time_between_messages"))
+    #VRC_OSCLib.set_min_time_between_messages(settings.GetOption("osc_min_time_between_messages"))
     
     if osc_ip != "0":
         if osc_send_type == "full":
@@ -208,6 +208,8 @@ def websocketMessageHandler(msgObj, websocket):
         if msgObj["name"] == "tts_model":
             silero.tts.load()
             BroadcastMessage(json.dumps({"type": "available_tts_voices", "data": silero.tts.list_voices()}))
+        if msgObj["name"] == "osc_min_time_between_messages":
+            VRC_OSCLib.set_min_time_between_messages(msgObj["value"])
 
     if msgObj["type"] == "setting_update_req":
         AnswerMessage(websocket, json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))

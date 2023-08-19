@@ -45,10 +45,14 @@ pyloudnorm
 nltk
 
 # plugin dependencies
-omegaconf==2.1.0
+omegaconf==2.0.6
 PyYAML>=6.0
 winsdk>=1.0.0b9
 keyboard>=0.13.5
+
+
+#RVC dependencies
+fairseq @ https://github.com/Sharrnah/fairseq/releases/download/v0.12.4/fairseq-0.12.4-cp310-cp310-win_amd64.whl
 
 #faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/tags/v0.3.0.zip
 faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/heads/master.zip

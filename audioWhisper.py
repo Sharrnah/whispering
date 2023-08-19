@@ -2,8 +2,12 @@ import os
 import sys
 import json
 import traceback
+
+import downloader
 import processmanager
 import atexit
+
+from Models.TTS import silero
 
 # set environment variable CT2_CUDA_ALLOW_FP16 to 1 (before ctranslate2 is imported)
 # to allow using FP16 computation on GPU even if the device does not have efficient FP16 support.
@@ -96,6 +100,16 @@ def sigterm_handler(_signo, _stack_frame):
 signal.signal(signal.SIGTERM, sigterm_handler)
 signal.signal(signal.SIGINT, sigterm_handler)
 signal.signal(signal.SIGABRT, sigterm_handler)
+
+
+def safe_decode(data):
+    encodings = ['utf-8', 'utf-16', 'gbk', 'iso-8859-1', 'iso-8859-5', 'iso-8859-6', 'big5', 'shift_jis', 'euc-kr', 'euc-jp', 'windows-1252', 'windows-1251', 'windows-1256']
+    for encoding in encodings:
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            pass
+    return data.decode('utf-8', 'replace')  # Default to utf-8 with replacement
 
 
 # Taken from utils_vad.py
@@ -229,9 +243,9 @@ def get_audio_device_index_by_name_and_api(name, api, is_input=True, default=Non
         device_info = audio.get_device_info_by_index(i)
         device_name = device_info["name"]
         if isinstance(device_name, bytes):
-            device_name = device_name.decode('utf-8')
+            device_name = safe_decode(device_name)
         if isinstance(name, bytes):
-            name = name.decode('utf-8')
+            name = safe_decode(name)
 
         if device_info["hostApi"] == api and device_info[
             "maxInputChannels" if is_input else "maxOutputChannels"] > 0 and name in device_name:
@@ -834,6 +848,12 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
     if websocket_ip == "0" and open_browser:
         print("--open_browser flag requres --websocket_ip to be set.")
 
+    # initialize Silero TTS
+    try:
+        silero.init()
+    except Exception as e:
+        print(e)
+
     if ui_download:
         # wait until ui is connected
         print("waiting for ui to connect...")
@@ -921,9 +941,41 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                                                       repo_or_dir=str(Path(
                                                           cache_vad_path / "snakers4_silero-vad_master").resolve())
                                                       )
-            except:
-                print("Error loading vad model")
-                return False
+            except Exception as e:
+                print("Error loading vad model trying to load from fallback server...")
+                print(e)
+
+                vad_fallback_server = {
+                    "urls": [
+                        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/silero/silero-vad.zip",
+                        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/silero/silero-vad.zip",
+                        "https://s3.libs.space:9000/ai-models/silero/silero-vad.zip"
+                    ],
+                    "sha256": "097cfacdc2b2f5b09e0da1273b3e30b0e96c3588445958171a7e339cc5805683",
+                }
+
+                try:
+                    downloader.download_extract(vad_fallback_server["urls"],
+                                                str(Path(cache_vad_path).resolve()),
+                                                vad_fallback_server["sha256"],
+                                                alt_fallback=True,
+                                                fallback_extract_func=downloader.extract_zip,
+                                                fallback_extract_func_args=(
+                                                    str(Path(cache_vad_path / "silero-vad.zip")),
+                                                    str(Path(cache_vad_path).resolve()),
+                                                ),
+                                                title="Silero VAD", extract_format="zip")
+
+                    vad_model, vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
+                                                          source="local", model="silero_vad", onnx=False,
+                                                          repo_or_dir=str(Path(
+                                                              cache_vad_path / "snakers4_silero-vad_master").resolve())
+                                                          )
+
+                except Exception as e:
+                    print("Error loading vad model.")
+                    print(e)
+                    return False
 
         # num_samples = 1536
         vad_frames_per_buffer = int(settings.SetOption("vad_frames_per_buffer",

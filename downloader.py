@@ -43,12 +43,12 @@ def move_files(source_dir, target_dir):
 
 
 def download_extract(urls, extract_dir, checksum, title="", extract_format="", alt_fallback=False,
-                     fallback_extract_func=None, fallback_extract_func_args=None):
+                     fallback_extract_func=None, fallback_extract_func_args=None, force_non_ui_dl=False):
     success = False
     local_dl_file = os.path.join(extract_dir, os.path.basename(urls[0]))
 
     use_ui_downloader = settings.GetOption("ui_download")
-    if use_ui_downloader and websocket.UI_CONNECTED["value"] and websocket.UI_CONNECTED["websocket"] is not None:
+    if not force_non_ui_dl and use_ui_downloader and websocket.UI_CONNECTED["value"] and websocket.UI_CONNECTED["websocket"] is not None:
         # send websocket message to UI
         websocket.AnswerMessage(websocket.UI_CONNECTED["websocket"], json.dumps({"type": "download",
                                                                                  "data": {"urls": urls,
@@ -65,14 +65,17 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
                 # if the finished file doesn't exist, wait for a second before checking again
                 time.sleep(1)
 
-        # remove the zip file after extraction
+        # remove the zip file after extraction, or just rename if not a compressed file
         if success:
-            os.remove(local_dl_file + ".finished")
+            if extract_format != "none":
+                os.remove(local_dl_file + ".finished")
+            else:
+                os.rename(local_dl_file + ".finished", local_dl_file)
 
     else:
         if not alt_fallback and fallback_extract_func is None:
             success = download_file(urls, local_file=local_dl_file, expected_checksum=checksum, max_retries=3)
-            if success:
+            if success and extract_format != "none":
                 with zipfile.ZipFile(local_dl_file, "r") as f:
                     f.extractall(extract_dir)
                 # remove the zip file after extraction
