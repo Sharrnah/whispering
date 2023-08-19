@@ -41,6 +41,8 @@ rem             --collect-all sentencepiece ^
 rem             --collect-all transformers ^
 rem             --collect-all df ^
 rem             --collect-all nltk ^
+rem             --collect-all fairseq ^
+rem             --collect-submodules fairseq ^
 rem             --add-data ".cache/nltk/tokenizers/punkt;./nltk_data/tokenizers/punkt" ^
 rem             -i app-icon.ico
 
