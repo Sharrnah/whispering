@@ -5,6 +5,11 @@ import downloader
 from pathlib import Path
 import torch
 
+nltk_path = Path(Path.cwd() / ".cache" / "nltk")
+os.makedirs(nltk_path, exist_ok=True)
+os.environ["NLTK_DATA"] = str(nltk_path.resolve())
+import nltk
+
 LANGUAGES = {
     "Afrikaans": "af",
     "Amharic": "am",
@@ -108,6 +113,30 @@ LANGUAGES = {
     "Zulu": "zu"
 }
 
+
+# List from https://github.com/nltk/nltk_data/blob/gh-pages/packages/tokenizers/punkt.xml
+NLTK_LANGUAGE_CODES = {
+    "cs": "Czech",
+    "da": "Danish",
+    "nl": "Dutch",
+    "en": "English",
+    "et": "Estonian",
+    "fi": "Finnish",
+    "fr": "French",
+    "de": "German",
+    "ell_Grek": "Greek",  # ??
+    "it": "Italian",
+    "ml": "Malayalam",
+    "no": "Norwegian",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "ru": "Russian",
+    "slv_Latn": "Slovene",  # ??
+    "es": "Spanish",
+    "sv": "Swedish",
+    "tr": "Turkish",
+}
+
 # Download CTranslate2 models:
 # • M2M-100 418M-parameter model: https://bit.ly/33fM1AO
 # • M2M-100 1.2B-parameter model: https://bit.ly/3GYiaed
@@ -196,17 +225,27 @@ def translate_language(text, from_code, to_code):
     tgt_prefix = "__" + to_code + "__"
     target_prefix = [[tgt_prefix]] * len(text)
 
-    # Subword the source sentences
-    source_sents_subworded = sentencepiece.encode(text, out_type=str)
-    source_sents_subworded = [[src_prefix] + source_sents_subworded]
+    # Split the source text into sentences
+    nltk_sentence_split_lang = "english"
+    if from_code in NLTK_LANGUAGE_CODES:
+        nltk_sentence_split_lang = NLTK_LANGUAGE_CODES[from_code]
+    sentences = nltk.tokenize.sent_tokenize(text, language=nltk_sentence_split_lang)
+    translated_sentences = []
 
-    # Translate the source sentences
-    translations = translator.translate_batch(source_sents_subworded, target_prefix=target_prefix, batch_type="tokens",
-                                              max_batch_size=2024, beam_size=beam_size, max_input_length=2048)
-    translations = [translation[0]['tokens'] for translation in translations]
+    for sentence in sentences:
+        # Subword the source sentences
+        source_sents_subworded = sentencepiece.encode(sentence, out_type=str)
+        source_sents_subworded = [[src_prefix] + source_sents_subworded]
 
-    # Desubword the target sentences
-    translations_desubword = sentencepiece.decode(translations)
-    translations_desubword = [sent[len(tgt_prefix):] for sent in translations_desubword]
+        # Translate the source sentences
+        translations = translator.translate_batch(source_sents_subworded, target_prefix=target_prefix, batch_type="tokens",
+                                                  max_batch_size=2024, beam_size=beam_size, max_input_length=2048)
+        translations = [translation[0]['tokens'] for translation in translations]
 
-    return ' '.join(translations_desubword)
+        # Desubword the target sentences
+        translations_desubword = sentencepiece.decode(translations)
+        translations_desubword = [sent[len(tgt_prefix):] for sent in translations_desubword]
+
+        translated_sentences.append(' '.join(translations_desubword))
+
+    return ' '.join(translated_sentences)
