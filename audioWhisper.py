@@ -3,6 +3,7 @@ import sys
 import json
 import traceback
 
+import Utilities
 import downloader
 import processmanager
 import atexit
@@ -100,16 +101,6 @@ def sigterm_handler(_signo, _stack_frame):
 signal.signal(signal.SIGTERM, sigterm_handler)
 signal.signal(signal.SIGINT, sigterm_handler)
 signal.signal(signal.SIGABRT, sigterm_handler)
-
-
-def safe_decode(data):
-    encodings = ['utf-8', 'utf-16', 'gbk', 'iso-8859-1', 'iso-8859-5', 'iso-8859-6', 'big5', 'shift_jis', 'euc-kr', 'euc-jp', 'windows-1252', 'windows-1251', 'windows-1256']
-    for encoding in encodings:
-        try:
-            return data.decode(encoding)
-        except UnicodeDecodeError:
-            pass
-    return data.decode('utf-8', 'replace')  # Default to utf-8 with replacement
 
 
 # Taken from utils_vad.py
@@ -243,9 +234,9 @@ def get_audio_device_index_by_name_and_api(name, api, is_input=True, default=Non
         device_info = audio.get_device_info_by_index(i)
         device_name = device_info["name"]
         if isinstance(device_name, bytes):
-            device_name = safe_decode(device_name)
+            device_name = Utilities.safe_decode(device_name)
         if isinstance(name, bytes):
-            name = safe_decode(name)
+            name = Utilities.safe_decode(name)
 
         if device_info["hostApi"] == api and device_info[
             "maxInputChannels" if is_input else "maxOutputChannels"] > 0 and name in device_name:

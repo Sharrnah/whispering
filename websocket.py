@@ -7,6 +7,7 @@ import websockets
 import json
 import base64
 
+import Utilities
 import audio_tools
 import processmanager
 
@@ -247,7 +248,7 @@ def websocketMessageHandler(msgObj, websocket):
             tts_thread.start()
 
     if msgObj["type"] == "get_windows_list":
-        windows_list = WindowCapture.list_window_names()
+        windows_list = Utilities.handle_bytes(WindowCapture.list_window_names())
         AnswerMessage(websocket, json.dumps({"type": "windows_list", "data": windows_list}))
 
     if msgObj["type"] == "send_osc":
@@ -296,7 +297,7 @@ async def handler(websocket):
     await send(websocket, json.dumps({"type": "settings_values", "data": settings.GetAvailableSettingValues()}))
 
     # send all current settings
-    await send(websocket, json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))
+    await send(websocket, json.dumps({"type": "translate_settings", "data": Utilities.handle_bytes(settings.TRANSLATE_SETTINGS)}))
 
     # send loading state
     if len(LOADING_QUEUE) > 0:

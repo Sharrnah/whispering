@@ -5,6 +5,7 @@ import time
 
 import whisper
 
+import Utilities
 import audio_tools
 import settings
 import VRC_OSCLib
@@ -26,9 +27,25 @@ import Models.STT.speecht5 as speech_t5
 # Plugins
 import Plugins
 
+ignore_list = []
+
+
 # some regular mistakenly recognized words/sentences on mostly silence audio, which are ignored in processing
-ignore_list_file = open(str(Path(Path.cwd() / "ignorelist.txt").resolve()), "r", encoding="utf-8")
-ignore_list = ignore_list_file.readlines()
+def load_ignore_list(filename):
+    global ignore_list
+    if Path(Path.cwd() / filename).is_file():
+        with open(str(Path(Path.cwd() / filename).resolve()), "rb") as ignore_list_file:
+            content = ignore_list_file.read()
+            decoded_content = Utilities.safe_decode(content)
+            ignore_list.extend(decoded_content.splitlines())
+    else:
+        with open(str(Path(Path.cwd() / filename).resolve()), "wb") as ignore_list_file:
+            ignore_list_file.write(b"")
+
+
+load_ignore_list("ignorelist.txt")
+load_ignore_list("ignorelist.custom.txt")
+
 # make all list entries lowercase and strip space, tab, CR, LF etc. for later comparison
 ignore_list = list((map(lambda x: x.lower().rstrip(), ignore_list)))
 

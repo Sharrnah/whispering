@@ -6,6 +6,8 @@ from click import core
 from whisper import available_models
 import threading
 
+import Utilities
+
 DEBOUNCE_TIME = 1.5  # 1.5 second, adjust as necessary
 _save_timer = None
 
@@ -162,7 +164,9 @@ def GetOption(setting):
 def LoadYaml(path):
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
-            TRANSLATE_SETTINGS.update(yaml.safe_load(f))
+            loaded_data = yaml.safe_load(f)
+            sanitized_data = Utilities.handle_bytes(loaded_data)
+            TRANSLATE_SETTINGS.update(sanitized_data)
 
 
 def debounced_save_yaml(path):
