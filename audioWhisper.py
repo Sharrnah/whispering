@@ -398,7 +398,7 @@ class AudioProcessor:
             # special case which seems to be needed for WASAPI
             if self.needs_sample_rate_conversion:
                 test_audio_chunk = audio_tools.resample_audio(test_audio_chunk, self.recorded_sample_rate, self.default_sample_rate, -1,
-                                                         is_mono=self.is_mono, filter="kaiser_fast").tobytes()
+                                                         is_mono=self.is_mono).tobytes()
 
             new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.vad_model, self.default_sample_rate)
 

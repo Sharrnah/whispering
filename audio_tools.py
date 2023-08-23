@@ -1,14 +1,57 @@
 import io
 import threading
-import time
 import wave
 
+import numpy
 import pyloudnorm
-import resampy
+#import resampy
 import numpy as np
 import pyaudio
 import torch
 from pydub import AudioSegment
+from threading import Lock
+import time
+
+
+class PyAudioPool:
+    def __init__(self, min_instances=2, max_unused_time=20):
+        # max_unused_time in seconds
+        self.pool = []
+        self.lock = Lock()
+        self.min_instances = min_instances
+        self.max_unused_time = max_unused_time
+
+    def acquire(self):
+        with self.lock:
+            for i, (p, _, in_use) in enumerate(self.pool):
+                if not in_use:
+                    self.pool[i] = (p, time.time(), True)
+                    return p
+            p = pyaudio.PyAudio()
+            self.pool.append((p, time.time(), True))
+            return p
+
+    def release(self, p):
+        with self.lock:
+            for i, (instance, _, _) in enumerate(self.pool):
+                if instance == p:
+                    self.pool[i] = (instance, time.time(), False)
+                    break
+
+    def manage_unused(self):
+        with self.lock:
+            current_time = time.time()
+            self.pool.sort(key=lambda x: x[1])  # Sort by last used time
+            while len(self.pool) > self.min_instances:
+                p, last_used_time, in_use = self.pool[0]
+                if not in_use and (current_time - last_used_time) > self.max_unused_time:
+                    p.terminate()
+                    self.pool.pop(0)
+                else:
+                    break
+
+
+pyaudio_pool = PyAudioPool()
 
 
 # resample_audio function to resample audio data to a different sample rate and convert it to mono.
@@ -18,37 +61,122 @@ from pydub import AudioSegment
 # set target_channels to '2' to keep stereo channels (or copy the mono channel to both channels if is_mono is True)
 # to Convert the int16 numpy array to bytes use .tobytes()
 # filter can be sync_window, kaiser_fast, kaiser_best
-def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16", filter="kaiser_best"):
-    audio_data_dtype = np.int16
-    if dtype == "int16":
-        audio_data_dtype = np.int16
-    elif dtype == "float32":
-        audio_data_dtype = np.float32
+#def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16", filter="kaiser_best"):
+#    audio_data_dtype = np.int16
+#    if dtype == "int16":
+#        audio_data_dtype = np.int16
+#    elif dtype == "float32":
+#        audio_data_dtype = np.float32
+#    audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
+#
+#    # try to guess if the audio is mono or stereo
+#    if is_mono is None:
+#        is_mono = audio_data.shape[0] % 2 != 0
+#
+#    if target_channels < 2 and not is_mono:
+#        # Reshape the array to separate the channels
+#        audio_data = audio_data.reshape(-1, 2)
+#
+#    if target_channels == -1 and not is_mono:
+#        # Average the left and right channels to create mono audio
+#        audio_data = audio_data.mean(axis=1)
+#    elif target_channels == 0 or target_channels == 1 and not is_mono:
+#        # Extract the first channel (left channel) data
+#        audio_data = audio_data[:, target_channels]
+#    elif target_channels == 2 and is_mono:
+#        # Duplicate the mono channel to create left and right channels
+#        # Also flatten the array and convert it back to int16 dtype
+#        audio_data = np.column_stack((audio_data, audio_data)).flatten()
+#
+#    # Resample the audio data to the desired sample rate
+#    audio_data = resampy.resample(audio_data, recorded_sample_rate, target_sample_rate, filter=filter)
+#    # Convert the resampled data back to int16 dtype
+#    return np.asarray(audio_data, dtype=audio_data_dtype)
+
+
+def _resample(smp, scale=1.0):
+    """Resample a sound to be a different length
+
+    Sample must be mono.  May take some time for longer sounds
+    sampled at 44100 Hz.
+
+    Keyword arguments:
+    scale - scale factor for length of sound (2.0 means double length)
+
+    """
+    # f*ing cool, numpy can do this with one command
+    # calculate new length of sample
+    n = round(len(smp) * scale)
+    # use linear interpolation
+    # endpoint keyword means than linspace doesn't go all the way to 1.0
+    # If it did, there are some off-by-one errors
+    # e.g. scale=2.0, [1,2,3] should go to [1,1.5,2,2.5,3,3]
+    # but with endpoint=True, we get [1,1.4,1.8,2.2,2.6,3]
+    # Both are OK, but since resampling will often involve
+    # exact ratios (i.e. for 44100 to 22050 or vice versa)
+    # using endpoint=False gets less noise in the resampled sound
+    return numpy.interp(
+        numpy.linspace(0.0, 1.0, n, endpoint=False), # where to interpret
+        numpy.linspace(0.0, 1.0, len(smp), endpoint=False), # known positions
+        smp, # known data points
+    )
+
+
+def _interleave(left, right):
+    """Given two separate arrays, return a new interleaved array
+
+    This function is useful for converting separate left/right audio
+    streams into one stereo audio stream.  Input arrays and returned
+    array are Numpy arrays.
+
+    See also: uninterleave()
+
+    """
+    return numpy.ravel(numpy.vstack((left, right)), order='F')
+
+
+def _uninterleave(data):
+    """Given a stereo array, return separate left and right streams
+
+    This function converts one array representing interleaved left and
+    right audio streams into separate left and right arrays.  The return
+    value is a list of length two.  Input array and output arrays are all
+    Numpy arrays.
+
+    See also: interleave()
+
+    """
+    return data.reshape(2, len(data)/2, order='FORTRAN')
+
+
+def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16"):
+    audio_data_dtype = np.int16 if dtype == "int16" else np.float32
     audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
 
-    # try to guess if the audio is mono or stereo
+    # Determine if the audio is mono or stereo
     if is_mono is None:
-        is_mono = audio_data.shape[0] % 2 != 0
+        is_mono = len(audio_data.shape) == 1
 
-    if target_channels < 2 and not is_mono:
-        # Reshape the array to separate the channels
+    if not is_mono:
         audio_data = audio_data.reshape(-1, 2)
 
+    # Handle channel conversion
     if target_channels == -1 and not is_mono:
-        # Average the left and right channels to create mono audio
         audio_data = audio_data.mean(axis=1)
-    elif target_channels == 0 or target_channels == 1 and not is_mono:
-        # Extract the first channel (left channel) data
+    elif target_channels in [0, 1] and not is_mono:
         audio_data = audio_data[:, target_channels]
     elif target_channels == 2 and is_mono:
-        # Duplicate the mono channel to create left and right channels
-        audio_data = np.column_stack((audio_data, audio_data))
-        # Flatten the array and convert it back to int16 dtype
-        audio_data = audio_data.flatten()
+        audio_data = _interleave(audio_data, audio_data)
 
-    # Resample the audio data to the desired sample rate
-    audio_data = resampy.resample(audio_data, recorded_sample_rate, target_sample_rate, filter=filter)
-    # Convert the resampled data back to int16 dtype
+    scale = target_sample_rate / recorded_sample_rate
+    if is_mono or target_channels in [0, 1, -1]:
+        audio_data = _resample(audio_data, scale)
+    else: # Stereo
+        left, right = _uninterleave(audio_data)
+        left_resampled = _resample(left, scale)
+        right_resampled = _resample(right, scale)
+        audio_data = _interleave(left_resampled, right_resampled)
+
     return np.asarray(audio_data, dtype=audio_data_dtype)
 
 
@@ -101,11 +229,14 @@ audio_list_lock = threading.Lock()  # Lock to protect the audio_threads list
 
 def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2, channels=2, sample_rate=44100, tag=""):
     try:
+        #frames_per_buffer = chunk * channels  # experiment with this value
+
         stream = p.open(format=audio_format,
                         channels=channels,
                         rate=int(sample_rate),
                         output_device_index=device,
                         output=True)
+                        #frames_per_buffer=frames_per_buffer)
 
         for i in range(0, len(audio_data), chunk * channels):
             if stop_flags[tag].is_set():
@@ -143,7 +274,8 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
     wf = wave.open(buff, 'rb')
 
     # Create an interface to PortAudio
-    p = pyaudio.PyAudio()
+    #p = pyaudio.PyAudio()
+    p = pyaudio_pool.acquire()
 
     # Find the closest supported sample rate to the original sample rate
     closest_sample_rate = get_closest_sample_rate_of_device(device, wf.getframerate())
@@ -200,7 +332,10 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
             if (thread, tag) in audio_threads:
                 audio_threads.remove((thread, tag))
 
-    p.terminate()
+    #p.terminate()
+    pyaudio_pool.release(p)
+    pyaudio_pool.manage_unused()
+
     if tag in stop_flags:
         stop_flags[tag].clear()
 
