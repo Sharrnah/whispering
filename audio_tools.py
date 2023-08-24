@@ -150,17 +150,41 @@ def _uninterleave(data):
 
 
 def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16"):
-    audio_data_dtype = np.int16 if dtype == "int16" else np.float32
-    audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
+    """
+    Resample audio data and optionally convert between stereo and mono.
 
-    # Determine if the audio is mono or stereo
+    :param audio_chunk: The raw audio data chunk as bytes or a NumPy array.
+    :param recorded_sample_rate: The sample rate of the input audio.
+    :param target_sample_rate: The desired target sample rate for the output.
+    :param target_channels: The desired number of channels in the output.
+        - '-1': Average the left and right channels to create mono audio. (default)
+        - '0': Extract the first channel (left channel) data.
+        - '1': Extract the second channel (right channel) data.
+        - '2': Keep stereo channels (or copy the mono channel to both channels if is_mono is True).
+    :param is_mono: Specify whether the input audio is mono. If None, it will be determined from the shape of the audio data.
+    :param dtype: The desired data type of the output audio, either "int16" or "float32".
+    :return: A NumPy array containing the resampled audio data.
+    """
+    # Determine the data type for audio data
+    audio_data_dtype = np.int16 if dtype == "int16" else np.float32
+    # Convert the audio chunk to a numpy array
+    if isinstance(audio_chunk, bytes):
+        audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
+    else:
+        audio_data = np.asarray(audio_chunk, dtype=audio_data_dtype)
+
+    # Determine if the audio is mono or stereo; assume mono if the shape has one dimension
     if is_mono is None:
         is_mono = len(audio_data.shape) == 1
 
+    # If stereo, reshape the data to have two columns (left and right channels)
     if not is_mono:
         audio_data = audio_data.reshape(-1, 2)
 
-    # Handle channel conversion
+    # Handle channel conversion based on the target_channels parameter
+    # -1 means converting stereo to mono by taking the mean of both channels
+    # 0 or 1 means selecting one of the stereo channels
+    # 2 means duplicating the mono channel to make it stereo
     if target_channels == -1 and not is_mono:
         audio_data = audio_data.mean(axis=1)
     elif target_channels in [0, 1] and not is_mono:
@@ -168,15 +192,21 @@ def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target
     elif target_channels == 2 and is_mono:
         audio_data = _interleave(audio_data, audio_data)
 
+    # Calculate the scaling factor for resampling
     scale = target_sample_rate / recorded_sample_rate
+
+    # Perform resampling based on whether the audio is mono or stereo
+    # If mono or selected one channel, use _resample directly
+    # If stereo, split into left and right, resample separately, then interleave
     if is_mono or target_channels in [0, 1, -1]:
         audio_data = _resample(audio_data, scale)
-    else: # Stereo
+    else:  # Stereo
         left, right = _uninterleave(audio_data)
         left_resampled = _resample(left, scale)
         right_resampled = _resample(right, scale)
         audio_data = _interleave(left_resampled, right_resampled)
 
+    # Return the resampled audio data with the specified dtype
     return np.asarray(audio_data, dtype=audio_data_dtype)
 
 
