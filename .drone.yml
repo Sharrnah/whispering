@@ -1,0 +1,44 @@
+---
+kind: pipeline
+type: kubernetes
+name: build
+
+x-build_builder_image: &build_builder_image
+  name: build-publish-builder-image
+  image: plugins/docker
+  settings:
+    mtu: 1450
+    repo: ${DRONE_REPO_LINK##https://}
+    dockerfile: Dockerfile
+    context: ./builder/
+    username:
+      from_secret: docker_username
+    password:
+      from_secret: docker_password
+    registry:
+      from_secret: docker_base_url
+    tags: latest
+    # try to keep image small
+    squash: true
+    compress: true
+  when:
+    status:
+      - success
+
+steps:
+  - <<: *build_builder_image
+    name: build-publish-main-image
+    when:
+      branch:
+        - master
+        - main
+    #volumes:
+    #  - name: temp
+    #    path: /tmp
+
+trigger:
+  #event:
+  #  - tag
+  ref:
+    exclude:
+      - refs/pipelines/*
