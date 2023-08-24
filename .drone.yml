@@ -9,7 +9,7 @@ x-build_builder_image: &build_builder_image
   settings:
     mtu: 1450
     repo: ${DRONE_REPO_LINK##https://}
-    dockerfile: Dockerfile
+    dockerfile: ./builder/Dockerfile
     context: ./builder/
     username:
       from_secret: docker_username
