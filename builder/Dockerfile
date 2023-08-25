@@ -10,7 +10,7 @@ ARG PYINSTALLER_VERSION=5.13
 RUN set -x \
     && dpkg --add-architecture i386 \
     && apt-get update -qy \
-    && apt-get install --no-install-recommends -qfy apt-transport-https software-properties-common zip wget git rename gpg-agent \
+    && apt-get install --no-install-recommends -qfy apt-transport-https software-properties-common zip p7zip-full wget rename gpg-agent \
     && wget -nv https://dl.winehq.org/wine-builds/winehq.key \
     && apt-key add winehq.key \
     && add-apt-repository 'https://dl.winehq.org/wine-builds/ubuntu/' \
@@ -25,6 +25,7 @@ RUN set -x \
 ENV WINEARCH win64
 ENV WINEDEBUG fixme-all
 ENV WINEPREFIX /wine
+ENV WINEPATH 'C:\git\bin\'
 
 # PYPI repository location
 ENV PYPI_URL=https://pypi.python.org/
@@ -67,7 +68,17 @@ RUN set -x \
     && cabextract -q --directory="$W_TMP" "$W_TMP/a11" \
     && cd "$W_TMP" \
     && rename 's/_/\-/g' *.dll \
-    && cp "$W_TMP"/*.dll "$W_SYSTEM64_DLLS"/
+    && cp "$W_TMP"/*.dll "$W_SYSTEM64_DLLS"/ \
+
+# install git for windows
+RUN set -x \
+    && mkdir -p /wine/drive_c/git \
+    && wget -P "/wine/drive_c/git/" https://github.com/git-for-windows/git/releases/download/v2.42.0.windows.1/PortableGit-2.42.0-64-bit.7z.exe \
+    && 7za x /wine/drive_c/git/PortableGit-2.42.0-64-bit.7z.exe -o/wine/drive_c/git/ \
+    && rm -rf /wine/drive_c/git/PortableGit-2.42.0-64-bit.7z.exe \
+    && echo 'wine '\''C:\git\bin\git.exe'\'' "$@"' > /usr/bin/git \
+    && while pgrep wineserver >/dev/null; do echo "Waiting for wineserver"; sleep 1; done \
+    && chmod +x /wine/drive_c/git/bin/git.exe /usr/bin/git
 
 # install pyinstaller
 RUN /usr/bin/pip install pyinstaller==$PYINSTALLER_VERSION
