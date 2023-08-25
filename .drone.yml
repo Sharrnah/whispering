@@ -72,6 +72,9 @@ steps:
       source: /drone/src/dist/whispering-tiger*.zip
       target:
         from_secret: s3-target-location
+    when:
+      ref:
+        - refs/tags/*
 
 trigger:
   #event:
