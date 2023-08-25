@@ -31,7 +31,7 @@ best-download
 pywin32
 #easyocr==1.7.0
 # fix for https://github.com/JaidedAI/EasyOCR/issues/1072
-easyocr @ https://github.com/itasli/EasyOCR/archive/refs/heads/patch-1.zip
+easyocr @ https://github.com/JaidedAI/EasyOCR/archive/f947eaa36a55adb306feac58966378e01cc67f85.zip
 mss==7.0.1
 scipy==1.10.1
 num2words==0.5.12
