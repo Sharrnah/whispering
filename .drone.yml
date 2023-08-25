@@ -34,6 +34,7 @@ steps:
         - main
   - name: build-distribution-windows
     image: ${DRONE_REPO_LINK##https://}:win64
+    pull: always
     environment:
       SRCDIR: /drone/src
     when:

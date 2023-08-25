@@ -67,6 +67,9 @@ RUN set -x \
     && (pip install -U pip || true) \
     && rm -rf /tmp/.wine-*
 
+# upgrade pip
+RUN wine cmd /C "python.exe -m pip install --upgrade pip"
+
 ENV W_DRIVE_C=/wine/drive_c
 ENV W_WINDIR_UNIX="$W_DRIVE_C/windows"
 ENV W_SYSTEM64_DLLS="$W_WINDIR_UNIX/system32"
