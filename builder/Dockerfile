@@ -25,7 +25,7 @@ RUN set -x \
 ENV WINEARCH win64
 ENV WINEDEBUG fixme-all
 ENV WINEPREFIX /wine
-ENV WINEPATH 'C:\\git\\bin\\'
+ENV WINEPATH 'C:\git\bin'
 
 # PYPI repository location
 ENV PYPI_URL=https://pypi.python.org/
@@ -84,6 +84,7 @@ RUN set -x \
 
 # debug windows PATH variable
 RUN wine cmd /C "echo %PATH%"
+RUN wine cmd /C "git -v"
 
 # install pyinstaller
 RUN /usr/bin/pip install pyinstaller==$PYINSTALLER_VERSION
