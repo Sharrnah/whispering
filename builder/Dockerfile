@@ -68,7 +68,7 @@ RUN set -x \
     && cabextract -q --directory="$W_TMP" "$W_TMP/a11" \
     && cd "$W_TMP" \
     && rename 's/_/\-/g' *.dll \
-    && cp "$W_TMP"/*.dll "$W_SYSTEM64_DLLS"/ \
+    && cp "$W_TMP"/*.dll "$W_SYSTEM64_DLLS"/
 
 # install git for windows
 RUN set -x \
