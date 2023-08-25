@@ -33,16 +33,14 @@ steps:
         - master
         - main
   - name: build-distribution-windows
-    image:
-      from_secret: windows-builder-image
+    image: ${DRONE_REPO_LINK##https://}:win64
     environment:
       SRCDIR: /drone/src
     when:
       ref:
         - refs/tags/*
   - name: build-distribution-windows-package
-    image:
-      from_secret: windows-builder-image
+    image: ${DRONE_REPO_LINK##https://}:win64
     environment:
       SRCDIR: /drone/src
     commands:
