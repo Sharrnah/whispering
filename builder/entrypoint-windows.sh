@@ -37,14 +37,14 @@ cd $WORKDIR
 
 if [ -f requirements.txt ]; then
     pip install -r requirements.txt -U
+    # debug
+    python -m pip show torch
 fi # [ -f requirements.txt ]
 
 echo "$@"
 
 if [[ "$@" == "" ]]; then
-    pip install winsdk
-    #pyinstaller --clean -y --dist ./dist/windows --workpath /tmp *.spec
-    pyinstaller --clean -y --dist ./dist/windows *.spec
+    pyinstaller --debug=all --clean -y --dist ./dist/windows --workpath /tmp *.spec
     chown -R --reference=. ./dist/windows
 else
     sh -c "$@"
