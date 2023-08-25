@@ -80,7 +80,7 @@ RUN set -x \
     && echo 'wine '\''C:\git\bin\git.exe'\'' "$@"' > /usr/bin/git \
     && cat /usr/bin/git \
     && while pgrep wineserver >/dev/null; do echo "Waiting for wineserver"; sleep 1; done \
-    && chmod +x /wine/drive_c/git/bin/git.exe /usr/bin/git \
+    && chmod +x /wine/drive_c/git/bin/git.exe /usr/bin/git
 
 # debug windows PATH variable
 RUN wine cmd /C "echo %PATH%"
