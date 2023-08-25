@@ -75,16 +75,12 @@ RUN set -x \
     && mkdir -p /wine/drive_c/git \
     && wget -P "/wine/drive_c/git/" https://github.com/git-for-windows/git/releases/download/v2.42.0.windows.1/PortableGit-2.42.0-64-bit.7z.exe \
     && 7za x /wine/drive_c/git/PortableGit-2.42.0-64-bit.7z.exe -o/wine/drive_c/git/ \
-    && ls -l /wine/drive_c/git/ \
     && rm -rf /wine/drive_c/git/PortableGit-2.42.0-64-bit.7z.exe \
     && echo 'wine '\''C:\git\bin\git.exe'\'' "$@"' > /usr/bin/git \
-    && cat /usr/bin/git \
     && while pgrep wineserver >/dev/null; do echo "Waiting for wineserver"; sleep 1; done \
-    && chmod +x /wine/drive_c/git/bin/git.exe /usr/bin/git
-
-# debug windows PATH variable
-RUN wine cmd /C "echo %PATH%"
-RUN wine cmd /C "git -v"
+    && chmod +x /wine/drive_c/git/bin/git.exe /usr/bin/git \
+    && wine cmd /C "echo %PATH%" \
+    && wine cmd /C "git -v"
 
 # install pyinstaller
 RUN /usr/bin/pip install pyinstaller==$PYINSTALLER_VERSION
