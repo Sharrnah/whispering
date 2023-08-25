@@ -43,7 +43,8 @@ echo "$@"
 
 if [[ "$@" == "" ]]; then
     pip install winsdk
-    pyinstaller --clean -y --dist ./dist/windows --workpath /tmp *.spec
+    #pyinstaller --clean -y --dist ./dist/windows --workpath /tmp *.spec
+    pyinstaller --clean -y --dist ./dist/windows *.spec
     chown -R --reference=. ./dist/windows
 else
     sh -c "$@"
