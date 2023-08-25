@@ -2,7 +2,7 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND noninteractive
 
-ARG WINE_VERSION=winehq-staging
+ARG WINE_VERSION=winehq-stable
 ARG PYTHON_VERSION=3.10.10
 ARG PYINSTALLER_VERSION=5.13
 
@@ -10,22 +10,35 @@ ARG PYINSTALLER_VERSION=5.13
 RUN set -x \
     && dpkg --add-architecture i386 \
     && apt-get update -qy \
-    && apt-get install --no-install-recommends -qfy apt-transport-https software-properties-common zip p7zip-full wget rename gpg-agent \
+    && apt-get install --no-install-recommends -qfy gpg-agent rename apt-transport-https software-properties-common git winbind cabextract wget curl zip unzip xvfb xdotool x11-utils xterm p7zip-full wget \
     && wget -nv https://dl.winehq.org/wine-builds/winehq.key \
     && apt-key add winehq.key \
     && add-apt-repository 'https://dl.winehq.org/wine-builds/ubuntu/' \
     && apt-get update -qy \
-    && apt-get install --no-install-recommends -qfy $WINE_VERSION winbind cabextract \
+    && apt-get install --no-install-recommends -qfy $WINE_VERSION \
     && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
     && wget -nv https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \
     && chmod +x winetricks \
     && mv winetricks /usr/local/bin
+
+# wine-gecko
+RUN mkdir -p /usr/share/wine/gecko
+RUN curl -o /usr/share/wine/gecko/wine_gecko-2.47-x86.msi http://dl.winehq.org/wine/wine-gecko/2.47/wine_gecko-2.47-x86.msi
+RUN curl -o /usr/share/wine/gecko/wine_gecko-2.47-x86_64.msi http://dl.winehq.org/wine/wine-gecko/2.47/wine_gecko-2.47-x86_64.msi
 
 # wine settings
 ENV WINEARCH win64
 ENV WINEDEBUG fixme-all
 ENV WINEPREFIX /wine
 ENV WINEPATH 'C:\git\bin'
+
+# xvfb settings
+# from https://github.com/engineervix/docker-pyinstaller/blob/b99163b6eb0a81fc9a0bfd498c09c4e0253d01b2/Dockerfile-py3-win64#L56-L59
+ENV DISPLAY :0
+RUN set -x \
+    && echo 'Xvfb $DISPLAY -screen 0 1024x768x24 &' >> /root/.bashrc
+
 
 # PYPI repository location
 ENV PYPI_URL=https://pypi.python.org/
@@ -35,7 +48,7 @@ ENV PYPI_INDEX_URL=https://pypi.python.org/simple
 # install python in wine, using the msi packages to install, extracting
 # the files directly, since installing isn't running correctly.
 RUN set -x \
-    && winetricks win7 \
+    && winetricks win10 \
     && for msifile in `echo core dev exe lib path pip tcltk tools`; do \
         wget -nv "https://www.python.org/ftp/python/$PYTHON_VERSION/amd64/${msifile}.msi"; \
         wine msiexec /i "${msifile}.msi" /qb TARGETDIR=C:/Python310; \
@@ -59,13 +72,15 @@ ENV W_WINDIR_UNIX="$W_DRIVE_C/windows"
 ENV W_SYSTEM64_DLLS="$W_WINDIR_UNIX/system32"
 ENV W_TMP="$W_DRIVE_C/windows/temp/_$0"
 
-# install Microsoft Visual C++ Redistributable for Visual Studio 2017 dll files
+# install Microsoft Visual C++ Redistributable for Visual Studio 2015, 2017 and 2019 dll files
 RUN set -x \
     && rm -f "$W_TMP"/* \
-    && wget -P "$W_TMP" https://download.visualstudio.microsoft.com/download/pr/11100230/15ccb3f02745c7b206ad10373cbca89b/VC_redist.x64.exe \
-    && cabextract -q --directory="$W_TMP" "$W_TMP"/VC_redist.x64.exe \
+    && wget -P "$W_TMP" https://aka.ms/vs/16/release/vc_redist.x64.exe \
+    && cabextract -q --directory="$W_TMP" "$W_TMP"/vc_redist.x64.exe \
     && cabextract -q --directory="$W_TMP" "$W_TMP/a10" \
     && cabextract -q --directory="$W_TMP" "$W_TMP/a11" \
+    && cabextract -q --directory="$W_TMP" "$W_TMP/a12" \
+    && cabextract -q --directory="$W_TMP" "$W_TMP/a13" \
     && cd "$W_TMP" \
     && rename 's/_/\-/g' *.dll \
     && cp "$W_TMP"/*.dll "$W_SYSTEM64_DLLS"/
