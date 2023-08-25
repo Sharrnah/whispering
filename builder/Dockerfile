@@ -77,7 +77,6 @@ RUN set -x \
     && rm -f "$W_TMP"/* \
     && wget -P "$W_TMP" https://aka.ms/vs/16/release/vc_redist.x64.exe \
     && cabextract -q --directory="$W_TMP" "$W_TMP"/vc_redist.x64.exe \
-    && cabextract -q --directory="$W_TMP" "$W_TMP/a10" \
     && cabextract -q --directory="$W_TMP" "$W_TMP/a11" \
     && cabextract -q --directory="$W_TMP" "$W_TMP/a12" \
     && cabextract -q --directory="$W_TMP" "$W_TMP/a13" \
