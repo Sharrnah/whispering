@@ -25,7 +25,7 @@ RUN set -x \
 ENV WINEARCH win64
 ENV WINEDEBUG fixme-all
 ENV WINEPREFIX /wine
-ENV WINEPATH 'C:\git\bin\'
+ENV WINEPATH 'C:\\git\\bin\\'
 
 # PYPI repository location
 ENV PYPI_URL=https://pypi.python.org/
