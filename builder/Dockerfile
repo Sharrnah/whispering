@@ -10,7 +10,7 @@ ARG PYINSTALLER_VERSION=5.13
 RUN set -x \
     && dpkg --add-architecture i386 \
     && apt-get update -qy \
-    && apt-get install --no-install-recommends -qfy apt-transport-https software-properties-common wget rename gpg-agent \
+    && apt-get install --no-install-recommends -qfy apt-transport-https software-properties-common zip wget rename gpg-agent \
     && wget -nv https://dl.winehq.org/wine-builds/winehq.key \
     && apt-key add winehq.key \
     && add-apt-repository 'https://dl.winehq.org/wine-builds/ubuntu/' \

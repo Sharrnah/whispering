@@ -1,0 +1,1 @@
+Place the *.py plugin file in this folder. (not in a subfolder)

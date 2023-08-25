@@ -17,7 +17,7 @@ x-build_builder_image: &build_builder_image
       from_secret: docker_password
     registry:
       from_secret: docker_base_url
-    tags: latest
+    tags: win64
     # try to keep image small
     squash: true
     compress: true
@@ -32,9 +32,48 @@ steps:
       branch:
         - master
         - main
-    #volumes:
-    #  - name: temp
-    #    path: /tmp
+  - name: build-distribution-windows
+    image:
+      from_secret: windows-builder-image
+    environment:
+      SRCDIR: /drone/src
+    when:
+      ref:
+        - refs/tags/*
+  - name: build-distribution-windows-package
+    image:
+      from_secret: windows-builder-image
+    environment:
+      SRCDIR: /drone/src
+    commands:
+      - cd ${SRCDIR}/dist
+      - cp ../ignorelist.txt ./
+      - cp ../LICENSE ./
+      - cp -Rf ../websocket_clients ./
+      - cp -Rf ../markers ./
+      - cp -Rf ../dist_files/ffmpeg ./
+      - cp -Rf ../dist_files/Plugins ./
+      - cp -Rf ../dist_files/get-defice-list.bat ./
+      - cp -Rf ../dist_files/help.bat ./
+      - cp -Rf ../dist_files/.current_platform.yaml.template ./.current_platform.yaml
+      - WT_VERSION="${DRONE_TAG#v}"
+      - sed -i "s/###VERSION###/$${WT_VERSION}/g" "./.current_platform.yaml"
+      - zip -r -9 whispering-tiger$${WT_VERSION}_win.zip .
+    when:
+      ref:
+        - refs/tags/*
+  - name: upload
+    image: plugins/s3
+    settings:
+      bucket:
+        from_secret: s3-bucket
+      access_key:
+        from_secret: s3-access-key
+      secret_key:
+        from_secret: s3-secret-key
+      source: /drone/src/dist/whispering-tiger*.zip
+      target:
+        from_secret: s3-target-location
 
 trigger:
   #event:
