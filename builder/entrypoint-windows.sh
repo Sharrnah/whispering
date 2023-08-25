@@ -11,6 +11,10 @@ set -e
 # and don't allow that much flexibility to mount volumes
 WORKDIR=${SRCDIR:-/src}
 
+echo "DEBUG:"
+wine cmd /C "echo %PATH%"
+wine cmd /C "git -v"
+
 #
 # In case the user specified a custom URL for PYPI, then use
 # that one, instead of the default one.
