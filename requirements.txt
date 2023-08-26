@@ -1,6 +1,7 @@
 # numpy v1.23.4 required for whisper
 numpy==1.23.4
 tqdm
+rich==12.6.0
 more-itertools
 transformers==4.31.0
 accelerate==0.21.0

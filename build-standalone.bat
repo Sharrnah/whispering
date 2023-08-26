@@ -11,6 +11,7 @@ rem             --hidden-import=scipy.signal ^
 rem             --hidden-import=transformers.models.nllb ^
 rem             --hidden-import=sentencepiece ^
 rem             --hidden-import=df.deepfilternet3 ^
+rem             --copy-metadata rich ^
 rem             --copy-metadata tqdm ^
 rem             --copy-metadata regex ^
 rem             --copy-metadata requests ^
@@ -18,7 +19,6 @@ rem             --copy-metadata packaging ^
 rem             --copy-metadata filelock ^
 rem             --copy-metadata numpy ^
 rem             --copy-metadata tokenizers ^
-rem             --copy-metadata rich ^
 rem             --copy-metadata sentencepiece ^
 rem             --copy-metadata transformers ^
 rem             --copy-metadata huggingface-hub ^
