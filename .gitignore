@@ -1,6 +1,5 @@
 .idea/
 __pycache__
-/dist_files/ffmpeg/
 *.yaml
 /build/
 /dist/

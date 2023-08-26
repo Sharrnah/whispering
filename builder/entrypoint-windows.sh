@@ -36,9 +36,8 @@ fi
 cd $WORKDIR
 
 if [ -f requirements.txt ]; then
-    pip install -r requirements.txt
-    # debug
-    python -m pip show torch
+    # use --no-cache-dir to try to reduce memory usage. (see https://github.com/pypa/pip/issues/2984)
+    pip install --no-cache-dir -r requirements.txt
 fi # [ -f requirements.txt ]
 
 echo "$@"
