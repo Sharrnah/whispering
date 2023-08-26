@@ -36,7 +36,7 @@ fi
 cd $WORKDIR
 
 if [ -f requirements.txt ]; then
-    pip install -r requirements.txt -U
+    pip install -r requirements.txt
     # debug
     python -m pip show torch
 fi # [ -f requirements.txt ]
@@ -44,7 +44,7 @@ fi # [ -f requirements.txt ]
 echo "$@"
 
 if [[ "$@" == "" ]]; then
-    pyinstaller --debug=all --clean -y --dist ./dist/windows --workpath /tmp *.spec
+    pyinstaller --verbose --clean -y --dist ./dist/windows --workpath /tmp *.spec
     chown -R --reference=. ./dist/windows
 else
     sh -c "$@"
