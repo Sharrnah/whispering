@@ -39,10 +39,13 @@ if [[ "$@" == "" ]]; then
         pip install --no-cache-dir -r requirements.txt
     fi # [ -f requirements.txt ]
 
-    if [ -f "$WORKDIR/builder/prepare.sh" ]; then
-      chmod +x "$WORKDIR/builder/prepare.sh"
-      "$WORKDIR/builder/prepare.sh"
-    fi # [ -f "$WORKDIR/builder/prepare.sh" ]
+    if [ -f "./builder/prepare.sh" ]; then
+        echo "running builder/prepare.sh"
+        chmod +x "./builder/prepare.sh"
+        "./builder/prepare.sh"
+    else
+        echo "No prepare.sh"
+    fi # [ -f "./builder/prepare.sh" ]
 
     pyinstaller --clean -y --dist ./dist/windows --workpath /tmp *.spec
     chown -R --reference=. ./dist/windows
