@@ -43,7 +43,7 @@ steps:
       - mkdir -p ./.cache
       - mkdir -p ./.cache/nltk/tokenizers
       - wget -P "./.cache/nltk/tokenizers" https://s3.libs.space:9000/ai-models/nltk/tokenizers/punkt.zip
-      - unzip -o punkt.zip -d ./.cache/nltk/tokenizers
+      - unzip -o ./.cache/nltk/tokenizers/punkt.zip -d ./.cache/nltk/tokenizers
     when:
       ref:
         - refs/tags/*
