@@ -11,10 +11,6 @@ set -e
 # and don't allow that much flexibility to mount volumes
 WORKDIR=${SRCDIR:-/src}
 
-echo "DEBUG:"
-wine cmd /C "echo %PATH%"
-wine cmd /C "git -v"
-
 #
 # In case the user specified a custom URL for PYPI, then use
 # that one, instead of the default one.
@@ -35,14 +31,19 @@ fi
 
 cd $WORKDIR
 
-if [ -f requirements.txt ]; then
-    # use --no-cache-dir to try to reduce memory usage. (see https://github.com/pypa/pip/issues/2984)
-    pip install --no-cache-dir -r requirements.txt
-fi # [ -f requirements.txt ]
-
 echo "$@"
 
 if [[ "$@" == "" ]]; then
+    if [ -f requirements.txt ]; then
+        # use --no-cache-dir to try to reduce memory usage. (see https://github.com/pypa/pip/issues/2984)
+        pip install --no-cache-dir -r requirements.txt
+    fi # [ -f requirements.txt ]
+
+    if [ -f "$WORKDIR/builder/prepare.sh" ]; then
+      chmod +x "$WORKDIR/builder/prepare.sh"
+      "$WORKDIR/builder/prepare.sh"
+    fi # [ -f "$WORKDIR/builder/prepare.sh" ]
+
     pyinstaller --clean -y --dist ./dist/windows --workpath /tmp *.spec
     chown -R --reference=. ./dist/windows
 else

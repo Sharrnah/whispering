@@ -35,18 +35,6 @@ steps:
       branch:
         - master
         - main
-  - name: build-distribution-windows-prepare
-    image: ${DRONE_REPO_LINK##https://}:win64
-    pull: always  # make sure to update the image
-    commands:
-      - cd ${SRCDIR}
-      - mkdir -p ./.cache
-      - mkdir -p ./.cache/nltk/tokenizers
-      - wget -P "./.cache/nltk/tokenizers" https://s3.libs.space:9000/ai-models/nltk/tokenizers/punkt.zip
-      - unzip -o ./.cache/nltk/tokenizers/punkt.zip -d ./.cache/nltk/tokenizers
-    when:
-      ref:
-        - refs/tags/*
   - name: build-distribution-windows
     image: ${DRONE_REPO_LINK##https://}:win64
     when:
