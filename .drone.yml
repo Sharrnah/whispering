@@ -39,7 +39,7 @@ steps:
         - main
   - name: build-distribution-windows-prepare
     image: ${DRONE_REPO_LINK##https://}:win64
-    pull: always  # make sure to update the image
+    #pull: always  # make sure to update the image
     environment:
       <<: *default_environment
     commands:
@@ -79,7 +79,7 @@ steps:
       - cp -Rf $${SRCDIR}/websocket_clients ./
       - cp -Rf $${SRCDIR}/markers ./
       - cp -Rf $${SRCDIR}/dist_files/Plugins ./
-      - cp -Rf $${SRCDIR}/dist_files/get-defice-list.bat ./
+      - cp -Rf $${SRCDIR}/dist_files/get-device-list.bat ./
       - cp -Rf $${SRCDIR}/dist_files/help.bat ./
       - cp -Rf $${SRCDIR}/dist_files/.current_platform.yaml.template ./.current_platform.yaml
       - WT_VERSION="$${DRONE_TAG#v}"
