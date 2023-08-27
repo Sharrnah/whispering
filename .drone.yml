@@ -3,10 +3,6 @@ kind: pipeline
 type: kubernetes
 name: build
 
-environment:
-  SRCDIR: /drone/src
-  DIST_DIR: ./dist/windows
-
 x-build_builder_image: &build_builder_image
   name: build-publish-builder-image
   image: plugins/docker
@@ -32,6 +28,9 @@ x-build_builder_image: &build_builder_image
 steps:
   - <<: *build_builder_image
     name: build-publish-main-image
+    environment:
+      SRCDIR: /drone/src
+      DIST_DIR: ./dist/windows
     when:
       branch:
         - master
@@ -39,7 +38,13 @@ steps:
   - name: build-distribution-windows-prepare
     image: ${DRONE_REPO_LINK##https://}:win64
     pull: always  # make sure to update the image
+    environment:
+      SRCDIR: /drone/src
+      DIST_DIR: ./dist/windows
     commands:
+      - echo "environments:"
+      - echo "${SRCDIR}"
+      - echo "${DIST_DIR}"
       - cd ${SRCDIR}
       - mkdir -p ./.cache
       - mkdir -p ./.cache/nltk/tokenizers
@@ -55,11 +60,17 @@ steps:
         - refs/tags/*
   - name: build-distribution-windows
     image: ${DRONE_REPO_LINK##https://}:win64
+    environment:
+      SRCDIR: /drone/src
+      DIST_DIR: ./dist/windows
     when:
       ref:
         - refs/tags/*
   - name: build-distribution-windows-package
     image: ${DRONE_REPO_LINK##https://}:win64
+    environment:
+      SRCDIR: /drone/src
+      DIST_DIR: ./dist/windows
     commands:
       - cd ${SRCDIR}
       - cd ${DIST_DIR}
@@ -79,6 +90,9 @@ steps:
         - refs/tags/*
   - name: upload
     image: plugins/s3
+    environment:
+      SRCDIR: /drone/src
+      DIST_DIR: ./dist/windows
     settings:
       bucket:
         from_secret: s3-bucket
