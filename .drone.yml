@@ -37,6 +37,8 @@ steps:
         - main
   - name: build-distribution-windows-prepare
     image: ${DRONE_REPO_LINK##https://}:win64
+    environment:
+      DIST_DIR: ./dist/windows
     pull: always  # make sure to update the image
     commands:
       - cd ${SRCDIR}
@@ -44,30 +46,36 @@ steps:
       - mkdir -p ./.cache/nltk/tokenizers
       - wget -P "./.cache/nltk/tokenizers" https://s3.libs.space:9000/ai-models/nltk/tokenizers/punkt.zip
       - unzip -o ./.cache/nltk/tokenizers/punkt.zip -d ./.cache/nltk/tokenizers
+      - mkdir -p ${DIST_DIR}/
+      - wget -P "${DIST_DIR}" https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full.7z
+      - 7za x ${DIST_DIR}/ffmpeg-release-full.7z -o${DIST_DIR}
+      - mv ${DIST_DIR}/ffmpeg-* ${DIST_DIR}/ffmpeg
+      - rm ${DIST_DIR}/ffmpeg-release-full.7z
     when:
       ref:
         - refs/tags/*
   - name: build-distribution-windows
     image: ${DRONE_REPO_LINK##https://}:win64
+    environment:
+      DIST_DIR: ./dist/windows
     when:
       ref:
         - refs/tags/*
   - name: build-distribution-windows-package
     image: ${DRONE_REPO_LINK##https://}:win64
+    environment:
+      DIST_DIR: ./dist/windows
     commands:
-      - cd ${SRCDIR}/dist
-      - cp ../ignorelist.txt ./
-      - cp ../LICENSE ./
-      - cp -Rf ../websocket_clients ./
-      - cp -Rf ../markers ./
-      - wget -P "./" https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full.7z
-      - 7za x ./ffmpeg-release-full.7z -o./
-      - mv ./ffmpeg-* ./ffmpeg
-      - rm ./ffmpeg-release-full.7z
-      - cp -Rf ../dist_files/Plugins ./
-      - cp -Rf ../dist_files/get-defice-list.bat ./
-      - cp -Rf ../dist_files/help.bat ./
-      - cp -Rf ../dist_files/.current_platform.yaml.template ./.current_platform.yaml
+      - cd ${SRCDIR}
+      - cd ${DIST_DIR}
+      - cp ${SRCDIR}/ignorelist.txt ./
+      - cp ${SRCDIR}/LICENSE ./
+      - cp -Rf ${SRCDIR}/websocket_clients ./
+      - cp -Rf ${SRCDIR}/markers ./
+      - cp -Rf ${SRCDIR}/dist_files/Plugins ./
+      - cp -Rf ${SRCDIR}/dist_files/get-defice-list.bat ./
+      - cp -Rf ${SRCDIR}/dist_files/help.bat ./
+      - cp -Rf ${SRCDIR}/dist_files/.current_platform.yaml.template ./.current_platform.yaml
       - WT_VERSION="${DRONE_TAG#v}"
       - sed -i "s/###VERSION###/$${WT_VERSION}/g" "./.current_platform.yaml"
       - zip -r -9 whispering-tiger$${WT_VERSION}_win.zip .
@@ -76,6 +84,8 @@ steps:
         - refs/tags/*
   - name: upload
     image: plugins/s3
+    environment:
+      DIST_DIR: ./dist/windows
     settings:
       bucket:
         from_secret: s3-bucket
@@ -83,7 +93,7 @@ steps:
         from_secret: s3-access-key
       secret_key:
         from_secret: s3-secret-key
-      source: /drone/src/dist/whispering-tiger*.zip
+      source: ${DIST_DIR}/whispering-tiger*.zip
       target:
         from_secret: s3-target-location
     when:

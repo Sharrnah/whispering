@@ -39,6 +39,8 @@ if [[ "$PYPI_URL" != "https://pypi.python.org/" ]] || \
     cat /wine/drive_c/users/root/pip/pip.ini
 fi
 
+BUILD_DIST_DIR=${DIST_DIR:-./dist/windows}
+
 cd $WORKDIR
 
 echo "$@"
@@ -49,8 +51,8 @@ if [[ "$@" == "" ]]; then
         pip install --no-cache-dir -r requirements.txt
     fi # [ -f requirements.txt ]
 
-    pyinstaller --clean -y --dist ./dist/windows --workpath /tmp *.spec
-    chown -R --reference=. ./dist/windows
+    pyinstaller --clean -y --dist ${BUILD_DIST_DIR} --workpath /tmp *.spec
+    chown -R --reference=. ${BUILD_DIST_DIR}
 else
     sh -c "$@"
 fi # [[ "$@" == "" ]]
