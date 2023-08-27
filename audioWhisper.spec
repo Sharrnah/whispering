@@ -57,7 +57,10 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('fairseq')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
-datas += [('.cache/nltk/tokenizers/punkt', './nltk_data/tokenizers/punkt')]
+workdir = os.environ.get('WORKDIR_WIN', '\\drone\\src')
+workdir = "C:" + workdir
+
+datas += [(workdir+'\\.cache\\nltk\\tokenizers\\punkt', 'C:\\src\\.cache\\nltk\\tokenizers\\punkt', 'C:\\drone\\src\\.cache\\nltk\\tokenizers\\punkt', '.cache/nltk/tokenizers/punkt', './nltk_data/tokenizers/punkt')]
 
 
 block_cipher = None
@@ -65,7 +68,7 @@ block_cipher = None
 
 a = Analysis(
     ['audioWhisper.py'],
-    pathex=['C:\\src\\'],
+    pathex=['C:\\src\\', workdir],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
