@@ -94,15 +94,15 @@ steps:
       <<: *default_environment
     settings:
       path_style: true
-      bucket:
-        from_secret: s3-bucket
+      endpoint:
+        from_secret: s3-endpoint
       access_key:
         from_secret: s3-access-key
       secret_key:
         from_secret: s3-secret-key
+      bucket: projects
       source: ${DIST_DIR}/whispering-tiger*.zip
-      target:
-        from_secret: s3-target-location
+      target: /whispering/
     when:
       ref:
         - refs/tags/*
