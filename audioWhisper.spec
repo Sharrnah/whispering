@@ -57,11 +57,19 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('fairseq')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
-workdir = os.environ.get('WORKDIR_WIN', '\\drone\\src')
-workdir = "C:" + workdir
+workdir = os.environ.get('WORKDIR_WIN', r'\drone\src')
+workdir = "C:" + workdir  # Now workdir = "C:\drone\src"
 
-datas += [(workdir+'\\.cache\\nltk\\tokenizers\\punkt', 'C:\\src\\.cache\\nltk\\tokenizers\\punkt', 'C:\\drone\\src\\.cache\\nltk\\tokenizers\\punkt', '.cache/nltk/tokenizers/punkt', './nltk_data/tokenizers/punkt')]
-
+# Check for the existence of various possible locations for the punkt tokenizer
+punkt_path_options = [
+    r'.cache/nltk/tokenizers/punkt',
+    r'C:\src\.cache\nltk\tokenizers\punkt',
+    workdir + r'\.cache\nltk\tokenizers\punkt'
+]
+for path_option in punkt_path_options:
+    if os.path.exists(path_option):
+        datas.append((path_option, r'./nltk_data/tokenizers/punkt'))
+        break  # Exit the loop once we find the existing path
 
 block_cipher = None
 
