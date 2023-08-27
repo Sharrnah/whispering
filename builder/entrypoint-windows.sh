@@ -12,7 +12,8 @@ set -e
 WORKDIR=${SRCDIR:-/src}
 
 # symlink custom SRCDIR to wine drive
-ln -s $WORKDIR /wine/drive_c/${WORKDIR}
+mkdir -p "/wine/drive_c$(dirname "${WORKDIR}")"
+ln -s "$WORKDIR" "/wine/drive_c${WORKDIR}"
 
 # make workdir path windows compatible
 WORKDIR_WIN=${WORKDIR//\//\\}
