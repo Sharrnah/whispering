@@ -18,6 +18,9 @@ ln -s "$WORKDIR" "/wine/drive_c${WORKDIR}"
 # make workdir path windows compatible
 WORKDIR_WIN=${WORKDIR//\//\\}
 
+# add workdir to PYTHONPATH
+PYTHONPATH="C:\\src\\;C:${WORKDIR_WIN};${PYTHONPATH}"
+
 #
 # In case the user specified a custom URL for PYPI, then use
 # that one, instead of the default one.
@@ -46,7 +49,7 @@ if [[ "$@" == "" ]]; then
         pip install --no-cache-dir -r requirements.txt
     fi # [ -f requirements.txt ]
 
-    pyinstaller --clean -y --paths "C:\\src\\" --paths "C:${WORKDIR_WIN}" --dist ./dist/windows --workpath /tmp *.spec
+    pyinstaller --clean -y --dist ./dist/windows --workpath /tmp *.spec
     chown -R --reference=. ./dist/windows
 else
     sh -c "$@"
