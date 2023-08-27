@@ -93,6 +93,7 @@ steps:
     environment:
       <<: *default_environment
     settings:
+      path_style: true
       bucket:
         from_secret: s3-bucket
       access_key:
