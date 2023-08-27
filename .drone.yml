@@ -54,9 +54,9 @@ steps:
       - mkdir -p $${DIST_DIR}/
       - wget -P "$${DIST_DIR}" https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full.7z
       - 7za x $${DIST_DIR}/ffmpeg-release-full.7z -o$${DIST_DIR}
+      - rm $${DIST_DIR}/ffmpeg-release-full.7z
       - ls $${DIST_DIR}/ffmpeg-*  # Debugging: list files to be moved
       - mv $${DIST_DIR}/ffmpeg-* $${DIST_DIR}/ffmpeg
-      - rm $${DIST_DIR}/ffmpeg-release-full.7z
     when:
       ref:
         - refs/tags/*
