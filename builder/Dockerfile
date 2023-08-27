@@ -102,11 +102,9 @@ RUN set -x \
 # install pyinstaller
 RUN /usr/bin/pip install pyinstaller==$PYINSTALLER_VERSION
 
-ENV WORKDIR=${SRCDIR:-/src}
-
 # put the src folder inside wine
-RUN mkdir ${WORKDIR}/ && ln -s ${WORKDIR} /wine/drive_c/src
-VOLUME ${WORKDIR}/
+RUN mkdir /src/ && ln -s /src /wine/drive_c/src
+VOLUME /src/
 WORKDIR /wine/drive_c/src/
 RUN mkdir -p /wine/drive_c/tmp
 

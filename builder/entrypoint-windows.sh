@@ -11,6 +11,12 @@ set -e
 # and don't allow that much flexibility to mount volumes
 WORKDIR=${SRCDIR:-/src}
 
+# symlink custom SRCDIR to wine drive
+ln -s $WORKDIR /wine/drive_c/${WORKDIR}
+
+# make workdir path windows compatible
+WORKDIR_WIN=${WORKDIR//\//\\}
+
 #
 # In case the user specified a custom URL for PYPI, then use
 # that one, instead of the default one.
@@ -39,15 +45,7 @@ if [[ "$@" == "" ]]; then
         pip install --no-cache-dir -r requirements.txt
     fi # [ -f requirements.txt ]
 
-    if [ -f "./builder/prepare.sh" ]; then
-        echo "running builder/prepare.sh"
-        chmod +x "./builder/prepare.sh"
-        "./builder/prepare.sh"
-    else
-        echo "No builder/prepare.sh"
-    fi # [ -f "./builder/prepare.sh" ]
-
-    pyinstaller --clean -y --dist ./dist/windows --workpath /tmp *.spec
+    pyinstaller --clean -y --paths "C:\\src\\" --paths "C:${WORKDIR_WIN}" --dist ./dist/windows --workpath /tmp *.spec
     chown -R --reference=. ./dist/windows
 else
     sh -c "$@"

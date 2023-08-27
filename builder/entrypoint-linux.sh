@@ -39,14 +39,6 @@ if [[ "$@" == "" ]]; then
         pip install --no-cache-dir -r requirements.txt
     fi # [ -f requirements.txt ]
 
-    if [ -f "./builder/prepare.sh" ]; then
-        echo "running builder/prepare.sh"
-        chmod +x "./builder/prepare.sh"
-        "./builder/prepare.sh"
-    else
-        echo "No prepare.sh"
-    fi # [ -f "./builder/prepare.sh" ]
-
     pyinstaller --clean -y --dist ./dist/linux --workpath /tmp *.spec
     chown -R --reference=. ./dist/linux
 else
