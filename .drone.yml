@@ -5,6 +5,7 @@ name: build
 
 environment:
   SRCDIR: /drone/src
+  DIST_DIR: ./dist/windows
 
 x-build_builder_image: &build_builder_image
   name: build-publish-builder-image
@@ -37,8 +38,6 @@ steps:
         - main
   - name: build-distribution-windows-prepare
     image: ${DRONE_REPO_LINK##https://}:win64
-    environment:
-      DIST_DIR: ./dist/windows
     pull: always  # make sure to update the image
     commands:
       - cd ${SRCDIR}
@@ -56,15 +55,11 @@ steps:
         - refs/tags/*
   - name: build-distribution-windows
     image: ${DRONE_REPO_LINK##https://}:win64
-    environment:
-      DIST_DIR: ./dist/windows
     when:
       ref:
         - refs/tags/*
   - name: build-distribution-windows-package
     image: ${DRONE_REPO_LINK##https://}:win64
-    environment:
-      DIST_DIR: ./dist/windows
     commands:
       - cd ${SRCDIR}
       - cd ${DIST_DIR}
@@ -84,8 +79,6 @@ steps:
         - refs/tags/*
   - name: upload
     image: plugins/s3
-    environment:
-      DIST_DIR: ./dist/windows
     settings:
       bucket:
         from_secret: s3-bucket
