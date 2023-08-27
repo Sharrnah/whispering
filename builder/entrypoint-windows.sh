@@ -44,7 +44,7 @@ if [[ "$@" == "" ]]; then
         chmod +x "./builder/prepare.sh"
         "./builder/prepare.sh"
     else
-        echo "No prepare.sh"
+        echo "No builder/prepare.sh"
     fi # [ -f "./builder/prepare.sh" ]
 
     pyinstaller --clean -y --dist ./dist/windows --workpath /tmp *.spec
