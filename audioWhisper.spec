@@ -65,7 +65,7 @@ block_cipher = None
 
 a = Analysis(
     ['audioWhisper.py'],
-    pathex=['C:\src\'],
+    pathex=['C:\\src\\'],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
