@@ -97,7 +97,10 @@ RUN set -x \
     && while pgrep wineserver >/dev/null; do echo "Waiting for wineserver"; sleep 1; done \
     && chmod +x /wine/drive_c/git/bin/git.exe /usr/bin/git \
     && wine cmd /C "echo %PATH%" \
-    && wine cmd /C "git -v"
+    && wine cmd /C "git -v" \
+
+ENV SRCDIR=${SRCDIR:-/src}
+ENV DIST_DIR=${DIST_DIR:-./dist/windows}
 
 # install pyinstaller
 RUN /usr/bin/pip install pyinstaller==$PYINSTALLER_VERSION

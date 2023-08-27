@@ -3,6 +3,11 @@ kind: pipeline
 type: kubernetes
 name: build
 
+x-global-variables:
+  environment: &default_environment
+    SRCDIR: /drone/src
+    DIST_DIR: ./dist/windows
+
 x-build_builder_image: &build_builder_image
   name: build-publish-builder-image
   image: plugins/docker
@@ -28,9 +33,6 @@ x-build_builder_image: &build_builder_image
 steps:
   - <<: *build_builder_image
     name: build-publish-main-image
-    environment:
-      SRCDIR: /drone/src
-      DIST_DIR: ./dist/windows
     when:
       branch:
         - master
@@ -39,50 +41,47 @@ steps:
     image: ${DRONE_REPO_LINK##https://}:win64
     pull: always  # make sure to update the image
     environment:
-      SRCDIR: /drone/src
-      DIST_DIR: ./dist/windows
+      <<: *default_environment
     commands:
       - echo "environments:"
-      - echo "${SRCDIR}"
-      - echo "${DIST_DIR}"
-      - cd ${SRCDIR}
+      - echo "$${SRCDIR}"
+      - echo "$${DIST_DIR}"
+      - cd $${SRCDIR}
       - mkdir -p ./.cache
       - mkdir -p ./.cache/nltk/tokenizers
       - wget -P "./.cache/nltk/tokenizers" https://s3.libs.space:9000/ai-models/nltk/tokenizers/punkt.zip
       - unzip -o ./.cache/nltk/tokenizers/punkt.zip -d ./.cache/nltk/tokenizers
-      - mkdir -p ${DIST_DIR}/
-      - wget -P "${DIST_DIR}" https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full.7z
-      - 7za x ${DIST_DIR}/ffmpeg-release-full.7z -o${DIST_DIR}
-      - mv ${DIST_DIR}/ffmpeg-* ${DIST_DIR}/ffmpeg
-      - rm ${DIST_DIR}/ffmpeg-release-full.7z
+      - mkdir -p $${DIST_DIR}/
+      - wget -P "$${DIST_DIR}" https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full.7z
+      - 7za x $${DIST_DIR}/ffmpeg-release-full.7z -o$${DIST_DIR}
+      - mv $${DIST_DIR}/ffmpeg-* $${DIST_DIR}/ffmpeg
+      - rm $${DIST_DIR}/ffmpeg-release-full.7z
     when:
       ref:
         - refs/tags/*
   - name: build-distribution-windows
     image: ${DRONE_REPO_LINK##https://}:win64
     environment:
-      SRCDIR: /drone/src
-      DIST_DIR: ./dist/windows
+      <<: *default_environment
     when:
       ref:
         - refs/tags/*
   - name: build-distribution-windows-package
     image: ${DRONE_REPO_LINK##https://}:win64
     environment:
-      SRCDIR: /drone/src
-      DIST_DIR: ./dist/windows
+      <<: *default_environment
     commands:
-      - cd ${SRCDIR}
-      - cd ${DIST_DIR}
-      - cp ${SRCDIR}/ignorelist.txt ./
-      - cp ${SRCDIR}/LICENSE ./
-      - cp -Rf ${SRCDIR}/websocket_clients ./
-      - cp -Rf ${SRCDIR}/markers ./
-      - cp -Rf ${SRCDIR}/dist_files/Plugins ./
-      - cp -Rf ${SRCDIR}/dist_files/get-defice-list.bat ./
-      - cp -Rf ${SRCDIR}/dist_files/help.bat ./
-      - cp -Rf ${SRCDIR}/dist_files/.current_platform.yaml.template ./.current_platform.yaml
-      - WT_VERSION="${DRONE_TAG#v}"
+      - cd $${SRCDIR}
+      - cd $${DIST_DIR}
+      - cp $${SRCDIR}/ignorelist.txt ./
+      - cp $${SRCDIR}/LICENSE ./
+      - cp -Rf $${SRCDIR}/websocket_clients ./
+      - cp -Rf $${SRCDIR}/markers ./
+      - cp -Rf $${SRCDIR}/dist_files/Plugins ./
+      - cp -Rf $${SRCDIR}/dist_files/get-defice-list.bat ./
+      - cp -Rf $${SRCDIR}/dist_files/help.bat ./
+      - cp -Rf $${SRCDIR}/dist_files/.current_platform.yaml.template ./.current_platform.yaml
+      - WT_VERSION="$${DRONE_TAG#v}"
       - sed -i "s/###VERSION###/$${WT_VERSION}/g" "./.current_platform.yaml"
       - zip -r -9 whispering-tiger$${WT_VERSION}_win.zip .
     when:
@@ -91,8 +90,7 @@ steps:
   - name: upload
     image: plugins/s3
     environment:
-      SRCDIR: /drone/src
-      DIST_DIR: ./dist/windows
+      <<: *default_environment
     settings:
       bucket:
         from_secret: s3-bucket
