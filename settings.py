@@ -77,7 +77,7 @@ TRANSLATE_SETTINGS = {
     "normalize_lower_threshold": -24.0,
     "normalize_upper_threshold": -16.0,
     "normalize_gain_factor": 2.0,
-    "denoise_audio": True,  # if enabled, audio will be de-noised before processing.
+    "denoise_audio": False,  # if enabled, audio will be de-noised before processing.
     "denoise_audio_post_filter": False,  # Enable post filter for some minor, extra noise reduction.
 
     "realtime": False,  # if enabled, Whisper will process audio in realtime.
