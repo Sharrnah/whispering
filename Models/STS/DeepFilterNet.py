@@ -31,6 +31,7 @@ class DeepFilterNet:
         os.makedirs(cache_df_path, exist_ok=True)
 
         model = "DeepFilterNet3"
+
         model_path = Path(cache_df_path / model / "checkpoints/model_120.ckpt.best")
         model_config_path = Path(cache_df_path / model / "config.ini")
         if not Path(cache_df_path).exists() or not model_path.is_file() or not model_config_path.is_file():
@@ -39,8 +40,10 @@ class DeepFilterNet:
                                                str(cache_df_path.resolve()),
                                                DEEP_FILTER_LINK[model]["checksum"], title="DeepFilterNet3 (A.I. Denoise)"):
                 print("Model download failed")
-
         self.df_model, self.df_state, _ = init_df(model_base_dir=str(Path(cache_df_path / model).resolve()), post_filter=post_filter, epoch=epoch, log_level="none")
+
+        # original part (downloads to %LOCALAPPDATA%\DeepFilterNet)
+        # self.df_model, self.df_state, _ = init_df(post_filter=post_filter, epoch=epoch, log_level="none")
         pass
 
     def int2float(self, sound):
@@ -77,4 +80,13 @@ class DeepFilterNet:
 
         audio_bytes = audio_tools.resample_audio(enhanced_audio, enhanced_sample_rate, output_sample_rate, -1,
                                                  is_mono=True)
+
+        # clear variables
+        enhanced_audio = None
+        del enhanced_audio
+        audio_tensor = None
+        del audio_tensor
+        audio_full_int16 = None
+        del audio_full_int16
+
         return audio_bytes

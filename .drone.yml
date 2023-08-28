@@ -100,7 +100,10 @@ steps:
       - cp -Rf $${SRCDIR}/dist_files/.current_platform.yaml.template ./.current_platform.yaml
       - WT_VERSION="$${DRONE_TAG#v}"
       - sed -i "s/###VERSION###/$${WT_VERSION}/g" "./.current_platform.yaml"
-      - zip -r -9 whispering-tiger$${WT_VERSION}_win.zip .
+      #- zip -r -9 whispering-tiger$${WT_VERSION}_win.zip .
+      - 7z a -tzip -mx=9 -mfb=128 whispering-tiger$${WT_VERSION}_win.zip .
+      - hash=$$(sha256sum whispering-tiger$${WT_VERSION}_win.zip | awk '{ print $$1 }')
+      - echo "SHA256 = $$hash"
     when:
       ref:
         - refs/tags/*

@@ -41,7 +41,7 @@ requests==2.29.0
 # downgradea of scikit-image to v1.23.4 to prevent https://github.com/scikit-image/scikit-image/issues/6784
 scikit-image==v0.19.3
 
-deepfilternet
+deepfilternet==0.5.3
 pyloudnorm
 nltk
 
