@@ -30,6 +30,21 @@ x-build_builder_image: &build_builder_image
     status:
       - success
 
+x-upload-build-s3: &upload-build-s3
+  image: plugins/s3
+  environment:
+    <<: *default_environment
+  settings:
+    path_style: true
+    bucket: projects
+    source: ${DIST_DIR}/whispering-tiger*.zip
+    target: /whispering/
+  when:
+    ref:
+      - refs/tags/*
+  depends_on:
+    - build-distribution-windows-package
+
 steps:
   - <<: *build_builder_image
     name: build-publish-main-image
@@ -88,24 +103,33 @@ steps:
     when:
       ref:
         - refs/tags/*
-  - name: upload
-    image: plugins/s3
-    environment:
-      <<: *default_environment
+  - <<: *upload-build-s3
+    name: upload-s3
     settings:
-      path_style: true
       endpoint:
-        from_secret: s3-endpoint
+        from_secret: s3-endpoint-s3
       access_key:
-        from_secret: s3-access-key
+        from_secret: s3-access-key-s3
       secret_key:
-        from_secret: s3-secret-key
-      bucket: projects
-      source: ${DIST_DIR}/whispering-tiger*.zip
-      target: /whispering/
-    when:
-      ref:
-        - refs/tags/*
+        from_secret: s3-secret-key-s3
+  - <<: *upload-build-s3
+    name: upload-eu
+    settings:
+      endpoint:
+        from_secret: s3-endpoint-eu
+      access_key:
+        from_secret: s3-access-key-eu
+      secret_key:
+        from_secret: s3-secret-key-eu
+  - <<: *upload-build-s3
+    name: upload-us
+    settings:
+      endpoint:
+        from_secret: s3-endpoint-us
+      access_key:
+        from_secret: s3-access-key-us
+      secret_key:
+        from_secret: s3-secret-key-us
 
 trigger:
   #event:
