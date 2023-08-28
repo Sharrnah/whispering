@@ -37,7 +37,7 @@ x-upload-build-s3: &upload-build-s3
   settings:
     path_style: true
     bucket: projects
-    source: ${DIST_DIR}/whispering-tiger*.zip
+    source: ${DIST_DIR##./}/whispering-tiger*.zip
     target: /whispering/
   when:
     ref:
