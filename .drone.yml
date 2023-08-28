@@ -101,15 +101,27 @@ steps:
       - WT_VERSION="$${DRONE_TAG#v}"
       - sed -i "s/###VERSION###/$${WT_VERSION}/g" "./.current_platform.yaml"
       #- zip -r -9 whispering-tiger$${WT_VERSION}_win.zip .
-      #- 7z a -tzip -mx=9 -mfb=128 whispering-tiger$${WT_VERSION}_win.zip .
-      # generate zip and calculate hash at the same time
-      - hash=$$(7z a -tzip -mx=9 -mfb=128 -so . | tee whispering-tiger$${WT_VERSION}_win.zip | sha256sum | awk '{print $$1}')
-      - echo "SHA256 = $$hash"
+      - 7z a -tzip -mx=9 -mfb=128 whispering-tiger$${WT_VERSION}_win.zip .
     when:
       ref:
         - refs/tags/*
     depends_on:
       - build-distribution-windows
+  - name: build-distribution-windows-package-hash
+    image: ${DRONE_REPO_LINK##https://}:win64
+    environment:
+      <<: *default_environment
+    commands:
+      - cd $${SRCDIR}
+      - cd $${DIST_DIR}
+      - WT_VERSION="$${DRONE_TAG#v}"
+      - hash=$$(sha256sum whispering-tiger$${WT_VERSION}_win.zip | awk '{ print $$1 }')
+      - echo "SHA256 (WIN) = $$hash"
+    when:
+      ref:
+        - refs/tags/*
+    depends_on:
+      - build-distribution-windows-package
   - <<: *upload-build-s3
     name: upload-s3
     environment:
