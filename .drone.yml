@@ -82,6 +82,8 @@ steps:
     when:
       ref:
         - refs/tags/*
+    depends_on:
+      - build-distribution-windows-prepare
   - name: build-distribution-windows-package
     image: ${DRONE_REPO_LINK##https://}:win64
     environment:
@@ -103,6 +105,8 @@ steps:
     when:
       ref:
         - refs/tags/*
+    depends_on:
+      - build-distribution-windows
   - <<: *upload-build-s3
     name: upload-s3
     settings:
