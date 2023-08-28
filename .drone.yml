@@ -31,14 +31,13 @@ x-build_builder_image: &build_builder_image
       - success
 
 x-upload-build-s3: &upload-build-s3
-  image: plugins/s3
+  image: minio/mc
   environment:
     <<: *default_environment
-  settings:
-    path_style: true
-    bucket: projects
-    source: ${DIST_DIR##./}/whispering-tiger*.zip
-    target: /whispering/
+  commands:
+    - WT_VERSION="$${DRONE_TAG#v}"
+    - mc alias set s3_alias $${MINIO_HOST} $${MINIO_ACCESS_KEY} $${MINIO_SECRET_KEY}
+    - mc cp $${SRCDIR}$${DIST_DIR##.}/whispering-tiger$${WT_VERSION}_win.zip s3_alias/projects/whispering/
   when:
     ref:
       - refs/tags/*
@@ -109,30 +108,30 @@ steps:
       - build-distribution-windows
   - <<: *upload-build-s3
     name: upload-s3
-    settings:
-      endpoint:
+    environment:
+      MINIO_HOST:
         from_secret: s3-endpoint-s3
-      access_key:
+      MINIO_ACCESS_KEY:
         from_secret: s3-access-key-s3
-      secret_key:
+      MINIO_SECRET_KEY:
         from_secret: s3-secret-key-s3
   - <<: *upload-build-s3
     name: upload-eu
-    settings:
-      endpoint:
+    environment:
+      MINIO_HOST:
         from_secret: s3-endpoint-eu
-      access_key:
+      MINIO_ACCESS_KEY:
         from_secret: s3-access-key-eu
-      secret_key:
+      MINIO_SECRET_KEY:
         from_secret: s3-secret-key-eu
   - <<: *upload-build-s3
     name: upload-us
-    settings:
-      endpoint:
+    environment:
+      MINIO_HOST:
         from_secret: s3-endpoint-us
-      access_key:
+      MINIO_ACCESS_KEY:
         from_secret: s3-access-key-us
-      secret_key:
+      MINIO_SECRET_KEY:
         from_secret: s3-secret-key-us
 
 trigger:
