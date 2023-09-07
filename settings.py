@@ -45,6 +45,7 @@ TRANSLATE_SETTINGS = {
     "current_language": None,  # can be None (auto) or any Whisper supported language.
     "model": "small",  # Whisper model size. Can be "tiny", "base", "small", "medium" or "large"
     "condition_on_previous_text": False,  # if enabled, Whisper will condition on previous text. (more prone to loops or getting stuck)
+    "prompt_reset_on_temperature": 0.5,  # after which temperature fallback step the prompt with the previous text should be reset (default value is 0.5)
     "energy": 300,  # energy of audio volume to start whisper processing. Can be 0-1000
     "phrase_time_limit": 0,  # time limit for Whisper to generate a phrase. (0 = no limit)
     "pause": 1.0,  # pause between phrases.
@@ -53,6 +54,8 @@ TRANSLATE_SETTINGS = {
     "no_speech_threshold": "0.6",
     "length_penalty": 1.0,
     "beam_search_patience": 1.0,
+    "repetition_penalty": 1.0,  # penalize the score of previously generated tokens (set > 1 to penalize)
+    "no_repeat_ngram_size": 0,  # prevent repetitions of ngrams with this size
     "whisper_precision": "float32",  # for original Whisper can be "float16" or "float32", for faster-whisper "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
     "stt_type": "faster_whisper",  # can be "faster_whisper", "original_whisper" or "speech_t5".
     "temperature_fallback": True,  # Set to False to disable temperature fallback which is the reason for some slowdowns, but decreases quality.

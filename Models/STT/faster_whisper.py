@@ -568,12 +568,15 @@ class FasterWhisper:
                                   cpu_threads=cpu_threads, num_workers=num_workers)
 
     def transcribe(self, audio_sample, task, language, condition_on_previous_text,
-                   initial_prompt, logprob_threshold, no_speech_threshold,
-                   temperature, beam_size, word_timestamps, without_timestamps, patience, length_penalty) -> dict:
+                   initial_prompt, logprob_threshold, no_speech_threshold, temperature, beam_size,
+                   word_timestamps, without_timestamps, patience, length_penalty: float = 1,
+                   prompt_reset_on_temperature: float = 0.5, repetition_penalty: float = 1,
+                   no_repeat_ngram_size: int = 0) -> dict:
 
         result_segments, audio_info = self.model.transcribe(audio_sample, task=task,
                                                             language=language,
                                                             condition_on_previous_text=condition_on_previous_text,
+                                                            prompt_reset_on_temperature=prompt_reset_on_temperature,
                                                             initial_prompt=initial_prompt,
                                                             log_prob_threshold=logprob_threshold,
                                                             no_speech_threshold=no_speech_threshold,
@@ -582,7 +585,9 @@ class FasterWhisper:
                                                             word_timestamps=word_timestamps,
                                                             without_timestamps=without_timestamps,
                                                             patience=patience,
-                                                            length_penalty=length_penalty
+                                                            length_penalty=length_penalty,
+                                                            repetition_penalty=repetition_penalty,
+                                                            no_repeat_ngram_size=no_repeat_ngram_size,
                                                             )
 
         result = {

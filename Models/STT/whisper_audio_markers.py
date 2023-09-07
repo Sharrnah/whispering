@@ -148,6 +148,9 @@ class WhisperVoiceMarker:
         whisper_faster_without_timestamps = kwargs["without_timestamps"]
         whisper_faster_beam_search_patience = kwargs["patience"]
         whisper_faster_length_penalty = kwargs["length_penalty"]
+        prompt_reset_on_temperature = kwargs["prompt_reset_on_temperature"]
+        repetition_penalty = kwargs["repetition_penalty"]
+        no_repeat_ngram_size = kwargs["no_repeat_ngram_size"]
 
         whisper_initial_prompt = self.get_voice_marker_prompt(whisper_language, whisper_task)
         if kwargs["initial_prompt"] is not None and kwargs["initial_prompt"] != "":
@@ -158,6 +161,7 @@ class WhisperVoiceMarker:
         result = self.audio_model.transcribe(audio_sample, task=whisper_task,
                                              language=whisper_language,
                                              condition_on_previous_text=whisper_condition_on_previous_text,
+                                             prompt_reset_on_temperature=prompt_reset_on_temperature,
                                              initial_prompt=whisper_initial_prompt,
                                              logprob_threshold=whisper_logprob_threshold,
                                              no_speech_threshold=whisper_no_speech_threshold,
@@ -166,7 +170,9 @@ class WhisperVoiceMarker:
                                              word_timestamps=whisper_word_timestamps,
                                              without_timestamps=whisper_faster_without_timestamps,
                                              patience=whisper_faster_beam_search_patience,
-                                             length_penalty=whisper_faster_length_penalty)
+                                             length_penalty=whisper_faster_length_penalty,
+                                             repetition_penalty=repetition_penalty,
+                                             no_repeat_ngram_size=no_repeat_ngram_size)
         if self.verbose:
             print("Result: " + str(result))
 
