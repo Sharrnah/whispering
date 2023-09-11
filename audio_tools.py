@@ -54,19 +54,24 @@ class PyAudioPool:
 pyaudio_pool = PyAudioPool()
 
 
-# resample_audio function to resample audio data to a different sample rate and convert it to mono.
+# resampy_audio function using the resampy library to resample audio data to a different sample rate and convert it to mono. (slower than resample, but less error prone to strange data)
 # set target_channels to '-1' to average the left and right channels to create mono audio (default)
 # set target_channels to '0' to extract the first channel (left channel) data
 # set target_channels to '1' to extract the second channel (right channel) data
 # set target_channels to '2' to keep stereo channels (or copy the mono channel to both channels if is_mono is True)
 # to Convert the int16 numpy array to bytes use .tobytes()
 # filter can be sync_window, kaiser_fast, kaiser_best
-#def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16", filter="kaiser_best"):
+#def resampy_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16", filter="kaiser_best"):
 #    audio_data_dtype = np.int16
 #    if dtype == "int16":
 #        audio_data_dtype = np.int16
 #    elif dtype == "float32":
 #        audio_data_dtype = np.float32
+#
+#    # Convert the audio chunk to a numpy array
+#    if isinstance(audio_chunk, torch.Tensor):
+#        audio_chunk = audio_chunk.detach().cpu().numpy()
+#
 #    audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
 #
 #    # try to guess if the audio is mono or stereo
@@ -146,14 +151,14 @@ def _uninterleave(data):
     See also: interleave()
 
     """
-    return data.reshape(2, len(data)/2, order='FORTRAN')
+    return data.reshape(2, len(data)//2, order='F')
 
 
 def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16"):
     """
     Resample audio data and optionally convert between stereo and mono.
 
-    :param audio_chunk: The raw audio data chunk as bytes or a NumPy array.
+    :param audio_chunk: The raw audio data chunk as bytes, NumPy array or PyTorch Tensor.
     :param recorded_sample_rate: The sample rate of the input audio.
     :param target_sample_rate: The desired target sample rate for the output.
     :param target_channels: The desired number of channels in the output.
@@ -167,11 +172,12 @@ def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target
     """
     # Determine the data type for audio data
     audio_data_dtype = np.int16 if dtype == "int16" else np.float32
+
     # Convert the audio chunk to a numpy array
-    if isinstance(audio_chunk, bytes):
-        audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
-    else:
-        audio_data = np.asarray(audio_chunk, dtype=audio_data_dtype)
+    if isinstance(audio_chunk, torch.Tensor):
+        audio_chunk = audio_chunk.detach().cpu().numpy()
+
+    audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
 
     # Determine if the audio is mono or stereo; assume mono if the shape has one dimension
     if is_mono is None:
