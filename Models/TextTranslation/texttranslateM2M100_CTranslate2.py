@@ -1,3 +1,5 @@
+import sys
+
 import ctranslate2
 import sentencepiece as spm
 import os
@@ -205,6 +207,12 @@ def load_model(size="small", compute_type="float32"):
                                     MODEL_LINKS[size]["checksum"], title="M2M100CT2")
 
     sentencepiece.load(str(sp_model_path.resolve()))
+
+    # only if not running as pyinstaller bundle (pyinstaller places tokenizer folder in distribution "nlpk_data")
+    if not getattr(sys, 'frozen', False) and not hasattr(sys, '_MEIPASS'):
+        # load nltk sentence splitting dependency
+        if not Path(nltk_path / "tokenizers" / "punkt").is_dir() or not Path(nltk_path / "tokenizers" / "punkt" / "english.pickle").is_file():
+            nltk.download('punkt', download_dir=str(nltk_path.resolve()))
 
     translator = ctranslate2.Translator(str(model_path.resolve()), device=torch_device, compute_type="float32")
 
