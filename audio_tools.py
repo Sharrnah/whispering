@@ -8,6 +8,7 @@ import pyloudnorm
 import numpy as np
 import pyaudio
 import torch
+from librosa.core.audio import resampy
 from pydub import AudioSegment
 from threading import Lock
 import time
@@ -61,42 +62,42 @@ pyaudio_pool = PyAudioPool()
 # set target_channels to '2' to keep stereo channels (or copy the mono channel to both channels if is_mono is True)
 # to Convert the int16 numpy array to bytes use .tobytes()
 # filter can be sync_window, kaiser_fast, kaiser_best
-#def resampy_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16", filter="kaiser_best"):
-#    audio_data_dtype = np.int16
-#    if dtype == "int16":
-#        audio_data_dtype = np.int16
-#    elif dtype == "float32":
-#        audio_data_dtype = np.float32
-#
-#    # Convert the audio chunk to a numpy array
-#    if isinstance(audio_chunk, torch.Tensor):
-#        audio_chunk = audio_chunk.detach().cpu().numpy()
-#
-#    audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
-#
-#    # try to guess if the audio is mono or stereo
-#    if is_mono is None:
-#        is_mono = audio_data.shape[0] % 2 != 0
-#
-#    if target_channels < 2 and not is_mono:
-#        # Reshape the array to separate the channels
-#        audio_data = audio_data.reshape(-1, 2)
-#
-#    if target_channels == -1 and not is_mono:
-#        # Average the left and right channels to create mono audio
-#        audio_data = audio_data.mean(axis=1)
-#    elif target_channels == 0 or target_channels == 1 and not is_mono:
-#        # Extract the first channel (left channel) data
-#        audio_data = audio_data[:, target_channels]
-#    elif target_channels == 2 and is_mono:
-#        # Duplicate the mono channel to create left and right channels
-#        # Also flatten the array and convert it back to int16 dtype
-#        audio_data = np.column_stack((audio_data, audio_data)).flatten()
-#
-#    # Resample the audio data to the desired sample rate
-#    audio_data = resampy.resample(audio_data, recorded_sample_rate, target_sample_rate, filter=filter)
-#    # Convert the resampled data back to int16 dtype
-#    return np.asarray(audio_data, dtype=audio_data_dtype)
+def resampy_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16", filter="kaiser_best"):
+    audio_data_dtype = np.int16
+    if dtype == "int16":
+        audio_data_dtype = np.int16
+    elif dtype == "float32":
+        audio_data_dtype = np.float32
+
+    # Convert the audio chunk to a numpy array
+    if isinstance(audio_chunk, torch.Tensor):
+        audio_chunk = audio_chunk.detach().cpu().numpy()
+
+    audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
+
+    # try to guess if the audio is mono or stereo
+    if is_mono is None:
+        is_mono = audio_data.shape[0] % 2 != 0
+
+    if target_channels < 2 and not is_mono:
+        # Reshape the array to separate the channels
+        audio_data = audio_data.reshape(-1, 2)
+
+    if target_channels == -1 and not is_mono:
+        # Average the left and right channels to create mono audio
+        audio_data = audio_data.mean(axis=1)
+    elif target_channels == 0 or target_channels == 1 and not is_mono:
+        # Extract the first channel (left channel) data
+        audio_data = audio_data[:, target_channels]
+    elif target_channels == 2 and is_mono:
+        # Duplicate the mono channel to create left and right channels
+        # Also flatten the array and convert it back to int16 dtype
+        audio_data = np.column_stack((audio_data, audio_data)).flatten()
+
+    # Resample the audio data to the desired sample rate
+    audio_data = resampy.resample(audio_data, recorded_sample_rate, target_sample_rate, filter=filter)
+    # Convert the resampled data back to int16 dtype
+    return np.asarray(audio_data, dtype=audio_data_dtype)
 
 
 def _resample(smp, scale=1.0):
