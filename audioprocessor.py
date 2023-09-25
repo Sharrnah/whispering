@@ -23,6 +23,7 @@ from Models.TTS import silero
 import Models.STT.faster_whisper as faster_whisper
 import Models.STT.whisper_audio_markers as whisper_audio_markers
 import Models.STT.speecht5 as speech_t5
+import Models.Multi.seamless_m4t as seamless_m4t
 
 # Plugins
 import Plugins
@@ -76,6 +77,13 @@ def whisper_get_languages():
         **LANGUAGES
     }
 
+    return tuple([{"code": code, "name": language} for code, language in languages.items()])
+
+
+def seamless_m4t_get_languages():
+    languages = {
+        **seamless_m4t.LANGUAGES
+    }
     return tuple([{"code": code, "name": language} for code, language in languages.items()])
 
 
@@ -277,6 +285,12 @@ def load_whisper(model, ai_device):
                                             cpu_threads=cpu_threads, num_workers=num_workers)
         # return whisperx.WhisperX(model, device=ai_device, compute_type=compute_dtype,
         #                                    cpu_threads=cpu_threads, num_workers=num_workers)
+    elif stt_type == "seamless_m4t":
+        compute_dtype = settings.GetOption("whisper_precision")
+        try:
+            return seamless_m4t.SeamlessM4T(model=model, compute_type=compute_dtype, device=ai_device)
+        except Exception as e:
+            print("Failed to load Seamless M4T model. Application exits. " + str(e))
     elif stt_type == "speech_t5":
         try:
             return speech_t5.SpeechT5STT(device=ai_device)
@@ -297,6 +311,9 @@ def load_realtime_whisper(model, ai_device):
 
         return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype,
                                             cpu_threads=cpu_threads, num_workers=num_workers)
+    elif settings.GetOption("stt_type") == "seamless_m4t":
+        compute_dtype = settings.GetOption("realtime_whisper_precision")
+        return seamless_m4t.SeamlessM4T(model=model, compute_type=compute_dtype, device=ai_device)
     elif settings.GetOption("stt_type") == "speech_t5":
         return speech_t5.SpeechT5STT(device=ai_device)
 
@@ -482,6 +499,12 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                                        length_penalty=whisper_faster_length_penalty,
                                                                        repetition_penalty=repetition_penalty,
                                                                        no_repeat_ngram_size=no_repeat_ngram_size)
+        elif settings.GetOption("stt_type") == "seamless_m4t":
+            # facebook seamless M4T
+            if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
+                result = audio_model_realtime.transcribe(audio_sample, target_lang=whisper_language, beam_size=whisper_beam_size_realtime)
+            else:
+                result = audio_model.transcribe(audio_sample, target_lang=whisper_language, beam_size=whisper_beam_size)
 
         elif settings.GetOption("stt_type") == "speech_t5":
             # microsoft SpeechT5

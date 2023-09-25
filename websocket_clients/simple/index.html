@@ -63,7 +63,7 @@
                         console.log(received_msg);
 
                         message_text = received_msg.text.trim();
-                        // use argos translate text result if received
+                        // use text translate result if received
                         if (typeof received_msg.txt_translation != 'undefined' && received_msg.txt_translation.trim() !== '') {
                            message_text = received_msg.txt_translation.trim();
                         }

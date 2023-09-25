@@ -50,6 +50,7 @@ import websocket
 import settings
 import remote_opener
 from Models.STT import faster_whisper
+from Models.Multi import seamless_m4t
 from Models.TextTranslation import texttranslate
 from Models import languageClassification
 import pyaudiowpatch as pyaudio
@@ -791,6 +792,8 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
         settings.SetOption("current_language", "en")
     elif "_whisper" in settings.GetOption("stt_type"):
         settings.SetOption("whisper_languages", audioprocessor.whisper_get_languages())
+    elif settings.GetOption("stt_type") == "seamless_m4t":
+        settings.SetOption("whisper_languages", audioprocessor.seamless_m4t_get_languages())
     elif settings.GetOption("stt_type") == "speech_t5":
         # speech t5 only supports english
         print(f"speechT5 is an English-only model. only English speech is supported.")
@@ -900,6 +903,12 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                                                                           realtime_whisper_precision):
             websocket.set_loading_state("downloading_whisper_model", True)
             faster_whisper.download_model(realtime_whisper_model, realtime_whisper_precision)
+            websocket.set_loading_state("downloading_whisper_model", False)
+    if settings.GetOption("stt_type") == "seamless_m4t":
+        stt_model_size = settings.GetOption("model")
+        if seamless_m4t.SeamlessM4T.needs_download(stt_model_size):
+            websocket.set_loading_state("downloading_whisper_model", True)
+            seamless_m4t.SeamlessM4T.download_model(stt_model_size)
             websocket.set_loading_state("downloading_whisper_model", False)
 
     # load audio filter model

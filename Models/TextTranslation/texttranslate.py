@@ -4,6 +4,9 @@ import pykakasi
 from Models.TextTranslation import texttranslateM2M100_CTranslate2
 from Models.TextTranslation import texttranslateNLLB200
 from Models.TextTranslation import texttranslateNLLB200_CTranslate2
+from Models.Multi.seamless_m4t import SeamlessM4T
+
+txt_translator_instance = None
 
 
 def get_current_translator():
@@ -29,6 +32,7 @@ def convert_to_romaji(text):
 
 # Download and install Translate packages
 def InstallLanguages():
+    global txt_translator_instance
     match get_current_translator():
         case "M2M100":
             texttranslateM2M100_CTranslate2.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
@@ -36,9 +40,16 @@ def InstallLanguages():
             texttranslateNLLB200.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "NLLB200_CT2":
             texttranslateNLLB200_CTranslate2.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
+        case "Seamless_M4T":
+            txt_translator_instance = SeamlessM4T(
+                model=settings.GetOption("txt_translator_size"),
+                compute_type=settings.GetOption("txt_translator_precision"),
+                device=settings.GetOption("txt_translator_device")
+            )
 
 
 def GetInstalledLanguageNames():
+    global txt_translator_instance
     match get_current_translator():
         case "M2M100":
             return texttranslateM2M100_CTranslate2.get_installed_language_names()
@@ -46,9 +57,12 @@ def GetInstalledLanguageNames():
             return texttranslateNLLB200.get_installed_language_names()
         case "NLLB200_CT2":
             return texttranslateNLLB200_CTranslate2.get_installed_language_names()
+        case "Seamless_M4T":
+            return SeamlessM4T.get_languages()
 
 
 def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
+    global txt_translator_instance
     translation_text = ""
     match get_current_translator():
         case "M2M100":
@@ -66,6 +80,12 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
                 translation_text, from_code, to_code = texttranslateNLLB200_CTranslate2.translate_language(text, from_code, to_code, as_iso1)
             except Exception as e:
                 print("Error: " + str(e))
+        case "Seamless_M4T":
+            try:
+                translation_text, from_code, to_code = txt_translator_instance.text_translate(text, from_code, to_code)
+            except Exception as e:
+                print("Error: " + str(e))
+
     if to_romaji:
         translation_text = convert_to_romaji(translation_text)
 
@@ -73,6 +93,9 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
 
 
 def SetDevice(option):
+    global txt_translator_instance
     texttranslateNLLB200.set_device(option)
     texttranslateNLLB200_CTranslate2.set_device(option)
     texttranslateM2M100_CTranslate2.set_device(option)
+    if txt_translator_instance is not None:
+        txt_translator_instance.set_device(option)
