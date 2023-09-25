@@ -3,7 +3,9 @@ numpy==1.23.4
 tqdm
 rich==12.6.0
 more-itertools
-transformers==4.33.2
+#transformers==4.33.2
+# fork for seamless-m4t (until its officially added)
+transformers @ https://github.com/Sharrnah/transformers/archive/refs/heads/add_seamless-m4t.zip
 accelerate==0.21.0
 ffmpeg-python==0.2.0
 click>=8.1.3
