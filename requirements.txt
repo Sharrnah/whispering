@@ -6,6 +6,7 @@ more-itertools
 #transformers==4.33.2
 # fork for seamless-m4t (until its officially added)
 transformers @ https://github.com/Sharrnah/transformers/archive/refs/heads/add_seamless-m4t.zip
+tensorboardX==2.6.2.2
 accelerate==0.21.0
 ffmpeg-python==0.2.0
 click>=8.1.3
