@@ -224,14 +224,11 @@ class SeamlessM4T(metaclass=SingletonMeta):
         return text.strip()
 
     # this always translates to the target langauge
-    def transcribe(self, audio_sample, target_lang='eng', beam_size=5, generate_speech=False) -> dict:
-        #print("target_lang")
-        #print(target_lang)
-        #target_lang = self.remove_writing_system_from_lang_code(target_lang)
-        #print("target_lang2")
-        #print(target_lang)
+    def transcribe(self, audio_sample, source_lang=None, target_lang='eng', beam_size=5, generate_speech=False) -> dict:
+        if source_lang is not None and (source_lang == '' or source_lang.lower() == 'auto'):
+            source_lang = None
 
-        inputs = self.processor(audios=audio_sample, sampling_rate=16000, return_tensors="pt")
+        inputs = self.processor(audios=audio_sample, src_lang=source_lang, sampling_rate=16000, return_tensors="pt")
         inputs = {name: tensor.to(dtype=self.precision).to(self.device) for name, tensor in inputs.items()}
 
         output_tokens = self.model.generate(**inputs, tgt_lang=target_lang,
@@ -269,12 +266,6 @@ class SeamlessM4T(metaclass=SingletonMeta):
         return lang_code
 
     def text_translate(self, text, source_lang='eng', target_lang='eng', beam_size=5, generate_speech=False) -> tuple:
-        #print("source_lang")
-        #print(source_lang)
-        #print("target_lang")
-        #print(target_lang)
-        #target_lang = self.remove_writing_system_from_lang_code(target_lang)
-
         if source_lang == "auto":
             source_lang = languageClassification.classify(text)
 

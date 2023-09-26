@@ -82,6 +82,7 @@ def whisper_get_languages():
 
 def seamless_m4t_get_languages():
     languages = {
+        "": "Auto",
         **seamless_m4t.LANGUAGES
     }
     return tuple([{"code": code, "name": language} for code, language in languages.items()])
@@ -340,6 +341,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                       final_audio):
     whisper_task = settings.GetOption("whisper_task")
     whisper_language = settings.GetOption("current_language")
+    stt_target_language = settings.GetOption("target_language")
     whisper_condition_on_previous_text = settings.GetOption("condition_on_previous_text")
     whisper_logprob_threshold = settings.GetOption("logprob_threshold")
     whisper_no_speech_threshold = settings.GetOption("no_speech_threshold")
@@ -502,9 +504,17 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
         elif settings.GetOption("stt_type") == "seamless_m4t":
             # facebook seamless M4T
             if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
-                result = audio_model_realtime.transcribe(audio_sample, target_lang=whisper_language, beam_size=whisper_beam_size_realtime)
+                result = audio_model_realtime.transcribe(audio_sample,
+                                                         source_lang=whisper_language,
+                                                         target_lang=stt_target_language,
+                                                         beam_size=whisper_beam_size_realtime
+                                                         )
             else:
-                result = audio_model.transcribe(audio_sample, target_lang=whisper_language, beam_size=whisper_beam_size)
+                result = audio_model.transcribe(audio_sample,
+                                                source_lang=whisper_language,
+                                                target_lang=stt_target_language,
+                                                beam_size=whisper_beam_size
+                                                )
 
         elif settings.GetOption("stt_type") == "speech_t5":
             # microsoft SpeechT5

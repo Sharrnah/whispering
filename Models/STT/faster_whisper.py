@@ -3,6 +3,7 @@ from faster_whisper import WhisperModel
 from pathlib import Path
 import os
 import downloader
+from Models.Singleton import SingletonMeta
 
 MODEL_LINKS = {
     "tiny": {
@@ -546,7 +547,7 @@ def download_model(model: str, compute_type: str = "float32"):
         print("no model downloaded for tokenizer.")
 
 
-class FasterWhisper:
+class FasterWhisper(metaclass=SingletonMeta):
     model = None
 
     def __init__(self, model: str, device: str = "cpu", compute_type: str = "float32", cpu_threads: int = 0,

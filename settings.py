@@ -43,6 +43,7 @@ TRANSLATE_SETTINGS = {
     "ai_device": None,  # can be None (auto), "cuda" or "cpu".
     "whisper_task": "transcribe",  # Whisper A.I. Can do "transcribe" or "translate"
     "current_language": None,  # can be None (auto) or any Whisper supported language.
+    "target_language": "eng",  # can be any M4T supported language.
     "model": "small",  # Whisper model size. Can be "tiny", "base", "small", "medium" or "large"
     "condition_on_previous_text": False,  # if enabled, Whisper will condition on previous text. (more prone to loops or getting stuck)
     "prompt_reset_on_temperature": 0.5,  # after which temperature fallback step the prompt with the previous text should be reset (default value is 0.5)
