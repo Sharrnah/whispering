@@ -11,6 +11,7 @@ rem             --hidden-import=scipy.signal ^
 rem             --hidden-import=transformers.models.nllb ^
 rem             --hidden-import=sentencepiece ^
 rem             --hidden-import=df.deepfilternet3 ^
+rem             --hidden-import=bitsandbytes ^
 rem             --copy-metadata rich ^
 rem             --copy-metadata tqdm ^
 rem             --copy-metadata regex ^
@@ -42,6 +43,7 @@ rem             --collect-all transformers ^
 rem             --collect-all df ^
 rem             --collect-all nltk ^
 rem             --collect-all fairseq ^
+rem             --collect-all bitsandbytes ^
 rem             --collect-submodules fairseq ^
 rem             --add-data ".cache/nltk/tokenizers/punkt;./nltk_data/tokenizers/punkt" ^
 rem             -i app-icon.ico

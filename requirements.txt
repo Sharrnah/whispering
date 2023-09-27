@@ -8,6 +8,8 @@ more-itertools
 transformers @ https://github.com/Sharrnah/transformers/archive/refs/heads/add_seamless-m4t.zip
 tensorboardX==2.6.2.2
 accelerate==0.21.0
+#bitsandbytes==0.41.1
+bitsandbytes @ git+https://github.com/Keith-Hon/bitsandbytes-windows.git
 ffmpeg-python==0.2.0
 click>=8.1.3
 PyAudio==0.2.13
