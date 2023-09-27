@@ -1,7 +1,7 @@
 import os
 
 import scipy
-from transformers import AutoProcessor, SeamlessM4TModel
+from transformers import AutoProcessor, SeamlessM4TModel, SeamlessM4TConfig
 
 from pathlib import Path
 import torch
@@ -144,15 +144,26 @@ class SeamlessM4T(metaclass=SingletonMeta):
     processor = None
     device = None
     precision = torch.float32
+    compute_type_name = "float32"  # just for output
+    load_in_8bit = False
 
     def __init__(self, model='medium', compute_type="float32", device="cpu"):
         if self.model is not None and self.processor is not None:
             return
 
+        self.compute_type_name = compute_type
         if compute_type == "float32":
             self.precision = torch.float32
         elif compute_type == "float16":
             self.precision = torch.float16
+        elif compute_type == "int8_float16":
+            self.precision = torch.float16
+            self.load_in_8bit = True
+        elif compute_type == "bfloat16":
+            self.precision = torch.bfloat16
+        elif compute_type == "int8_bfloat16":
+            self.precision = torch.bfloat16
+            self.load_in_8bit = True
 
         if self.device is None:
             self.device = device
@@ -203,15 +214,21 @@ class SeamlessM4T(metaclass=SingletonMeta):
     def load_model(self, model_size='medium'):
         self.download_model(model_size)
 
-        print(f"Seamless-M4T {model_size} is Loading to {self.device} using {self.precision} precision...")
+        configuration = SeamlessM4TConfig()
+
+        print(f"Seamless-M4T {model_size} is Loading to {self.device} using {self.compute_type_name} precision...")
         self.processor = AutoProcessor.from_pretrained("ylacombe/hf-seamless-m4t-" + model_size,
                                                        cache_dir=str(model_cache_path.resolve()),
                                                        torch_dtype=self.precision)
         self.model = SeamlessM4TModel.from_pretrained("ylacombe/hf-seamless-m4t-" + model_size,
                                                       cache_dir=str(model_cache_path.resolve()),
-                                                      torch_dtype=self.precision)
+                                                      torch_dtype=self.precision,
+                                                      low_cpu_mem_usage=True,
+                                                      load_in_8bit=self.load_in_8bit,
+                                                      config=configuration)
 
-        self.model.to(self.device)
+        if not self.load_in_8bit:
+            self.model.to(self.device)
 
     @staticmethod
     def get_languages():
@@ -224,9 +241,15 @@ class SeamlessM4T(metaclass=SingletonMeta):
         return text.strip()
 
     # this always translates to the target langauge
-    def transcribe(self, audio_sample, source_lang=None, target_lang='eng', beam_size=5, generate_speech=False) -> dict:
+    def transcribe(self, audio_sample, source_lang=None, target_lang='eng', beam_size=5, generate_speech=False,
+                   repetition_penalty: float = 1, length_penalty: float = 1, no_repeat_ngram_size: int = 0) -> dict:
         if source_lang is not None and (source_lang == '' or source_lang.lower() == 'auto'):
             source_lang = None
+
+        #self.model.config.temperature = 1.0
+        self.model.config.repetition_penalty = repetition_penalty
+        self.model.config.length_penalty = length_penalty
+        self.model.config.no_repeat_ngram_size = no_repeat_ngram_size
 
         inputs = self.processor(audios=audio_sample, src_lang=source_lang, sampling_rate=16000, return_tensors="pt")
         inputs = {name: tensor.to(dtype=self.precision).to(self.device) for name, tensor in inputs.items()}

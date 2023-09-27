@@ -507,13 +507,19 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                 result = audio_model_realtime.transcribe(audio_sample,
                                                          source_lang=whisper_language,
                                                          target_lang=stt_target_language,
-                                                         beam_size=whisper_beam_size_realtime
+                                                         beam_size=whisper_beam_size_realtime,
+                                                         repetition_penalty=repetition_penalty,
+                                                         length_penalty=whisper_faster_length_penalty,
+                                                         no_repeat_ngram_size=no_repeat_ngram_size,
                                                          )
             else:
                 result = audio_model.transcribe(audio_sample,
                                                 source_lang=whisper_language,
                                                 target_lang=stt_target_language,
-                                                beam_size=whisper_beam_size
+                                                beam_size=whisper_beam_size,
+                                                repetition_penalty=repetition_penalty,
+                                                length_penalty=whisper_faster_length_penalty,
+                                                no_repeat_ngram_size=no_repeat_ngram_size,
                                                 )
 
         elif settings.GetOption("stt_type") == "speech_t5":
