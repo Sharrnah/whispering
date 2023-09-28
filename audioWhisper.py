@@ -77,7 +77,7 @@ def save_to_wav(data, filename, sample_rate, channels=1):
         wf.writeframes(data)
 
 
-torchaudio.set_audio_backend("soundfile")
+#torchaudio.set_audio_backend("soundfile")
 py_audio = pyaudio.PyAudio()
 FORMAT = pyaudio.paInt16
 CHANNELS = 1

@@ -398,6 +398,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
         print("Audio is older than last result. Skipping...")
         return
 
+    result = None
     try:
         if settings.GetOption("stt_type") == "original_whisper":
             # official whisper model
@@ -450,7 +451,8 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                              no_repeat_ngram_size=no_repeat_ngram_size)
                 else:
                     marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_sample, audio_model)
-                    result = marker_audio_tool.voice_marker_transcribe(task=whisper_task,
+                    result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
+                                                                       task=whisper_task,
                                                                        language=whisper_language,
                                                                        condition_on_previous_text=whisper_condition_on_previous_text,
                                                                        prompt_reset_on_temperature=prompt_reset_on_temperature,
@@ -465,6 +467,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                                        length_penalty=whisper_faster_length_penalty,
                                                                        repetition_penalty=repetition_penalty,
                                                                        no_repeat_ngram_size=no_repeat_ngram_size)
+                    del marker_audio_tool
 
             else:
                 if not settings.GetOption("whisper_apply_voice_markers"):
@@ -486,7 +489,8 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                 else:
                     print("Applying voice markers.")
                     marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_sample, audio_model)
-                    result = marker_audio_tool.voice_marker_transcribe(task=whisper_task,
+                    result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
+                                                                       task=whisper_task,
                                                                        language=whisper_language,
                                                                        condition_on_previous_text=whisper_condition_on_previous_text,
                                                                        prompt_reset_on_temperature=prompt_reset_on_temperature,
@@ -501,32 +505,78 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                                        length_penalty=whisper_faster_length_penalty,
                                                                        repetition_penalty=repetition_penalty,
                                                                        no_repeat_ngram_size=no_repeat_ngram_size)
+                    del marker_audio_tool
         elif settings.GetOption("stt_type") == "seamless_m4t":
             # facebook seamless M4T
             if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
-                result = audio_model_realtime.transcribe(audio_sample,
-                                                         source_lang=whisper_language,
-                                                         target_lang=stt_target_language,
-                                                         beam_size=whisper_beam_size_realtime,
-                                                         repetition_penalty=repetition_penalty,
-                                                         length_penalty=whisper_faster_length_penalty,
-                                                         no_repeat_ngram_size=no_repeat_ngram_size,
-                                                         )
+                if not settings.GetOption("whisper_apply_voice_markers"):
+                    result = audio_model_realtime.transcribe(audio_sample,
+                                                             source_lang=whisper_language,
+                                                             target_lang=stt_target_language,
+                                                             beam_size=whisper_beam_size_realtime,
+                                                             repetition_penalty=repetition_penalty,
+                                                             length_penalty=whisper_faster_length_penalty,
+                                                             no_repeat_ngram_size=no_repeat_ngram_size,
+                                                             )
+                else:
+                    print("Applying voice markers.")
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_sample, audio_model)
+                    result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
+                                                                       task=whisper_task,
+                                                                       language=whisper_language,
+                                                                       target_lang=stt_target_language,
+                                                                       condition_on_previous_text=whisper_condition_on_previous_text,
+                                                                       prompt_reset_on_temperature=prompt_reset_on_temperature,
+                                                                       initial_prompt=whisper_initial_prompt,
+                                                                       logprob_threshold=whisper_logprob_threshold,
+                                                                       no_speech_threshold=whisper_no_speech_threshold,
+                                                                       temperature=whisper_temperature_fallback_option,
+                                                                       beam_size=whisper_beam_size,
+                                                                       word_timestamps=whisper_word_timestamps,
+                                                                       without_timestamps=whisper_faster_without_timestamps,
+                                                                       patience=whisper_faster_beam_search_patience,
+                                                                       length_penalty=whisper_faster_length_penalty,
+                                                                       repetition_penalty=repetition_penalty,
+                                                                       no_repeat_ngram_size=no_repeat_ngram_size)
+                    del marker_audio_tool
             else:
-                result = audio_model.transcribe(audio_sample,
-                                                source_lang=whisper_language,
-                                                target_lang=stt_target_language,
-                                                beam_size=whisper_beam_size,
-                                                repetition_penalty=repetition_penalty,
-                                                length_penalty=whisper_faster_length_penalty,
-                                                no_repeat_ngram_size=no_repeat_ngram_size,
-                                                )
+                if not settings.GetOption("whisper_apply_voice_markers"):
+                    result = audio_model.transcribe(audio_sample,
+                                                    source_lang=whisper_language,
+                                                    target_lang=stt_target_language,
+                                                    beam_size=whisper_beam_size,
+                                                    repetition_penalty=repetition_penalty,
+                                                    length_penalty=whisper_faster_length_penalty,
+                                                    no_repeat_ngram_size=no_repeat_ngram_size,
+                                                    )
+                else:
+                    print("Applying voice markers.")
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_sample, audio_model)
+                    result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
+                                                                       task=whisper_task,
+                                                                       language=whisper_language,
+                                                                       target_lang=stt_target_language,
+                                                                       condition_on_previous_text=whisper_condition_on_previous_text,
+                                                                       prompt_reset_on_temperature=prompt_reset_on_temperature,
+                                                                       initial_prompt=whisper_initial_prompt,
+                                                                       logprob_threshold=whisper_logprob_threshold,
+                                                                       no_speech_threshold=whisper_no_speech_threshold,
+                                                                       temperature=whisper_temperature_fallback_option,
+                                                                       beam_size=whisper_beam_size,
+                                                                       word_timestamps=whisper_word_timestamps,
+                                                                       without_timestamps=whisper_faster_without_timestamps,
+                                                                       patience=whisper_faster_beam_search_patience,
+                                                                       length_penalty=whisper_faster_length_penalty,
+                                                                       repetition_penalty=repetition_penalty,
+                                                                       no_repeat_ngram_size=no_repeat_ngram_size)
+
 
         elif settings.GetOption("stt_type") == "speech_t5":
             # microsoft SpeechT5
             result = audio_model.transcribe(audio_sample)
 
-        if last_whisper_result == result.get('text').strip() and not final_audio:
+        if result is None or (last_whisper_result == result.get('text').strip() and not final_audio):
+            print("skipping... result: ", result)
             return
 
         whisper_result_thread(result, current_audio_timestamp, final_audio)

@@ -19,10 +19,12 @@ sounddevice==0.4.6
 SpeechRecognition==3.10.0
 pydub>=0.25.1
 git+https://github.com/openai/whisper.git
---extra-index-url https://download.pytorch.org/whl/cu117
-torch==2.0.1+cu117
-torchaudio==2.0.2+cu117
-# torchvision==0.15.2+cu117
+#--extra-index-url https://download.pytorch.org/whl/cu117
+--extra-index-url https://download.pytorch.org/whl/nightly/cu118
+torch==2.2.0.dev20230927+cu118
+torchaudio==2.2.0.dev20230927+cu118
+torchvision==0.17.0.dev20230927+cu118
+triton @ https://github.com/PrashantSaikia/Triton-for-Windows/raw/84739dfcb724845b301fbde6a738e15c3ed25905/triton-2.0.0-cp310-cp310-win_amd64.whl
 soundfile==0.12.1
 python-osc>=1.8.0
 websockets>=10.4
