@@ -267,7 +267,8 @@ class SeamlessM4T(metaclass=SingletonMeta):
         result = {
             'text': transcription,
             'type': "transcribe",
-            'language': source_lang
+            'language': source_lang,
+            'target_lang': target_lang
         }
 
         return result

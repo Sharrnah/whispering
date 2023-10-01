@@ -144,11 +144,8 @@ def remove_repetitions(text, language='english'):
     # Try to prevent sentence repetition
     max_sentence_repetition = int(settings.GetOption("max_sentence_repetition"))
     if max_sentence_repetition > -1 and text != "":
-        print("trying to remove repetitions")
-        print("original text:")
-        print(text)
         sentence_split_language = ""
-        if language != "" and language is not None:
+        if language is not None and language != "":
             sentence_split_language = language
         if sentence_split_language == "" and do_txt_translate and src_lang is not None and src_lang != "auto":
             sentence_split_language = src_lang
@@ -242,21 +239,31 @@ def build_whisper_translation_osc_prefix(result_obj):
     whisper_task = settings.GetOption("whisper_task")
 
     # replace {src} with source language
-    prefix = prefix.replace("{src}", result_obj["language"])
+    if "language" in result_obj and result_obj["language"] is not None:
+        prefix = prefix.replace("{src}", result_obj["language"])
+    elif "language" in result_obj and result_obj["language"] is None:
+        prefix = prefix.replace("{src}", "?")
 
     if txt_translate_enabled and "txt_translation" in result_obj and "txt_translation_target" in result_obj:
         # replace {trg} with target language
         target_language = texttranslate.iso3_to_iso1(result_obj["txt_translation_target"])
         if target_language is None:
             target_language = result_obj["txt_translation_target"]
-        prefix = prefix.replace("{trg}", target_language)
+        if target_language is not None:
+            prefix = prefix.replace("{trg}", target_language)
     else:
-        if whisper_task == "transcribe":
+        if "target_lang" in result_obj and result_obj["target_lang"] is not None:
             # replace {trg} with target language of whisper
-            prefix = prefix.replace("{trg}", result_obj["language"])
-        else:
+            prefix = prefix.replace("{trg}", result_obj["target_lang"])
+        elif whisper_task == "transcribe":
+            # replace {trg} with target language of whisper
+            if "language" in result_obj and result_obj["language"] is not None:
+                prefix = prefix.replace("{trg}", result_obj["language"])
+        elif whisper_task == "translate":
             # replace {trg} with target language of whisper
             prefix = prefix.replace("{trg}", "en")
+        else:
+            prefix = prefix.replace("{trg}", "?")
     return prefix
 
 
