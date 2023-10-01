@@ -6,6 +6,8 @@ from Models.TextTranslation import texttranslateNLLB200
 from Models.TextTranslation import texttranslateNLLB200_CTranslate2
 from Models.Multi.seamless_m4t import SeamlessM4T
 
+import Plugins
+
 txt_translator_instance = None
 
 
@@ -83,6 +85,13 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
         case "Seamless_M4T":
             try:
                 translation_text, from_code, to_code = txt_translator_instance.text_translate(text, from_code, to_code)
+            except Exception as e:
+                print("Error: " + str(e))
+        case _:
+            try:
+                for plugin_inst in Plugins.plugins:
+                    if hasattr(plugin_inst, 'text_translate'):
+                        translation_text, from_code, to_code = plugin_inst.text_translate(text, from_code, to_code)
             except Exception as e:
                 print("Error: " + str(e))
 

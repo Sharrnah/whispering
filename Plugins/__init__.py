@@ -113,27 +113,27 @@ class Base:
         setting[self.__class__.__name__][settings_name] = value
         settings.SetOption("plugin_settings", setting)
 
-    def on_enable(self):
-        pass
-
-    def on_disable(self):
-        pass
-
     @abstractmethod
     def init(self):
         pass
 
-    @abstractmethod
-    def stt(self, text, result_obj):
-        pass
+    # def on_enable(self):
+    #     pass
 
-    @abstractmethod
-    def tts(self, text, device_index, websocket_connection=None, download=False):
-        pass
+    # def on_disable(self):
+    #     pass
 
-    @abstractmethod
-    def timer(self):
-        pass
+    # def text_translate(self, text, from_code, to_code) -> tuple:
+    #     pass
+
+    # def stt(self, text, result_obj):
+    #     pass
+
+    # def tts(self, text, device_index, websocket_connection=None, download=False):
+    #     pass
+
+    # def timer(self):
+    #     pass
 
 
 # Small utility to automatically load modules

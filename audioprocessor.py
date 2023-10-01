@@ -228,7 +228,8 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
 def plugin_process(predicted_text, result_obj, final_audio):
     for plugin_inst in Plugins.plugins:
         if final_audio:
-            plugin_inst.stt(predicted_text, result_obj)
+            if hasattr(plugin_inst, 'stt'):
+                plugin_inst.stt(predicted_text, result_obj)
         else:
             if hasattr(plugin_inst, 'stt_intermediate'):
                 plugin_inst.stt_intermediate(predicted_text, result_obj)

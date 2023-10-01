@@ -23,20 +23,17 @@ example:
 ```
 The format of the version line can start with `Version: `, `Version `, `V`, `V: ` followed by `<major>.<minor>.<patch>`
 
-The `timer` method is called every x seconds (defined in `plugin_timer`) and is paused for x seconds (defined in `plugin_timer_timeout`) when the STT engine returned a result.
-
-The `stt` method is called when the STT engine returns a result.
-
-The `tts` method is called when the TTS engine is about to play a result, except when called by the sst engine.
-So if you want to play a sound when the STT engine returns a result, you should do it in the `stt` method as well.
-
-The `init` method is called at the initialization of whispering tiger, right after the settings file is loaded.
-
-The _optional_ method `sts` is called when a recording is finished (which is sent to the STT model). This function gets the audio recording to be processed by the plugin.
-
-The _optional_ methods `on_enable` and `on_disable` are called when the plugin is enabled or disabled.
-
-The _optional_ method `stt_intermediate` is only called when a live transcription result is available. Make sure to use the `stt` function for final results.
+| Function                                                                            | Optionality | Description                                                                                                                                                                                                                                                                                                      |
+|-------------------------------------------------------------------------------------|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `init(self)`                                                                        | Required    | is called at the initialization of whispering tiger, right after the settings file is loaded.                                                                                                                                                                                                                    |
+| `on_enable(self)`                                                                   | Optional    | is called when the plugin is enabled.                                                                                                                                                                                                                                                                            |
+| `on_disable(self)`                                                                  | Optional    | is called when the plugin is disabled.                                                                                                                                                                                                                                                                           |
+| `timer(self)`                                                                       | Optional    | is called every x seconds (defined in `plugin_timer`) and is paused for x seconds (defined in `plugin_timer_timeout`) when the Speech-to-Text engine returned a result.<br>_This can be used for a regular output that is stopped occasionally when a more important transcription is supposed to be displayed._ |
+| `stt(self, text, result_obj)`                                                       | Optional    | is called when the Speech-to-Text engine returns a result.                                                                                                                                                                                                                                                       |
+| `stt_intermediate(self, text, result_obj)`                                          | Optional    | is called when a live transcription result is available. Make sure to use the `stt` function for final results.                                                                                                                                                                                                  |
+| `tts(self, text, device_index, websocket_connection=None, download=False)`          | Optional    | is called when the TTS engine is about to play a result, except when called by the sst engine.<br>_if you want to play a sound when the Speech-to-Text engine returns a result, you should do it in the `stt` method as well._                                                                                   |
+| `sts(self, wavefiledata, sample_rate)`                                              | Optional    | is called when a recording is finished (which is sent to the Speech-to-Text model). This function gets the audio recording to be processed by the plugin.                                                                                                                                                        |
+| `text_translate(self, text, from_code, to_code) -> tuple (txt, from_lang, to_lang)` | Optional    | is called when a translation is requested and no included translator is available.<br>_Must return a tuple of translation_text, from_lang_code, to_lang_code._                                                                                                                                                   |
 
 ## Helper methods
 
@@ -66,7 +63,7 @@ The following structs are available:
 - `{"type": "textarea", "rows": 5, "value": ""}` - A textarea
 - `{"type": "hyperlink", "label": "hyperlink", "value": "https://github.com/Sharrnah/whispering-ui"}`
 - `{"type": "label", "label": "Some infotext in a label.", "style": "center"}` - A label (style can be "left", "right" or "center")
-- `{"type": "file_open", "accept": ".wav", "value": "bark_clone_voice/clone_voice.wav"}` - A file open dialog (accept can be any file extension or a comma separated list of file extensions)
+- `{"type": "file_open", "accept": ".wav,.mp3", "value": "bark_clone_voice/clone_voice.wav"}` - A file open dialog (accept can be any file extension or a comma separated list of file extensions)
 - `{"type": "file_save", "accept": ".npz", "value": "last_prompt.npz"}` - A file save dialog (accept can be any file extension or a comma separated list of file extensions)
 - `{"type": "folder_open", "accept": "", "value": ""}` - A folder open dialog
 - `{"type": "dir_open", "accept": "", "value": ""}` - Alias for a folder open dialog
@@ -120,7 +117,7 @@ class ExamplePlugin(Plugins.Base):
         else:
             print(self.__class__.__name__ + " is disabled")
 
-    # called every x seconds (defined in plugin_timer)
+    # OPTIONAL. called every x seconds (defined in plugin_timer)
     def timer(self):
         # get the settings from the global app settings
         osc_ip = settings.GetOption("osc_ip")
@@ -136,7 +133,7 @@ class ExamplePlugin(Plugins.Base):
                             convert_ascii=False)
         pass
 
-    # called when the STT engine returns a result
+    # OPTIONAL. called when the STT engine returns a result
     def stt(self, text, result_obj):
         if self.is_enabled():
             print("Plugin Example")
@@ -150,13 +147,17 @@ class ExamplePlugin(Plugins.Base):
             print(result_obj['language'])
         return
 
-    # called when the "send TTS" function is called
+    # OPTIONAL. called when the "send TTS" function is called
     def tts(self, text, device_index, websocket_connection=None, download=False):
         return
     
     # OPTIONAL - called when audio is finished recording and the audio is sent to the STT model
     def sts(self, wavefiledata, sample_rate):
         return
+
+    # OPTIONAL - called when translation is requested and no other translator is selected. must return a tuple consisting of text, from_code, to_code.
+    def text_translate(self, text, from_code, to_code) -> tuple:
+        return text, from_code, to_code
     
     # OPTIONAL - called when a websocket message is received.
     # formats are: (where 'ExamplePlugin' is the plugin class name)

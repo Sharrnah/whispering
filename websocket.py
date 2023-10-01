@@ -159,7 +159,8 @@ def tts_plugin_process(msgObj, websocket, download=False):
             device = settings.GetOption("device_out_index")
 
     for plugin_inst in Plugins.plugins:
-        plugin_inst.tts(text, device, websocket, download)
+        if hasattr(plugin_inst, 'tts'):
+            plugin_inst.tts(text, device, websocket, download)
 
 
 def ocr_req(msgObj, websocket):
