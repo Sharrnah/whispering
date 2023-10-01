@@ -24,11 +24,58 @@ import Models.STT.faster_whisper as faster_whisper
 import Models.STT.whisper_audio_markers as whisper_audio_markers
 import Models.STT.speecht5 as speech_t5
 import Models.Multi.seamless_m4t as seamless_m4t
+import csv
+from datetime import datetime
 
 # Plugins
 import Plugins
 
 ignore_list = []
+
+transcriptions_list = {}
+
+
+def ns_to_datetime(ns):
+    # Convert nanoseconds to seconds
+    seconds = ns / 1_000_000_000
+    # Create a datetime object
+    dt_object = datetime.fromtimestamp(seconds)
+    # Format the datetime object as a string
+    return dt_object.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]  # trimming microseconds to milliseconds
+
+
+def add_transcription(start_time, end_time, transcription, translation, file_path=None):
+    global transcriptions_list
+
+    start_time_str = ns_to_datetime(start_time)
+    end_time_str = ns_to_datetime(end_time)
+
+    # Update the dictionary
+    transcriptions_list[(start_time, end_time)] = {"transcription": transcription, "translation": translation}
+
+    # Add the new entry to the CSV file
+    if file_path is not None and isinstance(file_path, str) and file_path != "":
+        with open(file_path, "a", newline='') as transcription_file:
+            csv_writer = csv.writer(transcription_file, quoting=csv.QUOTE_MINIMAL)
+            csv_writer.writerow([start_time_str, end_time_str, transcription, translation])
+
+
+def save_transcriptions(file_path: str):
+    global transcriptions_list
+
+    with open(file_path, "w", newline='') as transcription_file:
+        csv_writer = csv.writer(transcription_file, quoting=csv.QUOTE_MINIMAL)
+
+        # Write headers if you want (optional)
+        #csv_writer.writerow(["Start Time", "End Time", "Transcription", "Translation"])
+
+        for (start_time, end_time), entry in transcriptions_list.items():
+            transcription = entry["transcription"]
+            translation = entry["translation"]
+            start_time_str = ns_to_datetime(start_time)
+            end_time_str = ns_to_datetime(end_time)
+            csv_writer.writerow([start_time_str, end_time_str, transcription, translation])
+        transcription_file.close()
 
 
 # some regular mistakenly recognized words/sentences on mostly silence audio, which are ignored in processing
@@ -92,6 +139,8 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
     global last_audio_timestamp
     verbose = settings.GetOption("verbose")
     osc_ip = settings.GetOption("osc_ip")
+    do_txt_translate = settings.GetOption("txt_translate")
+    transcription_auto_save_file = settings.GetOption("transcription_auto_save_file")
 
     predicted_text = result.get('text').strip()
     result["type"] = "transcript"
@@ -115,7 +164,6 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
                     print("???")
 
         # translate using text translator if enabled
-        do_txt_translate = settings.GetOption("txt_translate")
         # translate text realtime or after audio is finished
         if do_txt_translate and settings.GetOption("txt_translate_realtime") or \
                 do_txt_translate and not settings.GetOption("txt_translate_realtime") and final_audio:
@@ -127,6 +175,14 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
             result["txt_translation"] = predicted_text
             result["txt_translation_source"] = txt_from_lang
             result["txt_translation_target"] = to_lang
+
+        if final_audio:
+            if "txt_translation" in result:
+                translation_text = predicted_text
+            else:
+                translation_text = ""
+
+            add_transcription(audio_timestamp, time.time_ns(), result["text"], translation_text, transcription_auto_save_file)
 
         # send realtime processing data to websocket
         if not final_audio and predicted_text.strip() != "":
