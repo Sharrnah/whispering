@@ -27,7 +27,7 @@ os.makedirs(voices_path, exist_ok=True)
 
 tts_fallback_server = {
     "urls": [
-        #"https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/silero/silero-tts.zip",
+        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/silero/silero-tts.zip",
         "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/silero/silero-tts.zip",
         "https://s3.libs.space:9000/ai-models/silero/silero-tts.zip"
     ],
@@ -422,7 +422,7 @@ class Silero:
 
     def play_audio(self, audio, device=None):
         source_sample_rate = 24000
-        source_is_mono = False
+        source_is_mono = True
 
         if device is None:
             device = settings.GetOption("device_default_out_index")
@@ -441,11 +441,11 @@ class Silero:
         audio_tools.play_audio(audio, device,
                                source_sample_rate=source_sample_rate,
                                audio_device_channel_num=2,
-                               target_channels=2,
+                               target_channels=1,
                                is_mono=source_is_mono,
                                dtype="float32",
                                tensor_sample_with=4,
-                               tensor_channels=2,
+                               tensor_channels=1,
                                secondary_device=secondary_audio_device,
                                stop_play=not allow_overlapping_audio,
                                tag="tts"
