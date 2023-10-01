@@ -2,6 +2,8 @@ import sys
 import threading
 import asyncio
 import time
+from datetime import datetime
+from pathlib import Path
 
 import websockets
 import json
@@ -9,6 +11,7 @@ import base64
 
 import Utilities
 import audio_tools
+from audioprocessor import save_transcriptions
 import processmanager
 
 from Models.TextTranslation import texttranslate
@@ -267,6 +270,13 @@ def websocketMessageHandler(msgObj, websocket):
     if msgObj["type"] == "plugin_custom_event":
         plugin_event_thread = threading.Thread(target=plugin_event_handler, args=(msgObj, websocket,))
         plugin_event_thread.start()
+
+    if msgObj["type"] == "save_transcription":
+        # save file with date in filename
+        save_file = str(Path(Path.cwd() / ("transcriptions_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv")).resolve())
+        if "value" in msgObj:
+            save_file = msgObj["value"]
+        save_transcriptions(file_path=save_file)
 
     if msgObj["type"] == "quit":
         print("Received quit command.")
