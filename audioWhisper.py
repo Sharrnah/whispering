@@ -53,6 +53,7 @@ from Models.STT import faster_whisper
 from Models.Multi import seamless_m4t
 from Models.TextTranslation import texttranslate
 from Models import languageClassification
+from Models import sentence_split
 import pyaudiowpatch as pyaudio
 from whisper import available_models, audio as whisper_audio
 
@@ -883,6 +884,9 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
             print(e)
             pass
         websocket.set_loading_state("txt_transl_loading", False)
+
+    # load nltk sentence splitting dependency
+    sentence_split.load_model()
 
     # Load language identification dependencies
     languageClassification.download_model()

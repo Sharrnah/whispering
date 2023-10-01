@@ -72,6 +72,8 @@ TRANSLATE_SETTINGS = {
     "word_timestamps": False,  # if enabled, Whisper will add timestamps to the transcribed text.
     "faster_without_timestamps": False,  # if enabled, faster whisper will only sample text tokens. (only when using stt_type=faster_whisper)
     "whisper_apply_voice_markers": False,  # if enabled, Whisper will apply voice markers.
+    "max_sentence_repetition": -1,  # set max sentence repetition in result (-1 = disabled)
+    "transcription_auto_save_file": "",  # set to filepath to save transcriptions. (empty or None to disable)
 
     "silence_cutting_enabled": True,
     "silence_offset": -40.0,

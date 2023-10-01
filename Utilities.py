@@ -18,3 +18,4 @@ def handle_bytes(obj):
         return {key: handle_bytes(value) for key, value in obj.items()}
     else:
         return obj
+

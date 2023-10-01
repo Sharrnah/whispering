@@ -9,6 +9,7 @@ import Utilities
 import audio_tools
 import settings
 import VRC_OSCLib
+from Models import sentence_split
 from Models.TextTranslation import texttranslate
 import websocket
 import json
@@ -135,6 +136,28 @@ def seamless_m4t_get_languages():
     return tuple([{"code": code, "name": language} for code, language in languages.items()])
 
 
+def remove_repetitions(text, language='english'):
+    do_txt_translate = settings.GetOption("txt_translate")
+    src_lang = settings.GetOption("src_lang")
+    if src_lang is not None:
+        src_lang = src_lang.lower()
+    # Try to prevent sentence repetition
+    max_sentence_repetition = int(settings.GetOption("max_sentence_repetition"))
+    if max_sentence_repetition > -1 and text != "":
+        print("trying to remove repetitions")
+        print("original text:")
+        print(text)
+        sentence_split_language = ""
+        if language != "" and language is not None:
+            sentence_split_language = language
+        if sentence_split_language == "" and do_txt_translate and src_lang is not None and src_lang != "auto":
+            sentence_split_language = src_lang
+        if sentence_split_language == "":
+            sentence_split_language = "english"
+        return sentence_split.remove_repeated_sentences(text, language=sentence_split_language, max_repeat=max_sentence_repetition)
+    return text
+
+
 def whisper_result_handling(result, audio_timestamp, final_audio):
     global last_audio_timestamp
     verbose = settings.GetOption("verbose")
@@ -144,6 +167,14 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
 
     predicted_text = result.get('text').strip()
     result["type"] = "transcript"
+
+    # Try to prevent sentence repetition
+    sentence_split_language = "english"
+    if "language" in result:
+        sentence_split_language = result["language"]
+    predicted_text = remove_repetitions(predicted_text, language=sentence_split_language)
+    if "text" in result:
+        result["text"] = predicted_text
 
     if not predicted_text.lower() in ignore_list and \
             (final_audio or (not final_audio and audio_timestamp > last_audio_timestamp)):
