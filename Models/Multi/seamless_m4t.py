@@ -1,12 +1,15 @@
 import os
 
 import scipy
-from transformers import AutoProcessor, SeamlessM4TModel, SeamlessM4TConfig
+#from transformers import AutoProcessor, SeamlessM4TModel, SeamlessM4TConfig
+from transformers import AutoProcessor, SeamlessM4TModel
 
 from pathlib import Path
 import torch
 
+import audio_tools
 import downloader
+import settings
 from Models import languageClassification
 
 from Models.Singleton import SingletonMeta
@@ -202,7 +205,7 @@ class SeamlessM4T(metaclass=SingletonMeta):
 
         model_path = Path(model_cache_path / model_size)
 
-        configuration = SeamlessM4TConfig()
+        #configuration = SeamlessM4TConfig()
 
         print(f"Seamless-M4T {model_size} is Loading to {self.device} using {self.compute_type_name} precision...")
         # facebook/hf-seamless-m4t-medium
@@ -210,9 +213,11 @@ class SeamlessM4T(metaclass=SingletonMeta):
                                                        torch_dtype=self.precision)
         self.model = SeamlessM4TModel.from_pretrained(str(model_path.resolve()),
                                                       torch_dtype=self.precision,
+                                                      ignore_mismatched_sizes=True,
                                                       low_cpu_mem_usage=True,
                                                       load_in_8bit=self.load_in_8bit,
-                                                      config=configuration)
+                                                      #config=configuration)
+                                                      )
 
         if not self.load_in_8bit:
             self.model.to(self.device)
@@ -249,6 +254,7 @@ class SeamlessM4T(metaclass=SingletonMeta):
                                             )
 
         if generate_speech:
+            #self.play_audio(output_tokens.waveform, settings.GetOption("device_out_index"))
             scipy.io.wavfile.write("seamless_m4t_out.wav",
                                    rate=self.model.config.sampling_rate,
                                    data=output_tokens.waveform.cpu().numpy().squeeze()
@@ -291,3 +297,34 @@ class SeamlessM4T(metaclass=SingletonMeta):
         translation = self.processor.decode(output_tokens.sequences.tolist()[0], skip_special_tokens=True)
         translation = self.text_cleanup(translation)
         return translation, source_lang, target_lang
+
+    def play_audio(self, audio, device=None):
+        source_sample_rate = self.model.config.sampling_rate
+        source_is_mono = True
+
+        if device is None:
+            device = settings.GetOption("device_default_out_index")
+
+        secondary_audio_device = None
+        if settings.GetOption("tts_use_secondary_playback") and (
+                (settings.GetOption("tts_secondary_playback_device") == -1 and device != settings.GetOption("device_default_out_index")) or
+                (settings.GetOption("tts_secondary_playback_device") > -1 and device != settings.GetOption("tts_secondary_playback_device"))):
+            secondary_audio_device = settings.GetOption("tts_secondary_playback_device")
+            if secondary_audio_device == -1:
+                secondary_audio_device = settings.GetOption("device_default_out_index")
+
+        allow_overlapping_audio = settings.GetOption("tts_allow_overlapping_audio")
+
+        # play audio tensor
+        audio_tools.play_audio(audio, device,
+                               source_sample_rate=source_sample_rate,
+                               audio_device_channel_num=2,
+                               target_channels=1,
+                               is_mono=source_is_mono,
+                               dtype="float32",
+                               tensor_sample_with=4,
+                               tensor_channels=1,
+                               secondary_device=secondary_audio_device,
+                               stop_play=not allow_overlapping_audio,
+                               tag="tts"
+                               )
