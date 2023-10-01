@@ -7,11 +7,7 @@ import os
 import downloader
 from pathlib import Path
 from Models import languageClassification
-
-nltk_path = Path(Path.cwd() / ".cache" / "nltk")
-os.makedirs(nltk_path, exist_ok=True)
-os.environ["NLTK_DATA"] = str(nltk_path.resolve())
-import nltk
+from Models import sentence_split
 
 
 LANGUAGES = {
@@ -419,30 +415,6 @@ LANGUAGES_ISO1_TO_ISO3 = {
     "zu": ["zul_Latn"]
 }
 
-# List from https://github.com/nltk/nltk_data/blob/gh-pages/packages/tokenizers/punkt.xml
-NLTK_LANGUAGE_CODES = {
-    "ces_Latn": "Czech",
-    "dan_Latn": "Danish",
-    "nld_Latn": "Dutch",
-    "eng_Latn": "English",
-    "est_Latn": "Estonian",
-    "fin_Latn": "Finnish",
-    "fra_Latn": "French",
-    "deu_Latn": "German",
-    "ell_Grek": "Greek",
-    "ita_Latn": "Italian",
-    "mal_Mlym": "Malayalam",
-    "nno_Latn": "Norwegian",
-    "nob_Latn": "Norwegian",
-    "pol_Latn": "Polish",
-    "por_Latn": "Portuguese",
-    "rus_Cyrl": "Russian",
-    "slv_Latn": "Slovene",
-    "spa_Latn": "Spanish",
-    "swe_Latn": "Swedish",
-    "tur_Latn": "Turkish",
-}
-
 SUPPORTED_LANGUAGES = set()
 for lang_codes in LANGUAGES_ISO1_TO_ISO3.values():
     SUPPORTED_LANGUAGES.update(lang_codes)
@@ -527,12 +499,6 @@ def load_model(size="small", compute_type="float32"):
     sentencepiece = spm.SentencePieceProcessor()
     sentencepiece.load(str(sp_model_path.resolve()))
 
-    # only if not running as pyinstaller bundle (pyinstaller places tokenizer folder in distribution "nlpk_data")
-    if not getattr(sys, 'frozen', False) and not hasattr(sys, '_MEIPASS'):
-        # load nltk sentence splitting dependency
-        if not Path(nltk_path / "tokenizers" / "punkt").is_dir() or not Path(nltk_path / "tokenizers" / "punkt" / "english.pickle").is_file():
-            nltk.download('punkt', download_dir=str(nltk_path.resolve()))
-
     # init NLLB 200 model
     model_path_string = str(model_path.resolve())
     model = ctranslate2.Translator(model_path_string, device=torch_device, compute_type=compute_type)
@@ -566,10 +532,7 @@ def translate_language(text, from_code, to_code, as_iso1=False):
         return text, from_code, to_code
 
     # Split the source text into sentences
-    nltk_sentence_split_lang = "english"
-    if from_code in NLTK_LANGUAGE_CODES:
-        nltk_sentence_split_lang = NLTK_LANGUAGE_CODES[from_code]
-    sentences = nltk.tokenize.sent_tokenize(text, language=nltk_sentence_split_lang)
+    sentences = sentence_split.split_text(text, language=from_code)
     translated_sentences = []
 
     for sentence in sentences:

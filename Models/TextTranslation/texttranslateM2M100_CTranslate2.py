@@ -6,6 +6,7 @@ import os
 import downloader
 from pathlib import Path
 import torch
+from Models import sentence_split
 
 nltk_path = Path(Path.cwd() / ".cache" / "nltk")
 os.makedirs(nltk_path, exist_ok=True)
@@ -234,10 +235,7 @@ def translate_language(text, from_code, to_code):
     target_prefix = [[tgt_prefix]] * len(text)
 
     # Split the source text into sentences
-    nltk_sentence_split_lang = "english"
-    if from_code in NLTK_LANGUAGE_CODES:
-        nltk_sentence_split_lang = NLTK_LANGUAGE_CODES[from_code]
-    sentences = nltk.tokenize.sent_tokenize(text, language=nltk_sentence_split_lang)
+    sentences = sentence_split.split_text(text, language=from_code)
     translated_sentences = []
 
     for sentence in sentences:
