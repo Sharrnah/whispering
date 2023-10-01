@@ -80,4 +80,4 @@ def remove_repeated_sentences(text, language='english', max_repeat=1, additional
             if sentence_count[sentence.strip()] <= max_repeat:
                 cleaned_parts.append(sentence)
 
-    return ''.join(cleaned_parts)
+    return ' '.join(cleaned_parts)

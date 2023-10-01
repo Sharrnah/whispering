@@ -122,19 +122,19 @@ LANGUAGES = {
 MODEL_LINKS = {
     "medium": {
         "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/seamless-m4t/seamless-m4t-medium.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/seamless-m4t/seamless-m4t-medium.zip",
-            "https://s3.libs.space:9000/ai-models/seamless-m4t/seamless-m4t-medium.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/seamless-m4t/medium.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/seamless-m4t/medium.zip",
+            "https://s3.libs.space:9000/ai-models/seamless-m4t/medium.zip",
         ],
-        "checksum": "a7784245eb0d288b65440af888be5d1e6710e9e09d19b33cb71d5ab1b447998f"
+        "checksum": "678c6dc97899a5a34835dfb2315fdc05cff62332cd6efca4c0cfafe7a7553738"
     },
     "large": {
         "urls": [
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/seamless-m4t/seamless-m4t-large.zip",
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/seamless-m4t/seamless-m4t-large.zip",
-            "https://s3.libs.space:9000/ai-models/seamless-m4t/seamless-m4t-large.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/seamless-m4t/large.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/seamless-m4t/large.zip",
+            "https://s3.libs.space:9000/ai-models/seamless-m4t/large.zip",
         ],
-        "checksum": "c7cd472390081bf5f54715a69da23263018ffc4062c64658e1a75b79f9e1a502"
+        "checksum": "0ba6b31c223d4cebdf865e42d04a3b29b891f3286dd0550bcc7eb5c7f410d6eb"
     },
 }
 
@@ -179,49 +179,36 @@ class SeamlessM4T(metaclass=SingletonMeta):
 
     @staticmethod
     def needs_download(model: str):
-        model_path = Path(model_cache_path / ("models--ylacombe--hf-seamless-m4t-" + model))
-
-        # read main file to string variable
-        snapshot_hash = ""
-        if Path(model_path / "refs" / "main").exists():
-            with open(model_path / "refs" / "main", "r", encoding="utf-8") as f:
-                snapshot_hash = f.read()
-        pretrained_lang_model_file = Path(model_path / "snapshots" / snapshot_hash / "pytorch_model.bin")
-        if not Path(model_path).exists() or not Path(model_path / "refs" / "main").exists() or not pretrained_lang_model_file.is_file():
+        model_path = Path(model_cache_path / model)
+        pretrained_lang_model_file = Path(model_path / "pytorch_model.bin")
+        if not Path(model_path).exists() or not pretrained_lang_model_file.is_file():
             return True
         return False
 
     @staticmethod
     def download_model(model: str):
         os.makedirs(model_cache_path, exist_ok=True)
-        model_path = Path(model_cache_path / ("models--ylacombe--hf-seamless-m4t-" + model))
-
-        # read main file to string variable
-        snapshot_hash = ""
-        if Path(model_path / "refs" / "main").exists():
-            with open(model_path / "refs" / "main", "r", encoding="utf-8") as f:
-                snapshot_hash = f.read()
-
-        pretrained_lang_model_file = Path(model_path / "snapshots" / snapshot_hash / "pytorch_model.bin")
-
-        if not Path(model_path).exists() or not Path(model_path / "refs" / "main").exists() or not pretrained_lang_model_file.is_file():
+        model_path = Path(model_cache_path / model)
+        pretrained_lang_model_file = Path(model_path / "pytorch_model.bin")
+        if not Path(model_path).exists() or not pretrained_lang_model_file.is_file():
             print("downloading Seamless M4T...")
             if not downloader.download_extract(MODEL_LINKS[model]["urls"],
-                                           str(model_cache_path.resolve()),
+                                           str(model_path.resolve()),
                                            MODEL_LINKS[model]["checksum"], title="Speech 2 Text (Seamless M4T)"):
                 print("Model download failed")
 
     def load_model(self, model_size='medium'):
         self.download_model(model_size)
 
+        model_path = Path(model_cache_path / model_size)
+
         configuration = SeamlessM4TConfig()
 
         print(f"Seamless-M4T {model_size} is Loading to {self.device} using {self.compute_type_name} precision...")
-        self.processor = AutoProcessor.from_pretrained("ylacombe/hf-seamless-m4t-" + model_size,
-                                                       cache_dir=str(model_cache_path.resolve()),
+        # facebook/hf-seamless-m4t-medium
+        self.processor = AutoProcessor.from_pretrained(str(model_path.resolve()),
                                                        torch_dtype=self.precision)
-        self.model = SeamlessM4TModel.from_pretrained("ylacombe/hf-seamless-m4t-" + model_size,
-                                                      cache_dir=str(model_cache_path.resolve()),
+        self.model = SeamlessM4TModel.from_pretrained(str(model_path.resolve()),
                                                       torch_dtype=self.precision,
                                                       low_cpu_mem_usage=True,
                                                       load_in_8bit=self.load_in_8bit,
