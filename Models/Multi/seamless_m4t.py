@@ -196,7 +196,7 @@ class SeamlessM4T(metaclass=SingletonMeta):
         if not Path(model_path).exists() or not pretrained_lang_model_file.is_file():
             print("downloading Seamless M4T...")
             if not downloader.download_extract(MODEL_LINKS[model]["urls"],
-                                           str(model_path.resolve()),
+                                           str(model_cache_path.resolve()),
                                            MODEL_LINKS[model]["checksum"], title="Speech 2 Text (Seamless M4T)"):
                 print("Model download failed")
 
