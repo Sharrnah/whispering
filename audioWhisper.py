@@ -290,6 +290,8 @@ def record_highest_peak_amplitude(device_index=-1, record_time=10):
 
 
 class AudioProcessor:
+    last_callback_time = time.time()
+
     def __init__(self,
                  default_sample_rate=SAMPLE_RATE,
                  previous_audio_chunk=None,
@@ -306,6 +308,10 @@ class AudioProcessor:
 
                  osc_ip=None,
                  osc_port=None,
+
+                 chunk=None,
+                 channels=None,
+                 sample_format=None,
 
                  verbose=False
                  ):
@@ -338,9 +344,40 @@ class AudioProcessor:
 
         self.block_size_samples = int(self.default_sample_rate * 0.400)  # calculate block size in samples. (0.400 is the default block size of pyloudnorm)
 
+        self.chunk = chunk
+        self.channels = channels
+        self.sample_format = sample_format
+        # run callback after timeout even if no audio was detected (and such callback not called by pyAudio)
+        self.timer_reset_event = threading.Event()
+        self.timer_thread = threading.Thread(target=self.timer_expired)
+        #self.timer_thread.start()
+        #self.timer_reset_event.set()
+        #self.last_callback_time = time.time()
+
+    # The function to call when the timer expires
+    def timer_expired(self):
+        while True:
+            current_time = time.time()
+            time_since_last_callback = current_time - self.last_callback_time
+            if self.recorded_sample_rate is not None:
+                # wait double the chunk size to not accidentally call callback twice
+                self.timer_reset_event.wait(timeout=(self.chunk / self.recorded_sample_rate)*2)
+                if time_since_last_callback >= (self.chunk / self.recorded_sample_rate)*2 and len(self.frames) > 0:
+                    #print("Timer expired. Triggering callback.")
+                    try:
+                        print("Timer expired. Triggering callback.")
+                        self.callback(None, None, None, None)
+                    except Exception as e:
+                        print(e)
+            self.timer_reset_event.clear()
+
     def callback(self, in_data, frame_count, time_info, status):
+        # Reset the timer each time the callback is triggered
+        #self.last_callback_time = time.time()
+        #self.timer_reset_event.set()
+
         if not settings.GetOption("stt_enabled"):
-            return in_data, pyaudio.paContinue
+            return None, pyaudio.paContinue
 
         # disable gradient calculation
         with torch.no_grad():
@@ -398,11 +435,13 @@ class AudioProcessor:
             test_audio_chunk = in_data
             audio_chunk = in_data
             # special case which seems to be needed for WASAPI
-            if self.needs_sample_rate_conversion:
+            if self.needs_sample_rate_conversion and test_audio_chunk is not None:
                 test_audio_chunk = audio_tools.resample_audio(test_audio_chunk, self.recorded_sample_rate, self.default_sample_rate, -1,
                                                          is_mono=self.is_mono).tobytes()
 
-            new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.vad_model, self.default_sample_rate)
+            new_confidence, peak_amplitude = 0, 0
+            if test_audio_chunk is not None:
+                new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.vad_model, self.default_sample_rate)
 
             # put frames with recognized speech into a list and send to whisper
             if (clip_duration is not None and len(self.frames) > fps) or (
@@ -413,9 +452,13 @@ class AudioProcessor:
                 clip = []
                 # merge all frames to one audio clip
                 for i in range(0, len(self.frames)):
-                    clip.append(self.frames[i])
+                    if self.frames[i] is not None:
+                        clip.append(self.frames[i])
 
-                wavefiledata = b''.join(clip)
+                if len(clip) > 0:
+                    wavefiledata = b''.join(clip)
+                else:
+                    return None, pyaudio.paContinue
 
                 if self.needs_sample_rate_conversion:
                     wavefiledata = audio_tools.resample_audio(wavefiledata, self.recorded_sample_rate, self.default_sample_rate, -1,
@@ -454,7 +497,7 @@ class AudioProcessor:
                     full_audio_confidence = self.vad_model(torch.from_numpy(audio_full_float32), self.default_sample_rate).item()
                     print(full_audio_confidence)
 
-                if (not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold) and len(
+                if ((not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold)) and len(
                         wavefiledata) > 0:
                     # denoise audio
                     if settings.GetOption("denoise_audio") and self.audio_enhancer is not None:
@@ -476,6 +519,9 @@ class AudioProcessor:
                 self.start_time = time.time()
                 self.intermediate_time_start = time.time()
                 self.keyboard_rec_force_stop = False
+
+            if audio_chunk is None:
+                return None, pyaudio.paContinue
 
             # set start recording variable to true if the volume and voice confidence is above the threshold
             if should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold,
@@ -574,6 +620,7 @@ class AudioProcessor:
             else:
                 self.previous_audio_chunk = None
 
+        #self.last_callback_time = time.time()
         return in_data, pyaudio.paContinue
 
 
@@ -1014,6 +1061,9 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
             audio_enhancer=audio_enhancer,
             osc_ip=osc_ip,
             osc_port=osc_port,
+            chunk=vad_frames_per_buffer,
+            channels=CHANNELS,
+            sample_format=FORMAT,
             verbose=verbose,
         )
 
