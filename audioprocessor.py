@@ -34,6 +34,8 @@ import Plugins
 ignore_list = []
 
 transcriptions_list = {}
+# Lock for thread-safe dictionary update
+transcriptions_list_lock = threading.Lock()
 
 
 def ns_to_datetime(ns):
@@ -52,13 +54,14 @@ def add_transcription(start_time, end_time, transcription, translation, file_pat
     end_time_str = ns_to_datetime(end_time)
 
     # Update the dictionary
-    transcriptions_list[(start_time, end_time)] = {"transcription": transcription, "translation": translation}
+    with transcriptions_list_lock:
+        transcriptions_list[(start_time, end_time)] = {"transcription": transcription, "translation": translation}
 
-    # Add the new entry to the CSV file
-    if file_path is not None and isinstance(file_path, str) and file_path != "":
-        with open(file_path, "a", newline='') as transcription_file:
-            csv_writer = csv.writer(transcription_file, quoting=csv.QUOTE_MINIMAL)
-            csv_writer.writerow([start_time_str, end_time_str, transcription, translation])
+        # Add the new entry to the CSV file
+        if file_path is not None and isinstance(file_path, str) and file_path != "":
+            with open(file_path, "a", newline='') as transcription_file:
+                csv_writer = csv.writer(transcription_file, quoting=csv.QUOTE_MINIMAL)
+                csv_writer.writerow([start_time_str, end_time_str, transcription, translation])
 
 
 def save_transcriptions(file_path: str):
