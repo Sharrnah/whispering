@@ -30,11 +30,14 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
 ### Features
 - Runs 100% locally on your machine. (Once A.I. Models are downloaded, no further internet connection is required)
 - **Speech recognition, translation and transcription**
-  - OpenAI's [Whisper](https://github.com/openai/whisper) project, Supports ~98 languages)
+  - OpenAI's [Whisper](https://github.com/openai/whisper), Supports ~98 languages
+  - Meta's [Seamless M4T](https://github.com/facebookresearch/seamless_communication), multi modal, Supports ~101 languages
+  - Microsoft's [Speech T5](https://github.com/microsoft/SpeechT5), English only
 - **Text translation**
   - LID _[Language Identification]_ (Supports 200 languages)
   - NLLB-200 (single model, Supporting 200 languages, high accuracy)
   - M2M-100 (single model, Supporting 100 languages, high accuracy)
+  - Seamless M4T (single model, multi modal, Supporting ~101 languages)
 - **OCR** _[Optical Character Recognition]_ (to capture game images and translate in-game text)
   - EasyOCR (Supports 80+ languages)
 - **TTS** _[Text-to-Speech]_ (Read out transcriptions/translations)
@@ -71,7 +74,8 @@ A thanks goes to
 - OpenAI https://github.com/openai/whisper
 - Awexander https://github.com/Awexander/audioWhisper
 - Blake https://github.com/mallorbc/whisper_mic
-- Meta AI (LID, NLLB-200, M2M-100) https://ai.facebook.com/blog/nllb-200-high-quality-machine-translation/
+- Meta (LID, NLLB-200, M2M-100) https://ai.facebook.com/blog/nllb-200-high-quality-machine-translation/
+- Meta (Seamless M4T) https://github.com/facebookresearch/seamless_communication
 - faster-whisper https://github.com/guillaumekln/faster-whisper
 - EasyOCR https://github.com/jaidedai/easyocr
 - Silero (TTS, VAD) https://github.com/snakers4/silero-models
