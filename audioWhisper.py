@@ -348,28 +348,28 @@ class AudioProcessor:
         self.channels = channels
         self.sample_format = sample_format
         # run callback after timeout even if no audio was detected (and such callback not called by pyAudio)
-        self.timer_reset_event = threading.Event()
-        self.timer_thread = threading.Thread(target=self.timer_expired)
+        #self.timer_reset_event = threading.Event()
+        #self.timer_thread = threading.Thread(target=self.timer_expired)
         #self.timer_thread.start()
         #self.timer_reset_event.set()
         #self.last_callback_time = time.time()
 
     # The function to call when the timer expires
-    def timer_expired(self):
-        while True:
-            current_time = time.time()
-            time_since_last_callback = current_time - self.last_callback_time
-            if self.recorded_sample_rate is not None:
-                # wait double the chunk size to not accidentally call callback twice
-                self.timer_reset_event.wait(timeout=(self.chunk / self.recorded_sample_rate)*2)
-                if time_since_last_callback >= (self.chunk / self.recorded_sample_rate)*2 and len(self.frames) > 0:
-                    #print("Timer expired. Triggering callback.")
-                    try:
-                        print("Timer expired. Triggering callback.")
-                        self.callback(None, None, None, None)
-                    except Exception as e:
-                        print(e)
-            self.timer_reset_event.clear()
+    #def timer_expired(self):
+    #    while True:
+    #        current_time = time.time()
+    #        time_since_last_callback = current_time - self.last_callback_time
+    #        if self.recorded_sample_rate is not None:
+    #            # wait double the chunk size to not accidentally call callback twice
+    #            self.timer_reset_event.wait(timeout=(self.chunk / self.recorded_sample_rate)*2)
+    #            if time_since_last_callback >= (self.chunk / self.recorded_sample_rate)*2 and len(self.frames) > 0:
+    #                #print("Timer expired. Triggering callback.")
+    #                try:
+    #                    print("Timer expired. Triggering callback.")
+    #                    self.callback(None, None, None, None)
+    #                except Exception as e:
+    #                    print(e)
+    #        self.timer_reset_event.clear()
 
     def callback(self, in_data, frame_count, time_info, status):
         # Reset the timer each time the callback is triggered
@@ -562,7 +562,11 @@ class AudioProcessor:
                         # merge all frames to one audio clip
                         for i in range(0, len(self.frames)):
                             clip.append(self.frames[i])
-                        wavefiledata = b''.join(clip)
+
+                        if len(clip) > 0:
+                            wavefiledata = b''.join(clip)
+                        else:
+                            return None, pyaudio.paContinue
 
                         if self.needs_sample_rate_conversion:
                             wavefiledata = audio_tools.resample_audio(wavefiledata, self.recorded_sample_rate, self.default_sample_rate, -1,
