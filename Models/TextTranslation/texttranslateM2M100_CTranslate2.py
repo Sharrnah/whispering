@@ -8,11 +8,6 @@ from pathlib import Path
 import torch
 from Models import sentence_split
 
-nltk_path = Path(Path.cwd() / ".cache" / "nltk")
-os.makedirs(nltk_path, exist_ok=True)
-os.environ["NLTK_DATA"] = str(nltk_path.resolve())
-import nltk
-
 LANGUAGES = {
     "Afrikaans": "af",
     "Amharic": "am",
@@ -117,29 +112,6 @@ LANGUAGES = {
 }
 
 
-# List from https://github.com/nltk/nltk_data/blob/gh-pages/packages/tokenizers/punkt.xml
-NLTK_LANGUAGE_CODES = {
-    "cs": "Czech",
-    "da": "Danish",
-    "nl": "Dutch",
-    "en": "English",
-    "et": "Estonian",
-    "fi": "Finnish",
-    "fr": "French",
-    "de": "German",
-    "ell_Grek": "Greek",  # ??
-    "it": "Italian",
-    "ml": "Malayalam",
-    "no": "Norwegian",
-    "pl": "Polish",
-    "pt": "Portuguese",
-    "ru": "Russian",
-    "slv_Latn": "Slovene",  # ??
-    "es": "Spanish",
-    "sv": "Swedish",
-    "tr": "Turkish",
-}
-
 # Download CTranslate2 models:
 # • M2M-100 418M-parameter model: https://bit.ly/33fM1AO
 # • M2M-100 1.2B-parameter model: https://bit.ly/3GYiaed
@@ -208,12 +180,6 @@ def load_model(size="small", compute_type="float32"):
                                     MODEL_LINKS[size]["checksum"], title="M2M100CT2")
 
     sentencepiece.load(str(sp_model_path.resolve()))
-
-    # only if not running as pyinstaller bundle (pyinstaller places tokenizer folder in distribution "nlpk_data")
-    if not getattr(sys, 'frozen', False) and not hasattr(sys, '_MEIPASS'):
-        # load nltk sentence splitting dependency
-        if not Path(nltk_path / "tokenizers" / "punkt").is_dir() or not Path(nltk_path / "tokenizers" / "punkt" / "english.pickle").is_file():
-            nltk.download('punkt', download_dir=str(nltk_path.resolve()))
 
     translator = ctranslate2.Translator(str(model_path.resolve()), device=torch_device, compute_type="float32")
 
