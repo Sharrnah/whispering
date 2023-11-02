@@ -1,4 +1,5 @@
 import os
+import platform
 import sys
 import json
 import traceback
@@ -832,7 +833,9 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
     print("# Whispering Tiger is starting... #")
     print("###################################")
 
+    print("running Python: " + platform.python_implementation() + " / v" + platform.python_version())
     print("using Audio API: " + audio_api_name)
+    print("")
 
     # check if english only model is loaded, and configure STT languages accordingly.
     if model.endswith(".en") and "_whisper" in settings.GetOption("stt_type"):
