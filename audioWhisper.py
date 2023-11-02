@@ -168,7 +168,10 @@ def typing_indicator_function(osc_ip, osc_port, send_websocket=True):
             "osc_typing_indicator"):
         VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
     if send_websocket and settings.GetOption("websocket_ip") != "0":
-        websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": True}))
+        threading.Thread(
+            target=websocket.BroadcastMessage,
+            args=(json.dumps({"type": "processing_start", "data": True}),)
+        ).start()
 
 
 def process_audio_chunk(audio_chunk, vad_model, sample_rate):
