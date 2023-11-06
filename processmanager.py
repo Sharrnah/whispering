@@ -18,7 +18,7 @@ all_processes = []
 #
 #   subprocess.check_output(['program_to_run', 'arg_1'],
 #                           **subprocess_args(False))
-def subprocess_args(include_stdout=True):
+def subprocess_args(include_stdout=True, environments=None):
     # The following is true only on Windows.
     if hasattr(subprocess, 'STARTUPINFO'):
         # On Windows, subprocess calls will pop up a command window by default
@@ -34,6 +34,9 @@ def subprocess_args(include_stdout=True):
         env["PYTHONIOENCODING"] = "UTF-8"
         env["PYTHONLEGACYWINDOWSSTDIO"] = "UTF-8"
         env["PYTHONUTF8"] = "1"
+        # merge env with environment variables
+        if environments is not None:
+            env.update(environments)
     else:
         si = None
         env = None
@@ -76,10 +79,10 @@ def reader_thread(stream):
             continue
 
 
-def run_process(process_arguments, include_stdout=False):
+def run_process(process_arguments, include_stdout=False, env=None):
     # run command line tool with parameters
     try:
-        process = subprocess.Popen(process_arguments, **subprocess_args(include_stdout), close_fds=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(process_arguments, **subprocess_args(include_stdout, env), close_fds=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # Start the reader threads
         if process.stdout is not None:
