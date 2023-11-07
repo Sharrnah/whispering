@@ -217,7 +217,10 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
 
         # send realtime processing data to websocket
         if not final_audio and predicted_text.strip() != "":
-            websocket.BroadcastMessage(json.dumps({"type": "processing_data", "data": predicted_text}))
+            threading.Thread(
+                target=websocket.BroadcastMessage,
+                args=(json.dumps({"type": "processing_data", "data": predicted_text}),)
+            ).start()
 
         # send regular message
         send_message(predicted_text, result, final_audio)
@@ -355,7 +358,10 @@ def send_message(predicted_text, result_obj, final_audio):
 
     # Send to Websocket
     if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and final_audio:
-        websocket.BroadcastMessage(json.dumps(result_obj))
+        threading.Thread(
+            target=websocket.BroadcastMessage,
+            args=(json.dumps(result_obj),)
+        ).start()
 
     # Send to TTS on final audio
     if final_audio:
@@ -432,7 +438,10 @@ def whisper_result_thread(result, audio_timestamp, final_audio):
 
     # send stop info for processing indicator in websocket client
     if settings.GetOption("websocket_ip") != "0" and not settings.GetOption("realtime") and final_audio:
-        websocket.BroadcastMessage(json.dumps({"type": "processing_start", "data": False}))
+        threading.Thread(
+            target=websocket.BroadcastMessage,
+            args=(json.dumps({"type": "processing_start", "data": False}),)
+        ).start()
 
 
 def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_model_realtime, last_whisper_result,

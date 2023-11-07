@@ -12,6 +12,11 @@ rem             --hidden-import=transformers.models.nllb ^
 rem             --hidden-import=sentencepiece ^
 rem             --hidden-import=df.deepfilternet3 ^
 rem             --hidden-import=bitsandbytes ^
+rem             --hidden-import=faiss-cpu ^
+rem             --hidden-import=praat-parselmouth ^
+rem             --hidden-import=parselmouth ^
+rem             --hidden-import=pyworld ^
+rem             --hidden-import=torchcrepe ^
 rem             --copy-metadata rich ^
 rem             --copy-metadata tqdm ^
 rem             --copy-metadata regex ^
@@ -44,6 +49,10 @@ rem             --collect-all df ^
 rem             --collect-all nltk ^
 rem             --collect-all fairseq ^
 rem             --collect-all bitsandbytes ^
+rem             --collect-all faiss-cpu ^
+rem             --collect-all praat-parselmouth ^
+rem             --collect-all pyworld ^
+rem             --collect-all torchcrepe ^
 rem             --collect-submodules fairseq ^
 rem             --add-data ".cache/nltk/tokenizers/punkt;./nltk_data/tokenizers/punkt" ^
 rem             -i app-icon.ico

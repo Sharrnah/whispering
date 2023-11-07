@@ -1,11 +1,14 @@
 # numpy v1.23.4 required for whisper
-numpy==1.23.4
+numpy==1.24.2
 tqdm
 rich==12.6.0
 more-itertools
+librosa==0.10.1
 #transformers==4.33.2
 # fork for seamless-m4t (until its officially added)
-transformers @ https://github.com/Sharrnah/transformers/archive/refs/heads/add_seamless-m4t.zip
+#transformers @ https://github.com/Sharrnah/transformers/archive/refs/heads/add_seamless-m4t.zip
+transformers @ https://github.com/huggingface/transformers/archive/84724efd101af52ed3d6af878e41ff8fd651a9cc.zip
+
 tensorboardX==2.6.2.2
 accelerate==0.21.0
 #bitsandbytes==0.41.1
@@ -24,7 +27,7 @@ git+https://github.com/openai/whisper.git
 torch==2.2.0.dev20230927+cu118
 torchaudio==2.2.0.dev20230927+cu118
 torchvision==0.17.0.dev20230927+cu118
-triton @ https://github.com/PrashantSaikia/Triton-for-Windows/raw/84739dfcb724845b301fbde6a738e15c3ed25905/triton-2.0.0-cp310-cp310-win_amd64.whl
+#triton @ https://github.com/PrashantSaikia/Triton-for-Windows/raw/84739dfcb724845b301fbde6a738e15c3ed25905/triton-2.0.0-cp310-cp310-win_amd64.whl
 soundfile==0.12.1
 python-osc>=1.8.0
 websockets>=10.4
@@ -46,8 +49,8 @@ scipy==1.10.1
 num2words==0.5.12
 onnxruntime==1.15.1
 requests==2.29.0
-# downgradea of scikit-image to v1.23.4 to prevent https://github.com/scikit-image/scikit-image/issues/6784
-scikit-image==v0.19.3
+# downgradea of scikit-image to v1.19.3 to prevent https://github.com/scikit-image/scikit-image/issues/6784
+scikit-image==v0.22.0
 
 deepfilternet==0.5.6
 pyloudnorm
@@ -61,7 +64,13 @@ keyboard>=0.13.5
 
 
 #RVC dependencies
-fairseq @ https://github.com/Sharrnah/fairseq/releases/download/v0.12.4/fairseq-0.12.4-cp310-cp310-win_amd64.whl
+#fairseq @ https://github.com/Sharrnah/fairseq/archive/refs/heads/main.zip
+#fairseq @ https://github.com/Sharrnah/fairseq/releases/download/v0.12.4/fairseq-0.12.4-cp310-cp310-win_amd64.whl
+fairseq @ https://github.com/Sharrnah/fairseq/releases/download/v0.12.4/fairseq-0.12.4-cp311-cp311-win_amd64.whl
+faiss-cpu==1.7.3
+praat-parselmouth>=0.4.2
+pyworld==0.3.2
+torchcrepe==0.0.22
 
 #faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/tags/v0.3.0.zip
 faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/heads/master.zip
