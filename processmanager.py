@@ -75,7 +75,7 @@ def reader_thread(stream):
     for line in iter(stream.readline, b''):
         try:
             print(line.decode(errors='replace'), end='')
-        except UnicodeEncodeError:
+        except Exception:
             continue
 
 

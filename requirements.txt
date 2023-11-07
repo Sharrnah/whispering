@@ -67,6 +67,10 @@ keyboard>=0.13.5
 #fairseq @ https://github.com/Sharrnah/fairseq/archive/refs/heads/main.zip
 #fairseq @ https://github.com/Sharrnah/fairseq/releases/download/v0.12.4/fairseq-0.12.4-cp310-cp310-win_amd64.whl
 fairseq @ https://github.com/Sharrnah/fairseq/releases/download/v0.12.4/fairseq-0.12.4-cp311-cp311-win_amd64.whl
+faiss-cpu==1.7.3
+praat-parselmouth>=0.4.2
+pyworld==0.3.2
+torchcrepe==0.0.22
 
 #faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/tags/v0.3.0.zip
 faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/heads/master.zip
