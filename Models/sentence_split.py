@@ -2,33 +2,38 @@ import os
 import sys
 from pathlib import Path
 from collections import defaultdict
+from typing import List
 
 nltk_path = Path(Path.cwd() / ".cache" / "nltk")
 os.makedirs(nltk_path, exist_ok=True)
 os.environ["NLTK_DATA"] = str(nltk_path.resolve())
 import nltk
 
+# from nltk.tokenize import RegexpTokenizer
+
 # List from https://github.com/nltk/nltk_data/blob/gh-pages/packages/tokenizers/punkt.xml
 NLTK_LANGUAGE_CODES_GROUPED = {
-    ("czech", "ces_Latn", "ces", "cs",): "Czech",
-    ("danish", "dan_Latn", "dan", "da",): "Danish",
-    ("dutch", "nld_Latn", "nld", "nl",): "Dutch",
-    ("english", "eng_Latn", "eng", "en",): "English",
-    ("estonian", "est_Latn", "est", "et",): "Estonian",
-    ("finnish", "fin_Latn", "fin", "fi",): "Finnish",
-    ("french", "fra_Latn", "fra", "fr",): "French",
-    ("german", "deu_Latn", "deu", "de",): "German",
-    ("greek", "ell_Grek", "ell", "el",): "Greek",
-    ("italian", "ita_Latn", "ita", "it",): "Italian",
-    ("malayalam", "mal_Mlym", "mal", "ml",): "Malayalam",
-    ("norwegian", "nno_Latn", "nno", "nob_Latn", "nob", "no",): "Norwegian",
-    ("polish", "pol_Latn", "pol", "pl",): "Polish",
-    ("portuguese", "por_Latn", "por", "pt",): "Portuguese",
-    ("russian", "rus_Cyrl", "rus", "ru",): "Russian",
-    ("slovene", "slv_Latn", "slv", "sl",): "Slovene",
-    ("spanish", "spa_Latn", "spa", "es",): "Spanish",
-    ("swedish", "swe_Latn", "swe", "sv",): "Swedish",
-    ("turkish", "tur_Latn", "tur", "tr",): "Turkish",
+    ("czech", "ces_latn", "ces", "cs",): "Czech",
+    ("danish", "dan_latn", "dan", "da",): "Danish",
+    ("dutch", "nld_latn", "nld", "nl",): "Dutch",
+    ("english", "eng_latn", "eng", "en",): "English",
+    ("estonian", "est_latn", "est", "et",): "Estonian",
+    ("finnish", "fin_latn", "fin", "fi",): "Finnish",
+    ("french", "fra_latn", "fra", "fr",): "French",
+    ("german", "deu_latn", "deu", "de",): "German",
+    ("greek", "ell_grek", "ell", "el",): "Greek",
+    ("italian", "ita_latn", "ita", "it",): "Italian",
+    ("malayalam", "mal_mlym", "mal", "ml",): "Malayalam",
+    ("norwegian", "nno_latn", "nno", "nob_Latn", "nob", "no",): "Norwegian",
+    ("polish", "pol_latn", "pol", "pl",): "Polish",
+    ("portuguese", "por_latn", "por", "pt",): "Portuguese",
+    ("russian", "rus_cyrl", "rus", "ru",): "Russian",
+    ("slovene", "slv_latn", "slv", "sl",): "Slovene",
+    ("spanish", "spa_latn", "spa", "es",): "Spanish",
+    ("swedish", "swe_latn", "swe", "sv",): "Swedish",
+    ("turkish", "tur_latn", "tur", "tr",): "Turkish",
+    # Custom languages (see custom_split_text() function)
+    #("japanese", "jpn_jpan", "jpn", "ja",): "Japanese",
 }
 
 # Create a flat dictionary for easier lookup
@@ -44,15 +49,34 @@ def load_model():
     # only if not running as pyinstaller bundle (pyinstaller places tokenizer folder in distribution "nlpk_data")
     if not getattr(sys, 'frozen', False) and not hasattr(sys, '_MEIPASS'):
         # load nltk sentence splitting dependency
-        if not Path(nltk_path / "tokenizers" / "punkt").is_dir() or not Path(nltk_path / "tokenizers" / "punkt" / "english.pickle").is_file():
+        if not Path(nltk_path / "tokenizers" / "punkt").is_dir() or not Path(
+                nltk_path / "tokenizers" / "punkt" / "english.pickle").is_file():
             nltk.download('punkt', download_dir=str(nltk_path.resolve()))
 
 
-def split_text(text, language='english'):
+def custom_split_text(input_text, language='japanese'):
+    match language:
+        case "Japanese":
+            # custom nltk tokenizer
+            tokenizer = nltk.RegexpTokenizer(r'[^!?。\n]+[!?。\n]?')
+            tokenized_sentences = tokenizer.tokenize(input_text)
+            return tokenized_sentences
+
+        case _:
+            return None
+
+
+def split_text(text, language='english') -> List[str]:
     load_model()
 
-    # Split the source text into sentences
     nltk_sentence_split_lang = get_nltk_language_code(language)
+
+    #custom_split = custom_split_text(text, nltk_sentence_split_lang)
+    #if custom_split is not None:
+    #    print("returning custom split text")
+    #    return custom_split
+
+    # Split the source text into sentences
     return nltk.tokenize.sent_tokenize(text, language=nltk_sentence_split_lang)
 
 
