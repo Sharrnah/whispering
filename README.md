@@ -44,8 +44,12 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
   - Silero
 - **VAD** _[Voice Activity Detection]_
   - Silero-VAD
+- **RVC** _[Retrieval-based Voice Conversion]_ (Convert your voice or the voice in audio files)
+  - RVC (Using the [RVC STS Whispering Tiger Plugin](https://gist.github.com/Sharrnah/8d906a3657f097702079451ff762ed95)) 
 - **LLM** _[Large language model]_ (Continuation of text. automatic answer generation etc.) **Proof of concept**
   - FLAN-T5, GPT-J, Bloomz etc. (Using the [Whispering TIger Plugin for LLM](https://gist.github.com/Sharrnah/eeaf2acda3e92d8eed1747f05a3f4102))
+
+  > See all available Plugins in the [List of Plugins](documentation/plugins.md#list-of-plugins). 
 
 ## Quickstart
 For a quick and easy start, download the latest Whispering Tiger UI from here: [https://github.com/Sharrnah/whispering-ui](https://github.com/Sharrnah/whispering-ui#readme)
