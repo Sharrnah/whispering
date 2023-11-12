@@ -38,7 +38,8 @@ sentencepiece==0.1.99
 protobuf==3.20.3
 progressbar2
 fasttext-wheel
-best-download
+#best-download
+robust-downloader @ https://github.com/Sharrnah/robust-downloader/archive/refs/heads/main.zip
 # pywin32 required for easyOCR
 pywin32
 #easyocr==1.7.0

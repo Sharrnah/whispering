@@ -4,7 +4,8 @@ import time
 import zipfile
 import tarfile
 import os
-from best_download import download_file
+#from best_download import download_file
+from robust_downloader import download
 import requests
 import hashlib
 
@@ -74,17 +75,37 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
 
     else:
         if not alt_fallback and fallback_extract_func is None:
-            success = download_file(urls, local_file=local_dl_file, expected_checksum=checksum, max_retries=3)
-            if success and extract_format != "none":
-                with zipfile.ZipFile(local_dl_file, "r") as f:
-                    f.extractall(extract_dir)
-                # remove the zip file after extraction
-                os.remove(local_dl_file)
+            try:
+                download(urls[0], folder=extract_dir, sha256=checksum, retry_max=5)
+                if extract_format != "none":
+                    with zipfile.ZipFile(local_dl_file, "r") as f:
+                        f.extractall(extract_dir)
+                    # remove the zip file after extraction
+                    os.remove(local_dl_file)
+            except Exception as e:
+                print(e)
+                success = False
         else:
             try:
                 download_file_normal(urls[0], extract_dir, checksum)
-            except Exception as e:
-                download_file_simple(urls[0], extract_dir, checksum)
+            except Exception as first_exception:
+                if len(urls) > 1:
+                    download_successful = False
+                    last_exception = None
+                    for url in urls[1:]:
+                        try:
+                            download_file_simple(url, extract_dir, checksum)
+                            download_successful = True
+                            break  # Exit the loop if download is successful
+                        except Exception as e:
+                            last_exception = e
+                            continue  # Try the next URL if this one fails
+                    if not download_successful:
+                        print("All download attempts failed.")
+                        if last_exception:
+                            print(f"Last encountered exception: {last_exception}")
+                else:
+                    print(first_exception)
             if fallback_extract_func is not None:
                 fallback_extract_func(*fallback_extract_func_args)
 
@@ -100,7 +121,7 @@ def sha256_checksum(file_path):
 
 
 def download_file_normal(url, target_path, expected_sha256=None, num_retries=3):
-    download_file(url, local_directory=target_path, expected_checksum=expected_sha256, max_retries=num_retries)
+    download(url, folder=target_path, sha256=expected_sha256, retry_max=num_retries)
 
 
 def download_file_simple(url, target_path, expected_sha256=None, num_retries=3, timeout=60):

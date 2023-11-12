@@ -606,7 +606,7 @@ class FasterWhisper(metaclass=SingletonMeta):
         use_tf_tokenizer = False
         if model == "large-v3":
             n_mels = 128
-            use_tf_tokenizer = True
+            #use_tf_tokenizer = True
 
         self.model = WhisperModel(str(Path(model_path).resolve()), device=device, compute_type=compute_type,
                                   cpu_threads=cpu_threads, num_workers=num_workers, feature_size=n_mels, use_tf_tokenizer=use_tf_tokenizer)
