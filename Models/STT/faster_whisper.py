@@ -603,25 +603,19 @@ class FasterWhisper(metaclass=SingletonMeta):
         # temporary fix for large-v3 loading (https://github.com/guillaumekln/faster-whisper/issues/547)
         # @TODO: this is a temporary fix for large-v3
         n_mels = 80
+        use_tf_tokenizer = False
         if model == "large-v3":
             n_mels = 128
+            use_tf_tokenizer = True
 
         self.model = WhisperModel(str(Path(model_path).resolve()), device=device, compute_type=compute_type,
-                                  cpu_threads=cpu_threads, num_workers=num_workers, feature_size=n_mels)
+                                  cpu_threads=cpu_threads, num_workers=num_workers, feature_size=n_mels, use_tf_tokenizer=use_tf_tokenizer)
 
     def transcribe(self, audio_sample, task, language, condition_on_previous_text,
                    initial_prompt, logprob_threshold, no_speech_threshold, temperature, beam_size,
                    word_timestamps, without_timestamps, patience, length_penalty: float = 1,
                    prompt_reset_on_temperature: float = 0.5, repetition_penalty: float = 1,
                    no_repeat_ngram_size: int = 0) -> dict:
-
-        # set task to "translate" if it is "transcribe" and vise versa if its large-v3 (because for some reason this works opposite of all other models)
-        # @TODO: this is a temporary fix for large-v3
-        if self.loaded_model_size == "large-v3":
-            if task == "transcribe":
-                task = "translate"
-            elif task == "translate":
-                task = "transcribe"
 
         result_segments, audio_info = self.model.transcribe(audio_sample, task=task,
                                                             language=language,

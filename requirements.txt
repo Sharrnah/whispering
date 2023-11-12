@@ -5,9 +5,9 @@ rich==12.6.0
 more-itertools
 librosa==0.10.1
 #transformers==4.33.2
-# fork for seamless-m4t (until its officially added)
 #transformers @ https://github.com/Sharrnah/transformers/archive/refs/heads/add_seamless-m4t.zip
-transformers @ https://github.com/huggingface/transformers/archive/84724efd101af52ed3d6af878e41ff8fd651a9cc.zip
+#transformers @ https://github.com/huggingface/transformers/archive/84724efd101af52ed3d6af878e41ff8fd651a9cc.zip
+transformers==4.35.0
 
 tensorboardX==2.6.2.2
 accelerate==0.21.0
