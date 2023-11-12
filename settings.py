@@ -223,6 +223,8 @@ def get_available_models():
 
     # add custom models to list
     if GetOption("stt_type") == "faster_whisper":
+        available_models_list.insert(0, "medium-distilled.en")
+        available_models_list.insert(0, "large-distilled-v2.en")
         available_models_list.insert(0, "small.eu")
         available_models_list.insert(0, "medium.eu")
         available_models_list.insert(0, "small.de")

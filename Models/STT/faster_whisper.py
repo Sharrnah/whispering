@@ -186,6 +186,26 @@ MODEL_LINKS = {
             "checksum": "c9e889f59cacfef9ebe76a1db5d80befdcf0043195c07734f6984d19e78c8253"
         }
     },
+    "medium-distilled.en": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/medium.distilled.en-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/medium.distilled.en-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/medium.distilled.en-ct2-fp16.zip",
+            ],
+            "checksum": "237de540a5a606dae47c61231b489ad3e43ab0750ce58f7921f0a0fadf4cf9d0"
+        },
+    },
+    "large-distilled-v2.en": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/large-v2.distilled-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/large-v2.distilled-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/large-v2.distilled-ct2-fp16.zip",
+            ],
+            "checksum": "3e0bcbc905259a61db35afa35d4559ba5284320cdcb44b9e7f0ebfc6701fed1d"
+        },
+    },
     # float16 vs float32 converted model showed no difference...
     "large-v3": {
         "float16": {
@@ -194,7 +214,7 @@ MODEL_LINKS = {
                 "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/large-v3-ct2-fp16.zip",
                 "https://s3.libs.space:9000/ai-models/Whisper-CT2/large-v3-ct2-fp16.zip",
             ],
-            "checksum": "123a5d915b2f1952b371ff4dbc3c75a84eed7eeedc9e43b2913084674d77d9f7"
+            "checksum": "0521e0ee741b114674b146d048251520a51b0342da5de2bfd76e2470c18b84b7"
         }
     },
     # Finetune Models
@@ -513,7 +533,7 @@ def needs_download(model: str, compute_type: str = "float32"):
     model_path = Path(model_cache_path / (model + "-ct2"))
     if compute_type == "float16" or compute_type == "int8_float16" or compute_type == "int16" or compute_type == "int8":
         model_path = Path(model_cache_path / (model + "-ct2-fp16"))
-    # special case for large-v3 as float16 showed no difference
+    # special case for models that are only available in one precision (as float16 vs float32 showed no difference in large-v3 and distilled versions)
     if compute_type not in MODEL_LINKS[model]:
         if compute_type == "float32":
             model_path = Path(model_cache_path / (model + "-ct2-fp16"))
@@ -539,7 +559,7 @@ def download_model(model: str, compute_type: str = "float32"):
     if compute_type == "float16" or compute_type == "int8_float16" or compute_type == "int16" or compute_type == "int8":
         compute_type = "float16"
         model_path = Path(model_cache_path / (model + "-ct2-fp16"))
-    # special case for large-v3 as float16 vs float32 showed no difference
+    # special case for models that are only available in one precision (as float16 vs float32 showed no difference in large-v3 and distilled versions)
     if compute_type not in MODEL_LINKS[model]:
         if compute_type == "float32":
             compute_type = "float16"
@@ -588,7 +608,7 @@ class FasterWhisper(metaclass=SingletonMeta):
         model_folder_name = model + "-ct2"
         if compute_type == "float16" or compute_type == "int8_float16":
             model_folder_name = model + "-ct2-fp16"
-        # special case for large-v3 as float16 showed no difference
+        # special case for models that are only available in one precision (as float16 vs float32 showed no difference in large-v3 and distilled versions)
         if compute_type not in MODEL_LINKS[model]:
             if compute_type == "float32":
                 model_folder_name = model + "-ct2-fp16"
