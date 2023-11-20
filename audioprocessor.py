@@ -38,20 +38,11 @@ transcriptions_list = {}
 transcriptions_list_lock = threading.Lock()
 
 
-def ns_to_datetime(ns):
-    # Convert nanoseconds to seconds
-    seconds = ns / 1_000_000_000
-    # Create a datetime object
-    dt_object = datetime.fromtimestamp(seconds)
-    # Format the datetime object as a string
-    return dt_object.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]  # trimming microseconds to milliseconds
-
-
-def add_transcription(start_time, end_time, transcription, translation, file_path=None):
+def add_transcription(start_time, end_time, transcription, translation, continous_text=False, file_path=None):
     global transcriptions_list
 
-    start_time_str = ns_to_datetime(start_time)
-    end_time_str = ns_to_datetime(end_time)
+    start_time_str = Utilities.ns_to_datetime(start_time)
+    end_time_str = Utilities.ns_to_datetime(end_time)
 
     # Update the dictionary
     with transcriptions_list_lock:
@@ -60,8 +51,12 @@ def add_transcription(start_time, end_time, transcription, translation, file_pat
         # Add the new entry to the CSV file
         if file_path is not None and isinstance(file_path, str) and file_path != "":
             with open(file_path, "a", newline='') as transcription_file:
-                csv_writer = csv.writer(transcription_file, quoting=csv.QUOTE_MINIMAL)
-                csv_writer.writerow([start_time_str, end_time_str, transcription, translation])
+                if continous_text:
+                    text_to_append = translation if translation else transcription
+                    transcription_file.write(f" {text_to_append}")
+                else:
+                    csv_writer = csv.writer(transcription_file, quoting=csv.QUOTE_MINIMAL)
+                    csv_writer.writerow([start_time_str, end_time_str, transcription, translation])
 
 
 def save_transcriptions(file_path: str):
@@ -76,8 +71,8 @@ def save_transcriptions(file_path: str):
         for (start_time, end_time), entry in transcriptions_list.items():
             transcription = entry["transcription"]
             translation = entry["translation"]
-            start_time_str = ns_to_datetime(start_time)
-            end_time_str = ns_to_datetime(end_time)
+            start_time_str = Utilities.ns_to_datetime(start_time)
+            end_time_str = Utilities.ns_to_datetime(end_time)
             csv_writer.writerow([start_time_str, end_time_str, transcription, translation])
         transcription_file.close()
 
@@ -164,6 +159,7 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
     osc_ip = settings.GetOption("osc_ip")
     do_txt_translate = settings.GetOption("txt_translate")
     transcription_auto_save_file = settings.GetOption("transcription_auto_save_file")
+    transcription_auto_save_continous_text = settings.GetOption("transcription_auto_save_continous_text")
 
     predicted_text = result.get('text').strip()
     result["type"] = "transcript"
@@ -213,14 +209,17 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
             else:
                 translation_text = ""
 
-            add_transcription(audio_timestamp, time.time_ns(), result["text"], translation_text, transcription_auto_save_file)
+            add_transcription(audio_timestamp, time.time_ns(), result["text"], translation_text,
+                              transcription_auto_save_continous_text, transcription_auto_save_file
+                              )
 
         # send realtime processing data to websocket
         if not final_audio and predicted_text.strip() != "":
-            threading.Thread(
-                target=websocket.BroadcastMessage,
-                args=(json.dumps({"type": "processing_data", "data": predicted_text}),)
-            ).start()
+            websocket.BroadcastMessage(json.dumps({"type": "processing_data", "data": predicted_text}))
+            #threading.Thread(
+            #    target=websocket.BroadcastMessage,
+            #    args=(json.dumps({"type": "processing_data", "data": predicted_text}),)
+            #).start()
 
         # send regular message
         send_message(predicted_text, result, final_audio)
@@ -358,10 +357,11 @@ def send_message(predicted_text, result_obj, final_audio):
 
     # Send to Websocket
     if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and final_audio:
-        threading.Thread(
-            target=websocket.BroadcastMessage,
-            args=(json.dumps(result_obj),)
-        ).start()
+        websocket.BroadcastMessage(json.dumps(result_obj))
+        #threading.Thread(
+        #    target=websocket.BroadcastMessage,
+        #    args=(json.dumps(result_obj),)
+        #).start()
 
     # Send to TTS on final audio
     if final_audio:

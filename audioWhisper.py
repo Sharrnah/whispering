@@ -1,3 +1,4 @@
+# -*- encoding: utf-8 -*-
 import os
 import platform
 import sys
@@ -513,6 +514,20 @@ class AudioProcessor:
                     audioprocessor.q.put(
                         {'time': time.time_ns(), 'data': audio_bytes_to_wav(wavefiledata), 'final': True})
                     # vad_iterator.reset_states()  # reset model states after each audio
+
+                    # write wav file if configured to do so
+                    transcription_save_audio_dir = settings.GetOption("transcription_save_audio_dir")
+                    if transcription_save_audio_dir is not None and transcription_save_audio_dir != "":
+                        start_time_str = Utilities.ns_to_datetime(time.time_ns(), formatting='%Y-%m-%d %H_%M_%S-%f')
+                        audio_file_name = f"audio_transcript_{start_time_str}.wav"
+
+                        transcription_save_audio_dir = Path(transcription_save_audio_dir)
+                        audio_file_path = transcription_save_audio_dir / audio_file_name
+
+                        threading.Thread(
+                            target=save_to_wav,
+                            args=(wavefiledata, str(audio_file_path.resolve()), self.default_sample_rate,)
+                        ).start()
 
                     # set typing indicator for VRChat and Websocket clients
                     typing_indicator_thread = threading.Thread(target=typing_indicator_function,

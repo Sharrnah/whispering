@@ -1,3 +1,6 @@
+from datetime import datetime
+
+
 def safe_decode(data):
     encodings = ['utf-8', 'utf-16', 'gbk', 'iso-8859-1', 'iso-8859-5', 'iso-8859-6', 'big5', 'shift_jis', 'euc-kr', 'euc-jp', 'windows-1252', 'windows-1251', 'windows-1256']
     for encoding in encodings:
@@ -19,3 +22,11 @@ def handle_bytes(obj):
     else:
         return obj
 
+
+def ns_to_datetime(ns, formatting='%Y-%m-%d %H:%M:%S.%f'):
+    # Convert nanoseconds to seconds
+    seconds = ns / 1_000_000_000
+    # Create a datetime object
+    dt_object = datetime.fromtimestamp(seconds)
+    # Format the datetime object as a string
+    return dt_object.strftime(formatting)[:-3]  # trimming microseconds to milliseconds
