@@ -73,7 +73,10 @@ TRANSLATE_SETTINGS = {
     "faster_without_timestamps": False,  # if enabled, faster whisper will only sample text tokens. (only when using stt_type=faster_whisper)
     "whisper_apply_voice_markers": False,  # if enabled, Whisper will apply voice markers.
     "max_sentence_repetition": -1,  # set max sentence repetition in result (-1 = disabled)
+
     "transcription_auto_save_file": "",  # set to filepath to save transcriptions. (empty or None to disable)
+    "transcription_auto_save_continous_text": False,  # set to save continous text line instead of CSV
+    "transcription_save_audio_dir": "",  # set to filepath to save transcriptions wav files. (empty or None to disable)
 
     "silence_cutting_enabled": True,
     "silence_offset": -40.0,
