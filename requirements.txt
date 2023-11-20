@@ -5,9 +5,9 @@ rich==12.6.0
 more-itertools
 librosa==0.10.1
 #transformers==4.33.2
-# fork for seamless-m4t (until its officially added)
 #transformers @ https://github.com/Sharrnah/transformers/archive/refs/heads/add_seamless-m4t.zip
-transformers @ https://github.com/huggingface/transformers/archive/84724efd101af52ed3d6af878e41ff8fd651a9cc.zip
+#transformers @ https://github.com/huggingface/transformers/archive/84724efd101af52ed3d6af878e41ff8fd651a9cc.zip
+transformers==4.35.0
 
 tensorboardX==2.6.2.2
 accelerate==0.21.0
@@ -33,12 +33,13 @@ python-osc>=1.8.0
 websockets>=10.4
 unidecode>=1.3.6
 pykakasi>=2.2.1
-ctranslate2==3.20.0
+ctranslate2==3.21.0
 sentencepiece==0.1.99
 protobuf==3.20.3
 progressbar2
 fasttext-wheel
-best-download
+#best-download
+robust-downloader @ https://github.com/Sharrnah/robust-downloader/archive/refs/heads/main.zip
 # pywin32 required for easyOCR
 pywin32
 #easyocr==1.7.0
@@ -72,5 +73,5 @@ praat-parselmouth>=0.4.2
 pyworld==0.3.2
 torchcrepe==0.0.22
 
-#faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/tags/v0.3.0.zip
-faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/heads/master.zip
+#faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/heads/master.zip
+faster-whisper @ https://github.com/Sharrnah/faster-whisper/archive/refs/heads/large-v3.zip

@@ -153,6 +153,8 @@ def run_image_processing(window_name, src_languages):
 
             # get an updated image of the game
             screenshot, screenshot_png = win_cap.get_screenshot_mss()
+            if screenshot is None:
+                return None, None, None
 
             # unitialize
             win_cap.unitialize()

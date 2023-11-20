@@ -12,6 +12,8 @@ from librosa.core.audio import resampy
 from pydub import AudioSegment
 from threading import Lock
 import time
+from scipy.io.wavfile import write as write_wav
+from io import BytesIO
 
 
 class PyAudioPool:
@@ -646,3 +648,10 @@ def load_wav_to_bytes(wav_path, target_sample_rate=16000):
         channels = wave_file.getnchannels()
 
     return resample_audio(audio_bytes, audio_sample_width, target_sample_rate, target_channels=-1, is_mono=channels == 1, dtype="int16")
+
+
+def numpy_array_to_wav_bytes(audio: np.ndarray, sample_rate: int = 22050) -> BytesIO:
+    buff = io.BytesIO()
+    write_wav(buff, sample_rate, audio)
+    buff.seek(0)
+    return buff

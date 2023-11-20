@@ -166,3 +166,10 @@ for fname in os.listdir(dirpath):
 plugins = []
 for plugin in Base.plugins:
     plugins.append(plugin())
+
+
+def get_plugin(class_name):
+    for plugin_inst in plugins:
+        if plugin_inst.__class__.__name__ == class_name:
+            return plugin_inst  # return plugin instance
+    return None
