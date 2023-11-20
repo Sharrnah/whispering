@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from df.enhance import enhance, init_df
+from Models.Singleton import SingletonMeta
 import numpy as np
 import torch
 import audio_tools
@@ -23,7 +24,7 @@ DEEP_FILTER_LINK = {
 }
 
 
-class DeepFilterNet:
+class DeepFilterNet(metaclass=SingletonMeta):
     df_model = None
     df_state = None
 
