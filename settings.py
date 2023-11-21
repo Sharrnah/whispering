@@ -102,7 +102,7 @@ TRANSLATE_SETTINGS = {
     "osc_port": 9000,
     "osc_address": "/chatbox/input",
     "osc_min_time_between_messages": 1.5,  # defines the minimum time between OSC messages in seconds.
-    "osc_typing_indicator": True,
+    "osc_typing_indicator": True,  # Display typing indicator while processing audio
     "osc_convert_ascii": False,
     "osc_chat_prefix": "",  # Prefix for OSC messages.
     "osc_chat_limit": 144,  # defines the maximum length of a chat message.
