@@ -17,6 +17,7 @@ rem             --hidden-import=praat-parselmouth ^
 rem             --hidden-import=parselmouth ^
 rem             --hidden-import=pyworld ^
 rem             --hidden-import=torchcrepe ^
+rem             --hidden-import=grpcio ^
 rem             --copy-metadata rich ^
 rem             --copy-metadata tqdm ^
 rem             --copy-metadata regex ^
@@ -53,6 +54,7 @@ rem             --collect-all faiss-cpu ^
 rem             --collect-all praat-parselmouth ^
 rem             --collect-all pyworld ^
 rem             --collect-all torchcrepe ^
+rem             --collect-all grpcio ^
 rem             --collect-submodules fairseq ^
 rem             --add-data ".cache/nltk/tokenizers/punkt;./nltk_data/tokenizers/punkt" ^
 rem             -i app-icon.ico

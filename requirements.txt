@@ -62,6 +62,7 @@ omegaconf==2.0.6
 PyYAML>=6.0
 winsdk>=1.0.0b9
 keyboard>=0.13.5
+grpcio==1.59.3
 
 
 #RVC dependencies
