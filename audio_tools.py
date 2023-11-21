@@ -4,7 +4,7 @@ import wave
 
 import numpy
 import pyloudnorm
-#import resampy
+# import resampy
 import numpy as np
 import pyaudio
 import torch
@@ -64,7 +64,8 @@ pyaudio_pool = PyAudioPool()
 # set target_channels to '2' to keep stereo channels (or copy the mono channel to both channels if is_mono is True)
 # to Convert the int16 numpy array to bytes use .tobytes()
 # filter can be sync_window, kaiser_fast, kaiser_best
-def resampy_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16", filter="kaiser_best"):
+def resampy_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None,
+                  dtype="int16", filter="kaiser_best"):
     audio_data_dtype = np.int16
     if dtype == "int16":
         audio_data_dtype = np.int16
@@ -124,9 +125,9 @@ def _resample(smp, scale=1.0):
     # exact ratios (i.e. for 44100 to 22050 or vice versa)
     # using endpoint=False gets less noise in the resampled sound
     return numpy.interp(
-        numpy.linspace(0.0, 1.0, n, endpoint=False), # where to interpret
-        numpy.linspace(0.0, 1.0, len(smp), endpoint=False), # known positions
-        smp, # known data points
+        numpy.linspace(0.0, 1.0, n, endpoint=False),  # where to interpret
+        numpy.linspace(0.0, 1.0, len(smp), endpoint=False),  # known positions
+        smp,  # known data points
     )
 
 
@@ -154,10 +155,11 @@ def _uninterleave(data):
     See also: interleave()
 
     """
-    return data.reshape(2, len(data)//2, order='F')
+    return data.reshape(2, len(data) // 2, order='F')
 
 
-def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None, dtype="int16"):
+def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None,
+                   dtype="int16"):
     """
     Resample audio data and optionally convert between stereo and mono.
 
@@ -221,7 +223,8 @@ def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target
 
 def get_closest_sample_rate_of_device(device_index, target_sample_rate, fallback_sample_rate=44100):
     p = pyaudio.PyAudio()
-    device_info = p.get_device_info_by_index(device_index if device_index is not None else p.get_default_output_device_info()["index"])
+    device_info = p.get_device_info_by_index(
+        device_index if device_index is not None else p.get_default_output_device_info()["index"])
     supported_sample_rates = device_info.get("supportedSampleRates")
 
     # If supported_sample_rates is empty, use common sample rates as a fallback
@@ -252,7 +255,8 @@ def _generate_binary_buffer(audio):
 def convert_tensor_to_wav_buffer(audio, sample_rate=24000, channels=1, sample_width=4):
     audio = _tensor_to_buffer(audio)
 
-    wav_file = AudioSegment.from_file(audio, format="raw", frame_rate=sample_rate, channels=channels, sample_width=sample_width)
+    wav_file = AudioSegment.from_file(audio, format="raw", frame_rate=sample_rate, channels=channels,
+                                      sample_width=sample_width)
 
     buff = io.BytesIO()
     wav_file.export(buff, format="wav")
@@ -266,16 +270,17 @@ audio_thread_lock = threading.Lock()
 audio_list_lock = threading.Lock()  # Lock to protect the audio_threads list
 
 
-def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2, channels=2, sample_rate=44100, tag=""):
+def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2, channels=2, sample_rate=44100,
+                tag=""):
     try:
-        #frames_per_buffer = chunk * channels  # experiment with this value
+        # frames_per_buffer = chunk * channels  # experiment with this value
 
         stream = p.open(format=audio_format,
                         channels=channels,
                         rate=int(sample_rate),
                         output_device_index=device,
                         output=True)
-                        #frames_per_buffer=frames_per_buffer)
+        # frames_per_buffer=frames_per_buffer)
 
         for i in range(0, len(audio_data), chunk * channels):
             if stop_flags[tag].is_set():
@@ -291,7 +296,9 @@ def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2
 # audio can be bytes (in wav) or tensor
 # tensor_sample_with is the sample width of the tensor (if audio is tensor and not bytes) [default is 4 bytes]
 # tensor_channels is the number of channels of the tensor (if audio is tensor and not bytes) [default is 1 channel (mono)]
-def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channel_num=2, target_channels=2, is_mono=True, dtype="int16", tensor_sample_with=4, tensor_channels=1, secondary_device=None, stop_play=True, tag=""):
+def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channel_num=2, target_channels=2,
+               is_mono=True, dtype="int16", tensor_sample_with=4, tensor_channels=1, secondary_device=None,
+               stop_play=True, tag=""):
     global audio_threads
 
     if stop_play:
@@ -304,7 +311,8 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
     if isinstance(audio, bytes):
         buff = _generate_binary_buffer(audio)
     else:
-        buff = convert_tensor_to_wav_buffer(audio, sample_rate=source_sample_rate, channels=tensor_channels, sample_width=tensor_sample_with)
+        buff = convert_tensor_to_wav_buffer(audio, sample_rate=source_sample_rate, channels=tensor_channels,
+                                            sample_width=tensor_sample_with)
 
     # Set chunk size of 1024 samples per data frame
     chunk = 1024
@@ -313,7 +321,7 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
     wf = wave.open(buff, 'rb')
 
     # Create an interface to PortAudio
-    #p = pyaudio.PyAudio()
+    # p = pyaudio.PyAudio()
     p = pyaudio_pool.acquire()
 
     # Find the closest supported sample rate to the original sample rate
@@ -330,7 +338,8 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
     wf.close()
 
     # resample audio data
-    audio_data = resample_audio(frame_data, source_sample_rate, closest_sample_rate, target_channels=target_channels, is_mono=is_mono, dtype=dtype)
+    audio_data = resample_audio(frame_data, source_sample_rate, closest_sample_rate, target_channels=target_channels,
+                                is_mono=is_mono, dtype=dtype)
 
     current_threads = []
 
@@ -371,7 +380,7 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
             if (thread, tag) in audio_threads:
                 audio_threads.remove((thread, tag))
 
-    #p.terminate()
+    # p.terminate()
     pyaudio_pool.release(p)
     pyaudio_pool.manage_unused()
 
@@ -413,7 +422,8 @@ def is_audio_playing(tag=None):
             return any(t == tag for _, t in audio_threads)
 
 
-def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt16, sample_rate=16000, channels=1, chunk=int(16000/10), py_audio=None, audio_processor=None):
+def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt16, sample_rate=16000, channels=1,
+                                 chunk=int(16000 / 10), py_audio=None, audio_processor=None):
     if py_audio is None:
         py_audio = pyaudio.PyAudio()
 
@@ -443,7 +453,7 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
         print("opening stream failed, falling back to default sample rate")
         dev_info = py_audio.get_device_info_by_index(device_index)
 
-        #channel_number = int(dev_info['maxInputChannels'])
+        # channel_number = int(dev_info['maxInputChannels'])
         recorded_sample_rate = int(dev_info['defaultSampleRate'])
         print("default sample rate: {}".format(recorded_sample_rate))
         needs_sample_rate_conversion = True
@@ -488,8 +498,10 @@ def calculate_lufs(audio, sample_rate):
 
 
 # Function to normalize the audio based on LUFS
-def normalize_audio_lufs(audio, sample_rate, lower_threshold=-24.0, upper_threshold=-16.0, gain_factor=2.0, verbose=False):
-    block_size_samples = int(sample_rate * 0.400)  # calculate block size in samples. (0.400 is the default block size of pyloudnorm)
+def normalize_audio_lufs(audio, sample_rate, lower_threshold=-24.0, upper_threshold=-16.0, gain_factor=2.0,
+                         verbose=False):
+    block_size_samples = int(
+        sample_rate * 0.400)  # calculate block size in samples. (0.400 is the default block size of pyloudnorm)
     if len(audio) < block_size_samples:
         if verbose:
             print(f"audio is too short to calculate lufs")
@@ -505,14 +517,14 @@ def normalize_audio_lufs(audio, sample_rate, lower_threshold=-24.0, upper_thresh
         if verbose:
             print(f"audio is too quiet, increasing volume")
         gain = (lower_threshold - lufs) / gain_factor
-        audio = audio * np.power(10.0, gain/20.0)
+        audio = audio * np.power(10.0, gain / 20.0)
 
     # If LUFS is higher than the upper threshold, decrease volume
     elif lufs > upper_threshold:
         if verbose:
             print(f"audio is too loud, decreasing volume")
         gain = (upper_threshold - lufs) * gain_factor
-        audio = audio * np.power(10.0, gain/20.0)
+        audio = audio * np.power(10.0, gain / 20.0)
     else:
         if verbose:
             print(f"audio is within the desired range")
@@ -565,7 +577,8 @@ def convert_audio_datatype_to_integer(audio, dtype=np.int16):
 # remove silence parts from audio. Make sure that keep_silence_length is less than or equal to half of
 # max_silence_length, or else the entire silent section will be kept.
 # fallback_silence_threshold is used if the audio is too short to calculate the LUFS
-def remove_silence_parts(audio, sample_rate, silence_offset=-40.0, max_silence_length=30.0, keep_silence_length=0.20, fallback_silence_threshold=0.15, trim_silence_end=True, verbose=False):
+def remove_silence_parts(audio, sample_rate, silence_offset=-40.0, max_silence_length=30.0, keep_silence_length=0.20,
+                         fallback_silence_threshold=0.15, trim_silence_end=True, verbose=False):
     # Store the original data type
     original_dtype = audio.dtype
 
@@ -574,7 +587,8 @@ def remove_silence_parts(audio, sample_rate, silence_offset=-40.0, max_silence_l
         audio = audio.astype(np.float32) / np.iinfo(original_dtype).max
 
     # Calculate LUFS and define silence threshold
-    block_size_samples = int(sample_rate * 0.400)  # calculate block size in samples. (0.400 is the default block size of pyloudnorm)
+    block_size_samples = int(
+        sample_rate * 0.400)  # calculate block size in samples. (0.400 is the default block size of pyloudnorm)
     if len(audio) >= block_size_samples:
         try:
             lufs = calculate_lufs(audio, sample_rate)
@@ -647,7 +661,8 @@ def load_wav_to_bytes(wav_path, target_sample_rate=16000):
         audio_sample_width = wave_file.getframerate()
         channels = wave_file.getnchannels()
 
-    return resample_audio(audio_bytes, audio_sample_width, target_sample_rate, target_channels=-1, is_mono=channels == 1, dtype="int16")
+    return resample_audio(audio_bytes, audio_sample_width, target_sample_rate, target_channels=-1,
+                          is_mono=channels == 1, dtype="int16")
 
 
 def numpy_array_to_wav_bytes(audio: np.ndarray, sample_rate: int = 22050) -> BytesIO:
@@ -655,3 +670,123 @@ def numpy_array_to_wav_bytes(audio: np.ndarray, sample_rate: int = 22050) -> Byt
     write_wav(buff, sample_rate, audio)
     buff.seek(0)
     return buff
+
+
+# ======================================
+# buffered audio streaming playback
+# ======================================
+
+class CircularBuffer:
+    def __init__(self, size):
+        self.buffer = np.zeros(size, dtype=np.int16)
+        self.size = size
+        self.start = 0
+        self.end = 0
+
+    def expand_buffer(self, min_new_size):
+        new_size = max(min_new_size, int(self.size * 1.5))  # Increase by 50%
+        new_buffer = np.zeros(new_size, dtype=self.buffer.dtype)
+        existing_data = self.read()  # Read the existing data
+        self.buffer = new_buffer
+        self.size = new_size
+        self.start = 0
+        self.end = len(existing_data)
+        self.buffer[:self.end] = existing_data
+
+    def append(self, data):
+        len_data = len(data)
+        # Calculate the space available in the buffer
+        available_space = self.size - self.end if self.end >= self.start else self.start - self.end
+        if len_data > available_space:
+            self.expand_buffer(self.size + len_data)
+
+        next_end = (self.end + len_data) % self.size
+        if next_end < self.end:  # Wrap around case
+            self.buffer[self.end:] = data[:self.size - self.end]
+            self.buffer[:next_end] = data[self.size - self.end:]
+        else:
+            self.buffer[self.end:next_end] = data
+        self.end = next_end
+
+    def read(self):
+        if self.start == self.end:
+            return np.array([])
+        data = self.buffer[self.start:self.end] if self.end > self.start else np.concatenate((self.buffer[self.start:], self.buffer[:self.end]))
+        self.start = self.end
+        return data
+
+    def clear(self):
+        self.buffer = np.zeros(self.size, dtype=self.buffer.dtype)
+        self.start = 0
+        self.end = 0
+
+
+class AudioStreamer:
+    def __init__(self, device, source_sample_rate=44100, target_channels=-1, is_mono=None, dtype="int16", buffer_size=4096, playback_channels=2, buffer_sample_size=1024):
+        self.device = device
+        self.recorded_sample_rate = source_sample_rate
+        self.target_channels = target_channels
+        self.is_mono = is_mono
+        self.dtype = dtype
+        self.format = pyaudio.paInt16 if self.dtype == "int16" else pyaudio.paFloat32
+        self.playback_channels = playback_channels
+        self.buffer_sample_size = buffer_sample_size
+
+        self.lock = threading.Lock()
+        self.buffer = CircularBuffer(buffer_size)
+        self.init_stream()
+
+    def init_stream(self):
+        with self.lock:
+            self.p = pyaudio.PyAudio()
+            self.target_sample_rate = get_closest_sample_rate_of_device(self.device, self.recorded_sample_rate)
+            self.stream = self.p.open(format=self.format, channels=self.playback_channels, rate=int(self.target_sample_rate), output=True, output_device_index=self.device)
+            self.started = False
+            self.playback_thread = None
+
+    def add_audio_chunk(self, chunk):
+        with self.lock:
+            if chunk.size == 0:
+                return
+
+            resampled_chunk = resample_audio(chunk, self.recorded_sample_rate, self.target_sample_rate, target_channels=self.target_channels, is_mono=self.is_mono, dtype=self.dtype)
+            self.buffer.append(resampled_chunk)
+
+            # Start playback if enough data is buffered
+            buffered_data_length = (self.buffer.end - self.buffer.start) % self.buffer.size
+            if not self.started and buffered_data_length >= self.buffer_sample_size:
+                self.start_playback()
+
+    def start_playback(self):
+        self.started = True
+        self.playback_thread = threading.Thread(target=self.playback_loop)
+        self.playback_thread.start()
+
+    def playback_loop(self):
+        while self.started:
+            with self.lock:
+                data = self.buffer.read()
+            if data.size > 0:
+                self.stream.write(data.tobytes())
+            else:
+                time.sleep(0.01)
+
+    def stop(self):
+        with self.lock:
+            self.buffer.clear()
+            self.started = False
+            if self.playback_thread and self.playback_thread.is_alive():
+                self.playback_thread.join()
+
+            if self.stream:
+                self.stream.stop_stream()
+                self.stream.close()
+
+            if self.p:
+                self.p.terminate()
+
+            self.playback_thread = None
+
+    def restart(self):
+        self.stop()
+        self.init_stream()
