@@ -58,7 +58,7 @@ pyloudnorm
 nltk
 
 # plugin dependencies
-omegaconf==2.0.6
+omegaconf==2.2.3
 PyYAML>=6.0
 winsdk>=1.0.0b9
 keyboard>=0.13.5
