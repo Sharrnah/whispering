@@ -189,9 +189,9 @@ MODEL_LINKS = {
     "medium-distilled.en": {
         "float16": {
             "urls": [
-                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/medium.distilled.en-ct2-fp16.zip",
-                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/medium.distilled.en-ct2-fp16.zip",
-                "https://s3.libs.space:9000/ai-models/Whisper-CT2/medium.distilled.en-ct2-fp16.zip",
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/medium-distilled.en-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/medium-distilled.en-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/medium-distilled.en-ct2-fp16.zip",
             ],
             "checksum": "237de540a5a606dae47c61231b489ad3e43ab0750ce58f7921f0a0fadf4cf9d0"
         },
@@ -199,9 +199,9 @@ MODEL_LINKS = {
     "large-distilled-v2.en": {
         "float16": {
             "urls": [
-                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/large-v2.distilled-ct2-fp16.zip",
-                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/large-v2.distilled-ct2-fp16.zip",
-                "https://s3.libs.space:9000/ai-models/Whisper-CT2/large-v2.distilled-ct2-fp16.zip",
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/large-distilled-v2.en-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/large-distilled-v2.en-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/large-distilled-v2.en-ct2-fp16.zip",
             ],
             "checksum": "3e0bcbc905259a61db35afa35d4559ba5284320cdcb44b9e7f0ebfc6701fed1d"
         },
