@@ -46,7 +46,8 @@ def move_files(source_dir, target_dir):
 def download_extract(urls, extract_dir, checksum, title="", extract_format="", alt_fallback=False,
                      fallback_extract_func=None, fallback_extract_func_args=None, force_non_ui_dl=False):
     success = False
-    local_dl_file = os.path.join(extract_dir, os.path.basename(urls[0]))
+    file_name = os.path.basename(urls[0])
+    local_dl_file = os.path.join(extract_dir, file_name)
 
     use_ui_downloader = settings.GetOption("ui_download")
     if not force_non_ui_dl and use_ui_downloader and websocket.UI_CONNECTED["value"] and websocket.UI_CONNECTED["websocket"] is not None:
@@ -76,7 +77,7 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
     else:
         if not alt_fallback and fallback_extract_func is None:
             try:
-                download(urls[0], folder=extract_dir, sha256=checksum, retry_max=5)
+                download(urls[0], filename=file_name, folder=extract_dir, sha256=checksum, retry_max=5)
                 if extract_format != "none":
                     with zipfile.ZipFile(local_dl_file, "r") as f:
                         f.extractall(extract_dir)
@@ -121,7 +122,8 @@ def sha256_checksum(file_path):
 
 
 def download_file_normal(url, target_path, expected_sha256=None, num_retries=3):
-    download(url, folder=target_path, sha256=expected_sha256, retry_max=num_retries)
+    file_name = os.path.basename(url)
+    download(url, filename=file_name, folder=target_path, sha256=expected_sha256, retry_max=num_retries)
 
 
 def download_file_simple(url, target_path, expected_sha256=None, num_retries=3, timeout=60):
