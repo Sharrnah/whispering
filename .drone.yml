@@ -5,6 +5,7 @@ name: build
 
 x-global-variables:
   environment: &default_environment
+    GPU_TYPE: NVIDIA
     SRCDIR: /drone/src
     DIST_DIR: ./dist/windows
 
@@ -37,12 +38,74 @@ x-upload-build-s3: &upload-build-s3
   commands:
     - WT_VERSION="$${DRONE_TAG#v}"
     - mc alias set s3_alias $${MINIO_HOST} $${MINIO_ACCESS_KEY} $${MINIO_SECRET_KEY}
-    - mc cp $${SRCDIR}$${DIST_DIR##.}/whispering-tiger$${WT_VERSION}_win.zip s3_alias/projects/whispering/
+    # NVIDIA
+    - GPU_TYPE=NVIDIA
+    - DIST_DIR="./dist/windows/nvidia"
+    - mc cp $${SRCDIR}$${DIST_DIR##.}/whispering-tiger$${WT_VERSION}_CPU-$${GPU_TYPE}_win.zip s3_alias/projects/whispering/
+    # AMD
+    - GPU_TYPE=AMD
+    - DIST_DIR="./dist/windows/amd"
+    - mc cp $${SRCDIR}$${DIST_DIR##.}/whispering-tiger$${WT_VERSION}_CPU-$${GPU_TYPE}_win.zip s3_alias/projects/whispering/
   when:
     ref:
       - refs/tags/*
   depends_on:
-    - build-distribution-windows-package
+    - build-distribution-windows-package_nvidia
+    - build-distribution-windows-package_amd
+
+
+x-distribution-windows-prepare: &distribution-windows-prepare
+  #name: build-distribution-windows-prepare
+  image: ${DRONE_REPO_LINK##https://}:win64
+  #pull: always  # make sure to update the image
+  environment:
+    <<: *default_environment
+  commands:
+    - echo "environments:"
+    - echo "$${SRCDIR}"
+    - echo "$${DIST_DIR}"
+    - cd $${SRCDIR}
+    - mkdir -p ./.cache
+    - mkdir -p ./.cache/nltk/tokenizers
+    - wget -P "./.cache/nltk/tokenizers" https://s3.libs.space:9000/ai-models/nltk/tokenizers/punkt.zip
+    - unzip -o ./.cache/nltk/tokenizers/punkt.zip -d ./.cache/nltk/tokenizers
+    - mkdir -p $${DIST_DIR}/
+    - wget -P "$${DIST_DIR}" https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full.7z
+    - 7za x $${DIST_DIR}/ffmpeg-release-full.7z -o$${DIST_DIR}
+    - rm $${DIST_DIR}/ffmpeg-release-full.7z
+    - ls $${DIST_DIR}/ffmpeg-*  # Debugging: list files to be moved
+    - mv $${DIST_DIR}/ffmpeg-* $${DIST_DIR}/ffmpeg
+  when:
+    ref:
+      - refs/tags/*
+
+
+x-build-distribution-windows-package: &build-distribution-windows-package
+# name: build-distribution-windows-package
+  image: ${DRONE_REPO_LINK##https://}:win64
+  environment:
+    <<: *default_environment
+  commands:
+    - cd $${SRCDIR}
+    - cd $${DIST_DIR}
+    - cp $${SRCDIR}/ignorelist.txt ./
+    - cp $${SRCDIR}/LICENSE ./
+    - cp -Rf $${SRCDIR}/websocket_clients ./
+    - cp -Rf $${SRCDIR}/markers ./
+    - cp -Rf $${SRCDIR}/dist_files/Plugins ./
+    - cp -Rf $${SRCDIR}/dist_files/get-device-list.bat ./
+    - cp -Rf $${SRCDIR}/dist_files/help.bat ./
+    - cp -Rf $${SRCDIR}/dist_files/.current_platform.yaml.template ./.current_platform.yaml
+    - WT_VERSION="$${DRONE_TAG#v}"
+    - sed -i "s/###VERSION###/$${WT_VERSION}/g" "./.current_platform.yaml"
+    #- zip -r -9 whispering-tiger$${WT_VERSION}_win.zip .
+    - 7z a -tzip -mx=9 -mfb=128 whispering-tiger$${WT_VERSION}_CPU-$${GPU_TYPE}_win.zip .
+  when:
+    ref:
+      - refs/tags/*
+  #depends_on:
+  #  - build-distribution-windows
+
 
 steps:
   - <<: *build_builder_image
@@ -51,77 +114,87 @@ steps:
       branch:
         - master
         - main
-  - name: build-distribution-windows-prepare
-    image: ${DRONE_REPO_LINK##https://}:win64
-    #pull: always  # make sure to update the image
+
+  # prepare build files and dependencies (NVIDIA)
+  - <<: *distribution-windows-prepare
+    name: build-distribution-windows-prepare_nvidia
     environment:
-      <<: *default_environment
-    commands:
-      - echo "environments:"
-      - echo "$${SRCDIR}"
-      - echo "$${DIST_DIR}"
-      - cd $${SRCDIR}
-      - mkdir -p ./.cache
-      - mkdir -p ./.cache/nltk/tokenizers
-      - wget -P "./.cache/nltk/tokenizers" https://s3.libs.space:9000/ai-models/nltk/tokenizers/punkt.zip
-      - unzip -o ./.cache/nltk/tokenizers/punkt.zip -d ./.cache/nltk/tokenizers
-      - mkdir -p $${DIST_DIR}/
-      - wget -P "$${DIST_DIR}" https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full.7z
-      - 7za x $${DIST_DIR}/ffmpeg-release-full.7z -o$${DIST_DIR}
-      - rm $${DIST_DIR}/ffmpeg-release-full.7z
-      - ls $${DIST_DIR}/ffmpeg-*  # Debugging: list files to be moved
-      - mv $${DIST_DIR}/ffmpeg-* $${DIST_DIR}/ffmpeg
-    when:
-      ref:
-        - refs/tags/*
-  - name: build-distribution-windows
+      GPU_TYPE: NVIDIA
+      DIST_DIR: ./dist/windows/nvidia
+  # actual build process (NVIDIA)
+  - name: build-distribution-windows_nvidia
     image: ${DRONE_REPO_LINK##https://}:win64
     environment:
       <<: *default_environment
+      GPU_TYPE: NVIDIA
+      DIST_DIR: ./dist/windows/nvidia
     when:
       ref:
         - refs/tags/*
     depends_on:
-      - build-distribution-windows-prepare
-  - name: build-distribution-windows-package
+      - build-distribution-windows-prepare_nvidia
+  # package release (NVIDIA)
+  - <<: *build-distribution-windows-package
+    name: build-distribution-windows-package_nvidia
+    environment:
+      GPU_TYPE: NVIDIA
+      DIST_DIR: ./dist/windows/nvidia
+    depends_on:
+      - build-distribution-windows_nvidia
+
+
+  # prepare build files and dependencies (AMD)
+  - <<: *distribution-windows-prepare
+    name: build-distribution-windows-prepare_amd
+    environment:
+      GPU_TYPE: AMD
+      DIST_DIR: ./dist/windows/amd
+  # actual build process (AMD)
+  - name: build-distribution-windows_amd
     image: ${DRONE_REPO_LINK##https://}:win64
     environment:
       <<: *default_environment
-    commands:
-      - cd $${SRCDIR}
-      - cd $${DIST_DIR}
-      - cp $${SRCDIR}/ignorelist.txt ./
-      - cp $${SRCDIR}/LICENSE ./
-      - cp -Rf $${SRCDIR}/websocket_clients ./
-      - cp -Rf $${SRCDIR}/markers ./
-      - cp -Rf $${SRCDIR}/dist_files/Plugins ./
-      - cp -Rf $${SRCDIR}/dist_files/get-device-list.bat ./
-      - cp -Rf $${SRCDIR}/dist_files/help.bat ./
-      - cp -Rf $${SRCDIR}/dist_files/.current_platform.yaml.template ./.current_platform.yaml
-      - WT_VERSION="$${DRONE_TAG#v}"
-      - sed -i "s/###VERSION###/$${WT_VERSION}/g" "./.current_platform.yaml"
-      #- zip -r -9 whispering-tiger$${WT_VERSION}_win.zip .
-      - 7z a -tzip -mx=9 -mfb=128 whispering-tiger$${WT_VERSION}_win.zip .
+      GPU_TYPE: AMD
+      DIST_DIR: ./dist/windows/amd
     when:
       ref:
         - refs/tags/*
     depends_on:
-      - build-distribution-windows
+      - build-distribution-windows-prepare_amd
+  # package release (AMD)
+  - <<: *build-distribution-windows-package
+    name: build-distribution-windows-package_amd
+    environment:
+      GPU_TYPE: AMD
+      DIST_DIR: ./dist/windows/amd
+    depends_on:
+      - build-distribution-windows_amd
+
+
+
   - name: build-distribution-windows-package-hash
     image: ${DRONE_REPO_LINK##https://}:win64
     environment:
       <<: *default_environment
     commands:
       - cd $${SRCDIR}
-      - cd $${DIST_DIR}
       - WT_VERSION="$${DRONE_TAG#v}"
-      - hash=$$(sha256sum whispering-tiger$${WT_VERSION}_win.zip | awk '{ print $$1 }')
-      - echo "SHA256 (WIN) = $$hash"
+      # --- nvidia
+      - GPU_TYPE=NVIDIA
+      - cd $${DIST_DIR}/nvidia
+      - hash=$$(sha256sum whispering-tiger$${WT_VERSION}_CPU-$${GPU_TYPE}_win.zip | awk '{ print $$1 }')
+      - echo "SHA256 (WIN/$$GPU_TYPE) = $$hash"
+      # --- amd
+      - GPU_TYPE=AMD
+      - cd $${DIST_DIR}/amd
+      - hash=$$(sha256sum whispering-tiger$${WT_VERSION}_CPU-$${GPU_TYPE}_win.zip | awk '{ print $$1 }')
+      - echo "SHA256 (WIN$$GPU_TYPE) = $$hash"
     when:
       ref:
         - refs/tags/*
     depends_on:
-      - build-distribution-windows-package
+      - build-distribution-windows-package_nvidia
+      - build-distribution-windows-package_amd
   - <<: *upload-build-s3
     name: upload-s3
     environment:
