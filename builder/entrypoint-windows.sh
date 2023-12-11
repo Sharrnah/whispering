@@ -43,10 +43,17 @@ cd $WORKDIR
 
 echo "$@"
 
+# Environment variable GPU_TYPE should be set to either "NVIDIA" or "AMD"
+GPU_TYPE=${GPU_TYPE:-"NVIDIA"}
+
 if [[ "$@" == "" ]]; then
     if [ -f requirements.txt ]; then
         # use --no-cache-dir to try to reduce memory usage. (see https://github.com/pypa/pip/issues/2984)
-        pip install --no-cache-dir -r requirements.txt
+        if [ "$GPU_TYPE" == "NVIDIA" ]; then
+          pip install --no-cache-dir -r requirements.txt  -r requirements.nvidia.txt
+        elif [ "$GPU_TYPE" == "AMD" ]; then
+          pip install --no-cache-dir -r requirements.txt  -r requirements.amd.txt
+        fi
     fi # [ -f requirements.txt ]
 
     pyinstaller --clean -y --dist ${DIST_DIR} --workpath /tmp *.spec

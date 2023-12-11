@@ -105,6 +105,9 @@ ENV DIST_DIR=${DIST_DIR:-./dist/windows}
 # install pyinstaller
 RUN /usr/bin/pip install pyinstaller==$PYINSTALLER_VERSION
 
+# install ninja builder
+#RUN /usr/bin/pip install ninja
+
 # put the src folder inside wine
 RUN mkdir /src/ && ln -s /src /wine/drive_c/src
 VOLUME /src/
