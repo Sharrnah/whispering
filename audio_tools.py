@@ -176,7 +176,15 @@ def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target
     :return: A NumPy array containing the resampled audio data.
     """
     # Determine the data type for audio data
-    audio_data_dtype = np.int16 if dtype == "int16" else np.float32
+    audio_data_dtype = np.float32
+    if dtype == "int8":
+        audio_data_dtype = np.int8
+    elif dtype == "int16":
+        audio_data_dtype = np.int16
+    elif dtype == "int32":
+        audio_data_dtype = np.int32
+    elif dtype == "float32":
+        audio_data_dtype = np.float32
 
     # Convert the audio chunk to a numpy array
     if isinstance(audio_chunk, torch.Tensor):
@@ -658,11 +666,29 @@ def load_wav_to_bytes(wav_path, target_sample_rate=16000):
         params = wave_file.getparams()
         audio_bytes = wave_file.readframes(params.nframes)
         # get audio sample width
-        audio_sample_width = wave_file.getframerate()
+        audio_sample_rate = wave_file.getframerate()
+        audio_sample_width = wave_file.getsampwidth()
+        format_type = wave_file.getcomptype()
         channels = wave_file.getnchannels()
 
-    return resample_audio(audio_bytes, audio_sample_width, target_sample_rate, target_channels=-1,
-                          is_mono=channels == 1, dtype="int16")
+        dtype = "int16"
+        # Determine the dtype based on sample width and format type
+        if audio_sample_width == 1:
+            dtype = "int8"
+        elif audio_sample_width == 2:
+            dtype = "int16"
+        elif audio_sample_width == 4:
+            if format_type == 'NONE':
+                dtype = "int32"
+            elif format_type == 'FLOAT':
+                dtype = "float32"
+            else:
+                print("Unsupported audio format for sample_with=4: " + str(format_type))
+        else:
+            print("Unsupported audio sample width: " + str(audio_sample_width))
+
+    return resample_audio(audio_bytes, audio_sample_rate, target_sample_rate, target_channels=-1,
+                          is_mono=channels == 1, dtype=dtype)
 
 
 def numpy_array_to_wav_bytes(audio: np.ndarray, sample_rate: int = 22050) -> BytesIO:
@@ -738,7 +764,7 @@ class AudioStreamer:
 
     def init_stream(self):
         with self.lock:
-            self.p = pyaudio.PyAudio()
+            self.p = pyaudio_pool.acquire()
             self.target_sample_rate = get_closest_sample_rate_of_device(self.device, self.recorded_sample_rate)
             self.stream = self.p.open(format=self.format, channels=self.playback_channels, rate=int(self.target_sample_rate), output=True, output_device_index=self.device)
             self.started = False
@@ -783,7 +809,8 @@ class AudioStreamer:
                 self.stream.close()
 
             if self.p:
-                self.p.terminate()
+                pyaudio_pool.release(self.p)
+                pyaudio_pool.manage_unused()
 
             self.playback_thread = None
 
