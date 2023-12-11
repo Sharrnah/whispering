@@ -3,8 +3,8 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND noninteractive
 
 ARG WINE_VERSION=winehq-stable
-ARG PYTHON_VERSION=3.10.10
-ARG PYINSTALLER_VERSION=5.13
+ARG PYTHON_VERSION=3.11.6
+ARG PYINSTALLER_VERSION=6.3
 
 # we need wine for this all to work, so we'll use the PPA
 RUN set -x \
