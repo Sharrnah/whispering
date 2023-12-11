@@ -7,7 +7,8 @@ librosa==0.10.1
 #transformers==4.33.2
 #transformers @ https://github.com/Sharrnah/transformers/archive/refs/heads/add_seamless-m4t.zip
 #transformers @ https://github.com/huggingface/transformers/archive/84724efd101af52ed3d6af878e41ff8fd651a9cc.zip
-transformers==4.35.0
+#transformers==4.35.0
+transformers @ https://github.com/huggingface/transformers/archive/235e5d4991e8a0984aa78db91087b49622c7740e.zip
 
 tensorboardX==2.6.2.2
 accelerate==0.21.0
@@ -22,12 +23,9 @@ sounddevice==0.4.6
 SpeechRecognition==3.10.0
 pydub>=0.25.1
 git+https://github.com/openai/whisper.git
-#--extra-index-url https://download.pytorch.org/whl/cu117
---extra-index-url https://download.pytorch.org/whl/nightly/cu118
-torch==2.2.0.dev20230927+cu118
-torchaudio==2.2.0.dev20230927+cu118
-torchvision==0.17.0.dev20230927+cu118
 #triton @ https://github.com/PrashantSaikia/Triton-for-Windows/raw/84739dfcb724845b301fbde6a738e15c3ed25905/triton-2.0.0-cp310-cp310-win_amd64.whl
+#triton @ https://s3.libs.space:9000/projects/wheels/triton-2.1.0-cp310-cp310-win_amd64.whl
+triton @ https://s3.libs.space:9000/projects/wheels/triton-2.1.0-cp311-cp311-win_amd64.whl
 soundfile==0.12.1
 python-osc>=1.8.0
 websockets>=10.4
