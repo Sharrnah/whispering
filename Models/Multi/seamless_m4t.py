@@ -2,7 +2,7 @@ import os
 
 import scipy
 #from transformers import AutoProcessor, SeamlessM4TModel, SeamlessM4TConfig
-from transformers import AutoProcessor, SeamlessM4TModel
+from transformers import AutoProcessor, SeamlessM4TModel, SeamlessM4Tv2Model
 
 from pathlib import Path
 import torch
@@ -139,6 +139,14 @@ MODEL_LINKS = {
         ],
         "checksum": "0ba6b31c223d4cebdf865e42d04a3b29b891f3286dd0550bcc7eb5c7f410d6eb"
     },
+    "large-v2": {
+        "urls": [
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/seamless-m4t/large-v2.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/seamless-m4t/large-v2.zip",
+            "https://s3.libs.space:9000/ai-models/seamless-m4t/large-v2.zip",
+        ],
+        "checksum": "36d0860601cc0d7d0dd758f1a3e8e7a8300dea498e1b83fa838ec7ff9b6421d4"
+    },
 }
 
 
@@ -183,7 +191,10 @@ class SeamlessM4T(metaclass=SingletonMeta):
     @staticmethod
     def needs_download(model: str):
         model_path = Path(model_cache_path / model)
-        pretrained_lang_model_file = Path(model_path / "pytorch_model.bin")
+        if model.endswith("-v2"):
+            pretrained_lang_model_file = Path(model_path / "model-00001-of-00002.safetensors")
+        else:
+            pretrained_lang_model_file = Path(model_path / "pytorch_model.bin")
         if not Path(model_path).exists() or not pretrained_lang_model_file.is_file():
             return True
         return False
@@ -192,7 +203,10 @@ class SeamlessM4T(metaclass=SingletonMeta):
     def download_model(model: str):
         os.makedirs(model_cache_path, exist_ok=True)
         model_path = Path(model_cache_path / model)
-        pretrained_lang_model_file = Path(model_path / "pytorch_model.bin")
+        if model.endswith("-v2"):
+            pretrained_lang_model_file = Path(model_path / "model-00001-of-00002.safetensors")
+        else:
+            pretrained_lang_model_file = Path(model_path / "pytorch_model.bin")
         if not Path(model_path).exists() or not pretrained_lang_model_file.is_file():
             print("downloading Seamless M4T...")
             if not downloader.download_extract(MODEL_LINKS[model]["urls"],
@@ -201,23 +215,33 @@ class SeamlessM4T(metaclass=SingletonMeta):
                 print("Model download failed")
 
     def load_model(self, model_size='medium'):
-        self.download_model(model_size)
+        #self.download_model(model_size)
 
         model_path = Path(model_cache_path / model_size)
 
         #configuration = SeamlessM4TConfig()
 
         print(f"Seamless-M4T {model_size} is Loading to {self.device} using {self.compute_type_name} precision...")
-        # facebook/hf-seamless-m4t-medium
+        # facebook/seamless-m4t-medium
+
         self.processor = AutoProcessor.from_pretrained(str(model_path.resolve()),
                                                        torch_dtype=self.precision)
-        self.model = SeamlessM4TModel.from_pretrained(str(model_path.resolve()),
-                                                      torch_dtype=self.precision,
-                                                      ignore_mismatched_sizes=True,
-                                                      low_cpu_mem_usage=True,
-                                                      load_in_8bit=self.load_in_8bit,
-                                                      #config=configuration)
-                                                      )
+        if model_size.endswith("-v2"):
+            self.model = SeamlessM4Tv2Model.from_pretrained(str(model_path.resolve()),
+                                                            torch_dtype=self.precision,
+                                                            ignore_mismatched_sizes=True,
+                                                            low_cpu_mem_usage=True,
+                                                            load_in_8bit=self.load_in_8bit,
+                                                            #config=configuration)
+                                                            )
+        else:
+            self.model = SeamlessM4TModel.from_pretrained(str(model_path.resolve()),
+                                                          torch_dtype=self.precision,
+                                                          ignore_mismatched_sizes=True,
+                                                          low_cpu_mem_usage=True,
+                                                          load_in_8bit=self.load_in_8bit,
+                                                          #config=configuration)
+                                                          )
 
         if not self.load_in_8bit:
             self.model.to(self.device)
@@ -250,7 +274,7 @@ class SeamlessM4T(metaclass=SingletonMeta):
                                             text_num_beams=beam_size, speech_do_sample=True,
                                             return_intermediate_token_ids=True,
                                             generate_speech=generate_speech,
-                                            spkr_id=0
+                                            #spkr_id=0
                                             )
 
         if generate_speech:
