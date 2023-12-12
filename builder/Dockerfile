@@ -103,7 +103,7 @@ ENV SRCDIR=${SRCDIR:-/src}
 ENV DIST_DIR=${DIST_DIR:-./dist/windows}
 
 # install pyinstaller
-RUN /usr/bin/pip install pyinstaller==$PYINSTALLER_VERSION
+RUN /usr/bin/pip install wheel pyinstaller==$PYINSTALLER_VERSION
 
 # install ninja builder
 #RUN /usr/bin/pip install ninja
