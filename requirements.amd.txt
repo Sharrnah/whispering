@@ -1,5 +1,10 @@
 #https://download.pytorch.org/whl/rocm5.2
---extra-index-url https://download.pytorch.org/whl/nightly
-torch==2.2.0.dev20231120+rocm5.7
-torchaudio==2.2.0.dev20231120+rocm5.7
-torchvision==0.17.0.dev20231120+rocm5.7
+#--extra-index-url https://download.pytorch.org/whl/nightly
+#torch==2.2.0.dev20231120+rocm5.7
+#torchaudio==2.2.0.dev20231120+rocm5.7
+#torchvision==0.17.0.dev20231120+rocm5.7
+--extra-index-url https://download.pytorch.org/whl/nightly/cpu
+torch==2.2.0.dev20231211+cpu
+torchaudio==2.2.0.dev20231211+cpu
+torchvision==0.17.0.dev20231211+cpu
+torch-directml

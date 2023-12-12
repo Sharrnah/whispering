@@ -50,9 +50,9 @@ if [[ "$@" == "" ]]; then
     if [ -f requirements.txt ]; then
         # use --no-cache-dir to try to reduce memory usage. (see https://github.com/pypa/pip/issues/2984)
         if [ "$GPU_TYPE" == "NVIDIA" ]; then
-          pip install --no-cache-dir -r requirements.txt  -r requirements.nvidia.txt
+          pip install --no-cache-dir -r requirements.txt  -r requirements.nvidia.txt --no-build-isolation
         elif [ "$GPU_TYPE" == "AMD" ]; then
-          pip install --no-cache-dir -r requirements.txt  -r requirements.amd.txt
+          pip install --no-cache-dir -r requirements.txt  -r requirements.amd.txt --no-build-isolation
         fi
     fi # [ -f requirements.txt ]
 

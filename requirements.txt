@@ -69,7 +69,7 @@ grpcio==1.59.3
 fairseq @ https://github.com/Sharrnah/fairseq/releases/download/v0.12.4/fairseq-0.12.4-cp311-cp311-win_amd64.whl
 faiss-cpu==1.7.3
 praat-parselmouth>=0.4.2
-pyworld==0.3.2
+pyworld==0.3.4
 torchcrepe==0.0.22
 
 #faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/heads/master.zip
