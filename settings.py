@@ -127,7 +127,7 @@ TRANSLATE_SETTINGS = {
     # TTS settings
     "tts_enabled": True,  # enable TTS
     "tts_ai_device": "cpu",  # can be "auto", "cuda" or "cpu".
-    "tts_answer": True,  # send whisper results to TTS engine
+    "tts_answer": False,  # send whisper results to TTS engine
     "tts_model": ["en", "v3_en"],  # TTS language and model to use
     "tts_voice": "en_0",  # TTS voice (one of silero tts voices, or "last" to use last used voice)
     "tts_prosody_rate": "",  # TTS voice speed. Can be "x-slow", "slow", "medium", "fast", "x-fast" or "" for default.
@@ -145,7 +145,9 @@ TRANSLATE_SETTINGS = {
     "plugin_current_timer": 0.0
 }
 
-NON_PERSISTENT_SETTINGS = ["stt_enabled", "whisper_languages", "lang_swap", "verbose",
+NON_PERSISTENT_SETTINGS = ["stt_enabled",
+                           # "txt_translate", "tts_answer", "osc_auto_processing_enabled",
+                           "whisper_languages", "lang_swap", "verbose",
                            "transl_result_textarea_savetts_voice", "transl_result_textarea_sendtts_download",
                            "plugin_timer_stopped", "plugin_current_timer", "websocket_final_messages",
                            "device_default_in_index", "device_default_out_index", "ui_download"]
