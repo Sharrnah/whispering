@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-time Translation/Transcription Overlay</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      font-size: 24px;
+      background-color: rgba(0, 0, 0, 0);
+      color: #ffffff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      height: 100vh;
+      overflow: hidden;
+    }
+    body.mirror {
+      transform: scaleX(-1);
+    }
+    .table-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      position: fixed;
+      bottom: 0;
+      max-height: 100vh;
+      overflow-y: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 5px 10px; /* Horizontal and vertical spacing */
+    }
+    th, td {
+      padding: 10px;
+      border-radius: 5px;
+      background-color: rgba(0, 0, 0, 0.5);
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background-color: rgba(0, 0, 0, 0.7);
+    }
+    .sticky-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      z-index: 9;
+    }
+  </style>
+</head>
+<body>
+<button onclick="exportTableToCSV('translations.csv')">Export to CSV</button>
+<div class="table-container">
+  <table id="messages_table">
+    <thead>
+      <tr class="sticky-header">
+        <th id="source_language">Source Language</th>
+        <th id="target_language">Target Language</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Table data will go here -->
+    </tbody>
+  </table>
+</div>
+
+<script>
+  let socket;
+  let connectionAttempts = 0;
+
+  function getParameter(name) {
+    let urlString = window.location.href;
+    let paramString = urlString.split('?')[1];
+    let queryString = new URLSearchParams(paramString);
+    for(let pair of queryString.entries()) {
+      if (name === pair[0]) {
+        return pair[1];
+      }
+    }
+    return undefined;
+  }
+
+  const ws_server = getParameter("ws_server") || 'ws://127.0.0.1:5000';
+  const mirror = getParameter("mirror");
+
+  function onOpen(event) {
+    console.log('WebSocket connection established.');
+    if (mirror) {
+      document.body.className = 'mirror';
+    }
+  }
+
+  function onMessage(event) {
+    const message = JSON.parse(event.data);
+
+    if (message.type === 'processing_data') {
+      // Check if the temporary processing element exists
+      let processingElem = document.getElementById('processing_data');
+      if (!processingElem) {
+        // Create the processing element if it doesn't exist
+        processingElem = document.createElement('tr');
+        processingElem.id = 'processing_data';
+        processingElem.innerHTML = `<td colspan="2">${message.data}</td>`;
+
+        const table = document.getElementById('messages_table');
+        table.appendChild(processingElem);
+      } else {
+        // Update existing processing element
+        processingElem.innerHTML = `<td colspan="2">${message.data}</td>`;
+      }
+    } else if (message.type === 'transcript') {
+      // Remove the processing data element if it exists
+      let processingElem = document.getElementById('processing_data');
+      if (processingElem) {
+        processingElem.parentNode.removeChild(processingElem);
+      }
+
+      const sourceLanguage = message.language ? message.language : 'Unknown';
+      const targetLanguage = message.txt_translation_target ? message.txt_translation_target : 'Unknown';
+
+      // Update headers if language changes
+      document.getElementById('source_language').innerText = sourceLanguage;
+      document.getElementById('target_language').innerText = targetLanguage;
+
+      // Create a new table row
+      const row = document.createElement('tr');
+
+      // Create and append transcription cell
+      const transcriptionCell = document.createElement('td');
+      transcriptionCell.innerText = message.text || '';
+      row.appendChild(transcriptionCell);
+
+      // Create and append translation cell
+      const translationCell = document.createElement('td');
+      translationCell.innerText = message.txt_translation || '';
+      row.appendChild(translationCell);
+
+      // Append the row to the table
+      const table = document.getElementById('messages_table');
+      table.appendChild(row);
+    }
+    // Scroll to the bottom of the table container
+    const tableContainer = document.querySelector('.table-container');
+    tableContainer.scrollTop = tableContainer.scrollHeight;
+  }
+
+  function exportTableToCSV(filename) {
+    let csv = [];
+    const rows = document.querySelectorAll("table tr");
+
+    for (let i = 0; i < rows.length; i++) {
+      let row = [], cols = rows[i].querySelectorAll("td, th");
+
+      for (let j = 0; j < cols.length; j++) {
+        // Clean the text and escape double quotes with another double quote
+        let text = cols[j].innerText.replace(/"/g, '""');
+        row.push('"' + text + '"'); // Surround each cell with quotes
+      }
+
+      csv.push(row.join(",")); // Join each column with a comma
+    }
+
+    // Combine each row with a newline character
+    csv = csv.join("\n");
+
+    // Create a link and trigger a download
+    var link = document.createElement("a");
+    link.style.display = 'none';
+    link.setAttribute("target", "_blank");
+    link.setAttribute("href", "data:text/csv;charset=utf-8," + encodeURIComponent(csv));
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function onClose(event) {
+    console.log('WebSocket closed:', event);
+    connectionAttempts++;
+    setTimeout(connectWebSocket, 5000);
+  }
+
+  function onError(event) {
+    console.error('WebSocket error:', event);
+    connectionAttempts++;
+    setTimeout(connectWebSocket, 5000);
+  }
+
+  function connectWebSocket() {
+    if (socket) {
+      socket.removeEventListener('open', onOpen);
+      socket.removeEventListener('message', onMessage);
+      socket.removeEventListener('close', onClose);
+      socket.removeEventListener('error', onError);
+    }
+
+    socket = new WebSocket(ws_server);
+
+    socket.addEventListener('open', onOpen);
+    socket.addEventListener('message', onMessage);
+    socket.addEventListener('close', onClose);
+    socket.addEventListener('error', onError);
+  }
+
+  connectWebSocket();
+</script>
+</body>
+</html>
