@@ -42,6 +42,10 @@
       vertical-align: top;
       text-align: left;
     }
+    tr > td + td {
+      cursor: pointer;
+    }
+
     th {
       background-color: rgba(0, 0, 0, 0.7);
     }
@@ -78,6 +82,8 @@
   let socket;
   let connectionAttempts = 0;
 
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
   function getParameter(name) {
     let urlString = window.location.href;
     let paramString = urlString.split('?')[1];
@@ -88,6 +94,18 @@
       }
     }
     return undefined;
+  }
+
+  function playWave(base64binary) {
+    let contentType = 'audio/wav';
+    let url = "data:" + contentType + ";base64," + base64binary;
+
+    // Create an audio element
+    let audio = new Audio(url);
+
+    // Play the audio
+    audio.play()
+            .catch(e => console.error("Error playing audio:", e));
   }
 
   const ws_server = getParameter("ws_server") || 'ws://127.0.0.1:5000';
@@ -143,11 +161,20 @@
       // Create and append translation cell
       const translationCell = document.createElement('td');
       translationCell.innerText = message.txt_translation || '';
+
+      // add TTS click event
+      translationCell.addEventListener('click', function(event) {
+        sendTTSTask(event.target, false, true)
+      });
+
       row.appendChild(translationCell);
 
       // Append the row to the table
       const table = document.getElementById('messages_table');
       table.appendChild(row);
+    } else if (message.type === "tts_result" || message.type === "tts_save") {
+        playWave(message.wav_data);
+        return;
     }
     // Scroll to the bottom of the table container
     const tableContainer = document.querySelector('.table-container');
@@ -182,6 +209,16 @@
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  }
+
+  function sendTTSTask(element, send_to_device, download) {
+    let text = element.innerText;
+    if (text === "") {
+      textarea_el.focus();
+      return;
+    }
+    let sendData = { type: "tts_req", value:{text: text, to_device: send_to_device, download: download} };
+    socket.send(JSON.stringify(sendData));
   }
 
   function onClose(event) {
