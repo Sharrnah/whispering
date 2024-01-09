@@ -66,7 +66,7 @@ def save_transcriptions(file_path: str):
         csv_writer = csv.writer(transcription_file, quoting=csv.QUOTE_MINIMAL)
 
         # Write headers if you want (optional)
-        #csv_writer.writerow(["Start Time", "End Time", "Transcription", "Translation"])
+        # csv_writer.writerow(["Start Time", "End Time", "Transcription", "Translation"])
 
         for (start_time, end_time), entry in transcriptions_list.items():
             transcription = entry["transcription"]
@@ -149,7 +149,8 @@ def remove_repetitions(text, language='english'):
             sentence_split_language = src_lang
         if sentence_split_language == "":
             sentence_split_language = "english"
-        return sentence_split.remove_repeated_sentences(text, language=sentence_split_language, max_repeat=max_sentence_repetition)
+        return sentence_split.remove_repeated_sentences(text, language=sentence_split_language,
+                                                        max_repeat=max_sentence_repetition)
     return text
 
 
@@ -216,10 +217,10 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
         # send realtime processing data to websocket
         if not final_audio and predicted_text.strip() != "":
             websocket.BroadcastMessage(json.dumps({"type": "processing_data", "data": predicted_text}))
-            #threading.Thread(
+            # threading.Thread(
             #    target=websocket.BroadcastMessage,
             #    args=(json.dumps({"type": "processing_data", "data": predicted_text}),)
-            #).start()
+            # ).start()
 
         # send regular message
         send_message(predicted_text, result, final_audio)
@@ -358,10 +359,10 @@ def send_message(predicted_text, result_obj, final_audio):
     # Send to Websocket
     if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and final_audio:
         websocket.BroadcastMessage(json.dumps(result_obj))
-        #threading.Thread(
+        # threading.Thread(
         #    target=websocket.BroadcastMessage,
         #    args=(json.dumps(result_obj),)
-        #).start()
+        # ).start()
 
     # Send to TTS on final audio
     if final_audio:

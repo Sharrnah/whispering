@@ -863,7 +863,7 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
         print(f"{model} is an English-only model. only English speech is supported.")
         settings.SetOption("whisper_languages", ({"code": "", "name": "Auto"}, {"code": "en", "name": "English"},))
         settings.SetOption("current_language", "en")
-    elif "_whisper" in settings.GetOption("stt_type"):
+    elif "_whisper" in settings.GetOption("stt_type") or "whisper_" in settings.GetOption("stt_type"):
         settings.SetOption("whisper_languages", audioprocessor.whisper_get_languages())
     elif settings.GetOption("stt_type") == "seamless_m4t":
         settings.SetOption("whisper_languages", audioprocessor.seamless_m4t_get_languages())
@@ -1000,8 +1000,13 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
 
     vad_enabled = settings.SetOption("vad_enabled",
                                      settings.GetArgumentSettingFallback(ctx, "vad_enabled", "vad_enabled"))
-    vad_thread_num = settings.SetOption("vad_thread_num",
-                                        settings.GetArgumentSettingFallback(ctx, "vad_thread_num", "vad_thread_num"))
+    try:
+        vad_thread_num = int(float(settings.SetOption("vad_thread_num",
+                                        settings.GetArgumentSettingFallback(ctx, "vad_thread_num", "vad_thread_num"))))
+    except ValueError as e:
+        print("Error assigning vad_thread_num. using 1")
+        print(e)
+        vad_thread_num = int(1)
 
     if vad_enabled:
         torch.hub.set_dir(str(Path(cache_vad_path).resolve()))
@@ -1051,7 +1056,6 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
                 except Exception as e:
                     print("Error loading vad model.")
                     print(e)
-                    return False
 
         # num_samples = 1536
         vad_frames_per_buffer = int(settings.SetOption("vad_frames_per_buffer",
@@ -1149,12 +1153,43 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
 
                 audio_data = audio.get_wav_data()
 
+                silence_cutting_enabled = settings.GetOption("silence_cutting_enabled")
+                silence_offset = settings.GetOption("silence_offset")
+                max_silence_length = settings.GetOption("max_silence_length")
+                keep_silence_length = settings.GetOption("keep_silence_length")
+
+                normalize_enabled = settings.GetOption("normalize_enabled")
+                normalize_lower_threshold = settings.GetOption("normalize_lower_threshold")
+                normalize_upper_threshold = settings.GetOption("normalize_upper_threshold")
+                normalize_gain_factor = settings.GetOption("normalize_gain_factor")
+                block_size_samples = int(whisper_audio.SAMPLE_RATE * 0.400)
+                # normalize audio (and make sure it's longer or equal the default block size by pyloudnorm)
+                if normalize_enabled and len(audio_data) >= block_size_samples:
+                    audio_data = audio_tools.convert_audio_datatype_to_float(np.frombuffer(audio_data, np.int16))
+                    audio_data, lufs = audio_tools.normalize_audio_lufs(
+                        audio_data, whisper_audio.SAMPLE_RATE, normalize_lower_threshold, normalize_upper_threshold,
+                        normalize_gain_factor, verbose=verbose
+                    )
+                    audio_data = audio_tools.convert_audio_datatype_to_integer(audio_data, np.int16)
+                    audio_data = audio_data.tobytes()
+
+                # remove silence from audio
+                if silence_cutting_enabled:
+                    audio_data_np = np.frombuffer(audio_data, np.int16)
+                    if len(audio_data_np) >= block_size_samples:
+                        audio_data = audio_tools.remove_silence_parts(
+                            audio_data_np, whisper_audio.SAMPLE_RATE,
+                            silence_offset=silence_offset, max_silence_length=max_silence_length, keep_silence_length=keep_silence_length,
+                            verbose=verbose
+                        )
+                        audio_data = audio_data.tobytes()
+
                 # denoise audio
                 if settings.GetOption("denoise_audio") and audio_enhancer is not None:
-                    wavefiledata = audio_enhancer.enhance_audio(wavefiledata).tobytes()
+                    audio_data = audio_enhancer.enhance_audio(audio_data).tobytes()
 
                 # add audio data to the queue
-                audioprocessor.q.put({'time': time.time_ns(), 'data': audio_data, 'final': True})
+                audioprocessor.q.put({'time': time.time_ns(), 'data': audio_bytes_to_wav(audio_data), 'final': True})
 
                 # set typing indicator for VRChat and websocket clients
                 typing_indicator_thread = threading.Thread(target=typing_indicator_function,
