@@ -11,7 +11,7 @@ import Utilities
 DEBOUNCE_TIME = 1.5  # 1.5 second, adjust as necessary
 _save_timer = None
 
-SETTINGS_PATH = Path(Path.cwd() / 'settings.yaml')
+SETTINGS_PATH = Path(Path.cwd() / "Profiles" / 'settings.yaml')
 
 TRANSLATE_SETTINGS = {
     "process_id": 0,  # the process id of the running instance
@@ -30,6 +30,8 @@ TRANSLATE_SETTINGS = {
     # ocr settings
     "ocr_lang": "en",  # language for OCR image to text recognition.
     "ocr_window_name": "VRChat",  # window name for OCR image to text recognition.
+    "ocr_txt_src_lang": "auto",  # (internal setting for ocr text translation)
+    "ocr_txt_trg_lang": "eng_Latn",  # (internal setting for ocr text translation)
 
     # audio settings
     "audio_api": "MME",  # The name of the audio API. (MME, DirectSound, WASAPI)
