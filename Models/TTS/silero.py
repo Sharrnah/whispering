@@ -419,8 +419,8 @@ class Silero:
 
             # call custom plugin event method
             plugin_audio = Plugins.plugin_custom_event_call('silero_tts_after_audio', {'audio': audio})
-            if plugin_audio is not None:
-                audio = plugin_audio
+            if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
+                audio = plugin_audio['audio']
 
         except Exception as e:
             return None, None

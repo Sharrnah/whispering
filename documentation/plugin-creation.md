@@ -75,14 +75,14 @@ The function names have the form of `on_{event_name}_call`.
 
 `event_name` should be unique and self explaining.
 
-The function needs to return either `None` if something failed or should be skipped,
+The function needs to return `None` if something failed or should be skipped,
 or the `data_obj` again with your necessary changes to the object.
 
 As an example the call from the Silero TTS:
 ```py
 plugin_audio = Plugins.plugin_custom_event_call('silero_tts_after_audio', {'audio': audio})
 if plugin_audio is not None:
-    audio = plugin_audio
+    audio = plugin_audio['audio']
 ```
 
 The called function in the Plugin looks like this:
