@@ -34,6 +34,7 @@ The format of the version line can start with `Version: `, `Version `, `V`, `V: 
 | `tts(self, text, device_index, websocket_connection=None, download=False)`          | Optional    | is called when the TTS engine is about to play a result, except when called by the sst engine.<br>_if you want to play a sound when the Speech-to-Text engine returns a result, you should do it in the `stt` method as well._                                                                                   |
 | `sts(self, wavefiledata, sample_rate)`                                              | Optional    | is called when a recording is finished (which is sent to the Speech-to-Text model). This function gets the audio recording to be processed by the plugin.                                                                                                                                                        |
 | `text_translate(self, text, from_code, to_code) -> tuple (txt, from_lang, to_lang)` | Optional    | is called when a translation is requested and no included translator is available.<br>_Must return a tuple of translation_text, from_lang_code, to_lang_code._                                                                                                                                                   |
+| `on_{event_name}_call(self, data_obj) -> dict (data_obj)`                           | Optional    | is called when a custom plugin event is called via `Plugins.plugin_custom_event_call(event_name, data_obj)`. See [Custom Plugin events](#Custom-Plugin-events) for more info.                                                                                                                                    |
 
 ## Helper methods
 
@@ -67,6 +68,43 @@ The following structs are available:
 - `{"type": "file_save", "accept": ".npz", "value": "last_prompt.npz"}` - A file save dialog (accept can be any file extension or a comma separated list of file extensions)
 - `{"type": "folder_open", "accept": "", "value": ""}` - A folder open dialog
 - `{"type": "dir_open", "accept": "", "value": ""}` - Alias for a folder open dialog
+
+## Custom Plugin events
+You can use event calls in plugins using `Plugins.plugin_custom_call(event_name, data_obj)`.
+The function names have the form of `on_{event_name}_call`.
+
+`event_name` should be unique and self explaining.
+
+The function needs to return either `None` if something failed or should be skipped,
+or the `data_obj` again with your necessary changes to the object.
+
+As an example the call from the Silero TTS:
+```py
+plugin_audio = Plugins.plugin_custom_event_call('silero_tts_after_audio', {'audio': audio})
+if plugin_audio is not None:
+    audio = plugin_audio
+```
+
+The called function in the Plugin looks like this:
+```py
+def on_silero_tts_after_audio_call(self, data_obj):
+    if self.is_enabled(False) and self.get_plugin_setting("voice_change_source") == CONSTANTS["SILERO_TTS"]:
+        audio = data_obj['audio']
+        # doing stuff
+        data_obj['audio'] = audio
+        return data_obj
+    return None
+```
+
+Before calling Events from other Plugins, make sure all Plugins are already loaded. (Should not be called in `__init__`).
+
+Make sure to check if the Event should be callable. (Is Plugin enabled? Are the plugin settings configured properly? ...). Otherwise return `None`.
+
+### List of core plugin events
+
+| Function Name                            | Description                                                                                                                     |
+|------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| on_silero_tts_after_audio_call(data_obj) | Called after the Included Silero TTS generated audio. Expects the `audio` key in the `data_obj` <br> (audio as Pytorch Tensor). |
 
 
 ## Example plugin
@@ -117,7 +155,7 @@ class ExamplePlugin(Plugins.Base):
         else:
             print(self.__class__.__name__ + " is disabled")
 
-    # OPTIONAL. called every x seconds (defined in plugin_timer)
+    ## OPTIONAL. called every x seconds (defined in plugin_timer)
     def timer(self):
         # get the settings from the global app settings
         osc_ip = settings.GetOption("osc_ip")
@@ -133,36 +171,36 @@ class ExamplePlugin(Plugins.Base):
                             convert_ascii=False)
         pass
 
-    # OPTIONAL. called when the STT engine returns a result
+    ## OPTIONAL. called when the STT engine returns a result
     def stt(self, text, result_obj):
         if self.is_enabled():
             print("Plugin Example")
             print(result_obj['language'])
         return
 
-    # OPTIONAL. only called when the STT engine returns an intermediate live result
+    ## OPTIONAL. only called when the STT engine returns an intermediate live result
     def stt_intermediate(self, text, result_obj):
         if self.is_enabled():
             print("Plugin Example")
             print(result_obj['language'])
         return
 
-    # OPTIONAL. called when the "send TTS" function is called
+    ## OPTIONAL. called when the "send TTS" function is called
     def tts(self, text, device_index, websocket_connection=None, download=False):
         return
     
-    # OPTIONAL - called when audio is finished recording and the audio is sent to the STT model
+    ## OPTIONAL - called when audio is finished recording and the audio is sent to the STT model
     def sts(self, wavefiledata, sample_rate):
         return
 
-    # OPTIONAL - called when translation is requested and no other translator is selected. must return a tuple consisting of text, from_code, to_code.
+    ## OPTIONAL - called when translation is requested and no other translator is selected. must return a tuple consisting of text, from_code, to_code.
     def text_translate(self, text, from_code, to_code) -> tuple:
         return text, from_code, to_code
     
-    # OPTIONAL - called when a websocket message is received.
-    # formats are: (where 'ExamplePlugin' is the plugin class name)
-    # {"name": "ExamplePlugin", "type": "plugin_button_press", "value": "button_name"}
-    # {"name": "ExamplePlugin", "type": "plugin_custom_event", "value": []}
+    ## OPTIONAL - called when a websocket message is received.
+    ## formats are: (where 'ExamplePlugin' is the plugin class name)
+    ## {"name": "ExamplePlugin", "type": "plugin_button_press", "value": "button_name"}
+    ## {"name": "ExamplePlugin", "type": "plugin_custom_event", "value": []}
     def on_event_received(self, message, websocket_connection=None):
         if "type" not in message:
             return
@@ -174,11 +212,17 @@ class ExamplePlugin(Plugins.Base):
                 print("custom event received")
         pass
     
-    # OPTIONAL
+    ## OPTIONAL
     def on_enable(self):
         pass
     
-    # OPTIONAL
+    ## OPTIONAL
     def on_disable(self):
         pass
+
+    ## OPTIONAL - custom event call function.
+    # def on_{event_name}_call(self, data_obj):
+    #     if self.is_enabled(False):
+    #         return data_obj
+    # return None
 ```

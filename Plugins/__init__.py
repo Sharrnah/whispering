@@ -173,3 +173,13 @@ def get_plugin(class_name):
         if plugin_inst.__class__.__name__ == class_name:
             return plugin_inst  # return plugin instance
     return None
+
+
+def plugin_custom_event_call(event_name, data_obj):
+    plugin_event_name = event_name
+    for plugin_inst in plugins:
+        call_func_name = 'on_'+plugin_event_name+'_call'
+        if hasattr(plugin_inst, call_func_name):
+            data_obj = getattr(plugin_inst, call_func_name)(data_obj)
+            return data_obj
+    return None

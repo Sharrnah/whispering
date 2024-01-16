@@ -6,6 +6,7 @@ import os
 
 from functools import partial
 
+import Plugins
 import audio_tools
 import downloader
 import websocket
@@ -415,6 +416,12 @@ class Silero:
                                          voice_path=voice_path,
                                          put_accent=True,
                                          put_yo=True)
+
+            # call custom plugin event method
+            plugin_audio = Plugins.plugin_custom_event_call('silero_tts_after_audio', {'audio': audio})
+            if plugin_audio is not None:
+                audio = plugin_audio
+
         except Exception as e:
             return None, None
 
