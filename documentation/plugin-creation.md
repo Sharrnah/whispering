@@ -10,7 +10,7 @@ Plugins are loaded from the `Plugins` directory in the root of the project. The 
 
 ## How to write
 
-Plugins are written as Python classes. The class must inherit from `Plugins.Base` and implement the `init`, `timer`, `stt` and `tts` methods.
+Plugins are written as Python classes. The class must inherit from `Plugins.Base` and implement at least the `init` method.
 
 At the very top of the file, you should add a comment with a short description and most importantly, a version line, so the version can be compared inside the UI application.
 example:
@@ -50,7 +50,7 @@ The `Base` class provides some helper methods to make it easier to write plugins
 
 __Note:__ _When using the *_plugin_setting methods, the settings are saved with the class name as the section name. So if you have a plugin called `ExamplePlugin`, the settings will be saved in the `ExamplePlugin` section._
 
-`is_enabled(self, default=True)` - Check if the plugin is enabled. If the plugin is not yet in the settings file, the default value is used. So by default, plugins will be enabled. Use this around your main functionality to allow enabling/disabling of your plugin even at runtime.
+`is_enabled(self, default=False)` - Check if the plugin is enabled. If the plugin is not yet in the settings file, the default value is used. So by default, plugins will be disabled. Use this around your main functionality to allow enabling/disabling of your plugin functionality even at runtime.
 
 
 ## use specific Widgets in plugin settings
@@ -90,7 +90,10 @@ The called function in the Plugin looks like this:
 def on_silero_tts_after_audio_call(self, data_obj):
     if self.is_enabled(False) and self.get_plugin_setting("voice_change_source") == CONSTANTS["SILERO_TTS"]:
         audio = data_obj['audio']
-        # doing stuff
+        
+        # doing stuff ...
+        
+        # set modified audio back to data_obj
         data_obj['audio'] = audio
         return data_obj
     return None
