@@ -16,6 +16,9 @@ from Models.TTS import silero
 # to allow using FP16 computation on GPU even if the device does not have efficient FP16 support.
 os.environ["CT2_CUDA_ALLOW_FP16"] = "1"
 
+# enable fast GPU mode for safetensors (https://huggingface.co/docs/safetensors/speed)
+os.environ["SAFETENSORS_FAST_GPU"] = "1"
+
 
 atexit.register(processmanager.cleanup_subprocesses)
 
@@ -52,6 +55,7 @@ import websocket
 import settings
 import remote_opener
 from Models.STT import faster_whisper
+from Models.STT import wav2vec_bert
 from Models.Multi import seamless_m4t
 from Models.TextTranslation import texttranslate
 from Models import languageClassification
@@ -872,6 +876,8 @@ def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_ra
         print(f"speechT5 is an English-only model. only English speech is supported.")
         settings.SetOption("whisper_languages", ({"code": "", "name": "Auto"}, {"code": "en", "name": "English"},))
         settings.SetOption("current_language", "en")
+    elif settings.GetOption("stt_type") == "wav2vec_bert":
+        settings.SetOption("whisper_languages", audioprocessor.wav2vec_bert_get_languages())
     else:
         # show no language if unspecified STT type
         settings.SetOption("whisper_languages", ({"code": "", "name": ""},))

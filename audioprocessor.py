@@ -24,6 +24,7 @@ from Models.TTS import silero
 import Models.STT.faster_whisper as faster_whisper
 import Models.STT.whisper_audio_markers as whisper_audio_markers
 import Models.STT.speecht5 as speech_t5
+import Models.STT.wav2vec_bert as wav2vec_bert
 import Models.Multi.seamless_m4t as seamless_m4t
 import csv
 from datetime import datetime
@@ -132,6 +133,11 @@ def seamless_m4t_get_languages():
         **seamless_m4t.LANGUAGES
     }
     return tuple([{"code": code, "name": language} for code, language in languages.items()])
+
+
+def wav2vec_bert_get_languages():
+    wav2vec_bert_model = wav2vec_bert.Wav2VecBert()
+    return wav2vec_bert_model.get_languages()
 
 
 def remove_repetitions(text, language='english'):
@@ -402,6 +408,12 @@ def load_whisper(model, ai_device):
             return speech_t5.SpeechT5STT(device=ai_device)
         except Exception as e:
             print("Failed to load speech t5 model. Application exits. " + str(e))
+    elif stt_type == "wav2vec_bert":
+        compute_dtype = settings.GetOption("whisper_precision")
+        try:
+            return wav2vec_bert.Wav2VecBert(compute_type=compute_dtype, device=ai_device)
+        except Exception as e:
+            print("Failed to load Wav2VecBert model. Application exits. " + str(e))
 
     # return None if no stt model is loaded
     return None
@@ -422,6 +434,9 @@ def load_realtime_whisper(model, ai_device):
         return seamless_m4t.SeamlessM4T(model=model, compute_type=compute_dtype, device=ai_device)
     elif settings.GetOption("stt_type") == "speech_t5":
         return speech_t5.SpeechT5STT(device=ai_device)
+    elif settings.GetOption("stt_type") == "wav2vec_bert":
+        compute_dtype = settings.GetOption("realtime_whisper_precision")
+        return wav2vec_bert.Wav2VecBert(compute_type=compute_dtype, device=ai_device)
 
 
 def convert_audio(audio_bytes: bytes):
@@ -678,10 +693,16 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                                        repetition_penalty=repetition_penalty,
                                                                        no_repeat_ngram_size=no_repeat_ngram_size)
 
-
         elif settings.GetOption("stt_type") == "speech_t5":
             # microsoft SpeechT5
             result = audio_model.transcribe(audio_sample)
+
+        elif settings.GetOption("stt_type") == "wav2vec_bert":
+            # Wav2VecBert
+            audio_model.set_compute_type(settings.GetOption("whisper_precision"))
+            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            result = audio_model.transcribe(audio_sample, task=whisper_task,
+                                            language=whisper_language)
 
         if result is None or (last_whisper_result == result.get('text').strip() and not final_audio):
             print("skipping... result: ", result)
