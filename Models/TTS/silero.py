@@ -423,6 +423,7 @@ class Silero:
                 audio = plugin_audio['audio']
 
         except Exception as e:
+            print(e)
             return None, None
 
         return audio, self.sample_rate

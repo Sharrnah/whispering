@@ -1,33 +1,38 @@
 import os
+import re
 
 import torch
 import gc
 
 import yaml
-from transformers import Wav2Vec2BertForCTC, Wav2Vec2BertProcessor
+from transformers import T5Tokenizer, T5ForConditionalGeneration
 from Models.Singleton import SingletonMeta
-from Models.TextCorrection import T5
 
 from pathlib import Path
 import downloader
 
 
-class Wav2VecBert(metaclass=SingletonMeta):
+# https://huggingface.co/vennify/t5-base-grammar-correction
+# https://huggingface.co/flexudy/t5-small-wav2vec2-grammar-fixer
+# https://huggingface.co/aiassociates/t5-small-grammar-correction-german
+
+class TextCorrectionT5(metaclass=SingletonMeta):
     model = None
     previous_model = None
-    processor = None
+    tokenizer = None
     compute_type = "float32"
     compute_device = "cpu"
-
-    text_correction_model = None
+    prompt_template = "{text}"
+    capitalize_text = False
+    cleanup = None
 
     currently_downloading = False
-    model_cache_path = Path(".cache/wav2vec-bert2.0")
+    model_cache_path = Path(".cache/text_correction_t5")
     MODEL_LINKS = {}
     MODELS_LIST_URLS = [
-        #"https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Wav2VecBert/models.yaml",
-        #"https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Wav2VecBert/models.yaml",
-        "https://s3.libs.space:9000/ai-models/Wav2VecBert/models.yaml",
+        #"https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/TextCorrectionT5/models.yaml",
+        #"https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/TextCorrectionT5/models.yaml",
+        "https://s3.libs.space:9000/ai-models/TextCorrectionT5/models.yaml",
     ]
     _debug_skip_dl = False
 
@@ -63,7 +68,7 @@ class Wav2VecBert(metaclass=SingletonMeta):
         if not self._debug_skip_dl:
             if not downloader.download_extract(self.MODELS_LIST_URLS,
                                                str(self.model_cache_path.resolve()),
-                                               '', title="Speech 2 Text (Wav2VecBert2 Model list)", extract_format="none"):
+                                               '', title="Text Correction (T5 Model list)", extract_format="none"):
                 print("Model list not downloaded. Using cached version.")
 
         # Load model list
@@ -71,19 +76,6 @@ class Wav2VecBert(metaclass=SingletonMeta):
             with open(self.model_cache_path / "models.yaml", "r") as file:
                 self.MODEL_LINKS = yaml.load(file, Loader=yaml.FullLoader)
                 file.close()
-
-    def get_languages(self):
-        if not self.MODEL_LINKS:
-            # Return a default value or message. Here, we return an empty tuple as a fallback.
-            return ()
-
-        # Generate a list of dictionaries, each containing the language code and language name
-        languages = []
-        for language, details in self.MODEL_LINKS.items():
-            # Extract the lang_code for the current language entry
-            lang_name = details.get("lang_name", "")  # Fallback to an empty string if not found
-            languages.append({"code": language, "name": lang_name})
-        return tuple(languages)
 
     def download_model(self, model_name):
         model_directory = Path(self.model_cache_path / model_name)
@@ -110,7 +102,7 @@ class Wav2VecBert(metaclass=SingletonMeta):
             for file in self.MODEL_LINKS[model_name]["files"]:
                 if not downloader.download_extract(file["urls"],
                                                    str(model_directory.resolve()),
-                                                   file["checksum"], title="Speech 2 Text (Wav2VecBert2) - " + model_name, extract_format="none"):
+                                                   file["checksum"], title="Text Correction (T5) - " + model_name, extract_format="none"):
                     print(f"Download failed: {file}")
 
         self.currently_downloading = False
@@ -133,48 +125,52 @@ class Wav2VecBert(metaclass=SingletonMeta):
 
                 self.previous_model = model
                 self.release_model()
-                print(f"Loading wav2vec model: {model} on {device} with {compute_type} precision...")
-                self.model = Wav2Vec2BertForCTC.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit)
+                print(f"Loading T5 model: {model} on {device} with {compute_type} precision...")
+                self.model = T5ForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit)
                 if not compute_8bit and not compute_4bit:
                     self.model = self.model.to(self.compute_device)
-                self.processor = Wav2Vec2BertProcessor.from_pretrained(str(Path(self.model_cache_path / model).resolve()))
+                self.tokenizer = T5Tokenizer.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype)
+                self.prompt_template = self.MODEL_LINKS[model].get("prompt_template", "")
+                self.capitalize_text = self.MODEL_LINKS[model].get("capitalize", False)
+                self.cleanup = self.MODEL_LINKS[model].get("cleanup", None)
 
-                # load text correction model
-                self.text_correction_model = T5.TextCorrectionT5(compute_type, device)
-
-    def transcribe(self, audio_sample, task, language) -> dict:
+    def translate(self, text, language) -> str:
         self.load_model(language, self.compute_type, self.compute_device)
 
-        compute_dtype = self._str_to_dtype_dict(self.compute_type).get('dtype', torch.float32)
+        if self.model is not None and self.tokenizer is not None:
+            try:
+                input_text = self.prompt_template.format(text=text)
 
-        if self.model is not None and self.processor is not None:
-            input_features = self.processor(audio=audio_sample, sampling_rate=16000, return_tensors="pt").to(self.compute_device).to(compute_dtype)
+                input_ids = self.tokenizer.encode(input_text, return_tensors="pt", max_length=256, truncation=True, add_special_tokens=True).to(self.compute_device)
 
-            with torch.no_grad():
-                logits = self.model(**input_features).logits
+                with torch.no_grad():
+                    outputs = self.model.generate(
+                        input_ids=input_ids,
+                        max_length=256,
+                        num_beams=4,
+                        repetition_penalty=1.0,
+                        length_penalty=1.0,
+                        early_stopping=True
+                    )
 
-            pred_ids = torch.argmax(logits, dim=-1)
+                result_sentence = self.tokenizer.batch_decode(outputs, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+                result_sentence_text = ' '.join(result_sentence).strip()
 
-            result_text = self.processor.batch_decode(pred_ids)
+                if self.cleanup is not None:
+                    for cleanup_entry in self.cleanup:
+                        if 'pattern' in cleanup_entry and 'replace' in cleanup_entry:
+                            result_sentence_text = re.sub(cleanup_entry['pattern'], cleanup_entry['replace'], result_sentence_text)
 
-            if self.text_correction_model is not None and result_text[0] != "":
-                result_text[0] = self.text_correction_model.translate(result_text[0], language)
-
-            return {
-                'text': result_text[0],
-                'type': task,
-                'language': language
-            }
+                return result_sentence_text
+            except Exception as e:
+                print(f"Error: {e}")
+                return text
         else:
-            return {
-                'text': "",
-                'type': task,
-                'language': language
-            }
+            return text
 
     def release_model(self):
         if self.model is not None:
-            print("Releasing wav2vec model...")
+            print("Releasing T5 model...")
             if hasattr(self.model, 'model'):
                 del self.model.model
             if hasattr(self.model, 'feature_extractor'):
@@ -182,8 +178,8 @@ class Wav2VecBert(metaclass=SingletonMeta):
             if hasattr(self.model, 'hf_tokenizer'):
                 del self.model.hf_tokenizer
             del self.model
-        if self.processor is not None:
-            del self.processor
+        if self.tokenizer is not None:
+            del self.tokenizer
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         gc.collect()
@@ -204,16 +200,18 @@ class Wav2VecBert(metaclass=SingletonMeta):
                 # Initialize the model in the data dictionary if it doesn't exist
                 if model_name not in data:
                     data[model_name] = {
-                        'lang_name': model_name.capitalize(),
-                        'files': []
+                        'prompt_template': "{text}",
+                        'capitalize': False,
+                        'files': [],
+                        'cleanup': {'pattern': '(\?|!)\.', 'replace': '\\1'}
                     }
 
                 # Add the file details to the model's files list
                 file_data = {
                     'urls': [
-                        f'https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Wav2VecBert/{model_name}/{file}',
-                        f'https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Wav2VecBert/{model_name}/{file}',
-                        f'https://s3.libs.space:9000/ai-models/Wav2VecBert/{model_name}/{file}'
+                        f'https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/TextCorrectionT5/{model_name}/{file}',
+                        f'https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/TextCorrectionT5/{model_name}/{file}',
+                        f'https://s3.libs.space:9000/ai-models/TextCorrectionT5/{model_name}/{file}'
                     ],
                     'checksum': checksum
                 }

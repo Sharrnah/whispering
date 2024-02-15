@@ -5,6 +5,7 @@ import numpy as np
 
 import audio_tools
 import settings
+from Models.Singleton import SingletonMeta
 
 language_mapping_iso3_to_iso_1 = {
     "eng": "en",
@@ -24,7 +25,7 @@ def iso3_to_iso_1(iso3):
         return iso3
 
 
-class WhisperVoiceMarker:
+class WhisperVoiceMarker(metaclass=SingletonMeta):
     audio_sample = None
     audio_model = None
     try_count = 0
