@@ -8,19 +8,24 @@ librosa==0.10.1
 #transformers @ https://github.com/Sharrnah/transformers/archive/refs/heads/add_seamless-m4t.zip
 #transformers @ https://github.com/huggingface/transformers/archive/84724efd101af52ed3d6af878e41ff8fd651a9cc.zip
 #transformers==4.35.0
-transformers @ https://github.com/huggingface/transformers/archive/235e5d4991e8a0984aa78db91087b49622c7740e.zip
+#transformers @ https://github.com/huggingface/transformers/archive/235e5d4991e8a0984aa78db91087b49622c7740e.zip
+transformers==4.37.2
 
 tensorboardX==2.6.2.2
-accelerate==0.21.0
+accelerate==0.26.1
+#optimum
+#flash-attn
 #bitsandbytes==0.41.1
-bitsandbytes @ git+https://github.com/Keith-Hon/bitsandbytes-windows.git
+# https://github.com/TimDettmers/bitsandbytes/actions/runs/7787696861/job/21236774833?pr=949
+#bitsandbytes @ git+https://github.com/Keith-Hon/bitsandbytes-windows.git
+bitsandbytes @ https://s3.libs.space:9000/projects/wheels/bitsandbytes-0.43.0.dev0-cp311-cp311-win_amd64.whl
 ffmpeg-python==0.2.0
 click>=8.1.3
-PyAudio==0.2.13
+PyAudio==0.2.14
 PyAudioWPatch==0.2.12.6
 resampy==0.4.2
 sounddevice==0.4.6
-SpeechRecognition==3.10.0
+SpeechRecognition==3.10.1
 pydub>=0.25.1
 git+https://github.com/openai/whisper.git
 #triton @ https://github.com/PrashantSaikia/Triton-for-Windows/raw/84739dfcb724845b301fbde6a738e15c3ed25905/triton-2.0.0-cp310-cp310-win_amd64.whl
@@ -29,15 +34,15 @@ triton @ https://s3.libs.space:9000/projects/wheels/triton-2.1.0-cp311-cp311-win
 soundfile==0.12.1
 python-osc>=1.8.0
 websockets>=10.4
-unidecode>=1.3.6
+unidecode==1.3.8
 pykakasi>=2.2.1
-ctranslate2==3.22.0
+ctranslate2==3.24.0
 sentencepiece==0.1.99
 protobuf==3.20.3
-progressbar2
+progressbar2==4.3.2
 fasttext-wheel
 #best-download
-robust-downloader @ https://github.com/Sharrnah/robust-downloader/archive/refs/heads/main.zip
+robust-downloader @ https://github.com/fedebotu/robust-downloader/archive/refs/heads/main.zip
 # pywin32 required for easyOCR
 pywin32
 #easyocr==1.7.0
@@ -68,7 +73,7 @@ annotated_types==0.6.0
 #fairseq @ https://github.com/Sharrnah/fairseq/archive/refs/heads/main.zip
 #fairseq @ https://github.com/Sharrnah/fairseq/releases/download/v0.12.4/fairseq-0.12.4-cp310-cp310-win_amd64.whl
 fairseq @ https://github.com/Sharrnah/fairseq/releases/download/v0.12.4/fairseq-0.12.4-cp311-cp311-win_amd64.whl
-faiss-cpu==1.7.3
+faiss-cpu==1.7.4
 praat-parselmouth>=0.4.2
 pyworld==0.3.4
 torchcrepe==0.0.22

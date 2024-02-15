@@ -55,7 +55,6 @@ import websocket
 import settings
 import remote_opener
 from Models.STT import faster_whisper
-from Models.STT import wav2vec_bert
 from Models.Multi import seamless_m4t
 from Models.TextTranslation import texttranslate
 from Models import languageClassification
