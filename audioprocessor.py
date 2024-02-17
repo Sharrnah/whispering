@@ -24,6 +24,7 @@ from Models.TTS import silero
 import Models.STT.faster_whisper as faster_whisper
 import Models.STT.whisper_audio_markers as whisper_audio_markers
 import Models.STT.speecht5 as speech_t5
+import Models.STT.tansformer_whisper as transformer_whisper
 import Models.STT.wav2vec_bert as wav2vec_bert
 import Models.Multi.seamless_m4t as seamless_m4t
 import csv
@@ -408,6 +409,12 @@ def load_whisper(model, ai_device):
             return speech_t5.SpeechT5STT(device=ai_device)
         except Exception as e:
             print("Failed to load speech t5 model. Application exits. " + str(e))
+    elif stt_type == "transformer_whisper":
+        compute_dtype = settings.GetOption("whisper_precision")
+        try:
+            return transformer_whisper.TransformerWhisper(compute_type=compute_dtype, device=ai_device)
+        except Exception as e:
+            print("Failed to load transformer_whisper model. Application exits. " + str(e))
     elif stt_type == "wav2vec_bert":
         compute_dtype = settings.GetOption("whisper_precision")
         try:
@@ -434,6 +441,9 @@ def load_realtime_whisper(model, ai_device):
         return seamless_m4t.SeamlessM4T(model=model, compute_type=compute_dtype, device=ai_device)
     elif settings.GetOption("stt_type") == "speech_t5":
         return speech_t5.SpeechT5STT(device=ai_device)
+    elif settings.GetOption("stt_type") == "transformer_whisper":
+        compute_dtype = settings.GetOption("realtime_whisper_precision")
+        return transformer_whisper.TransformerWhisper(compute_type=compute_dtype, device=ai_device)
     elif settings.GetOption("stt_type") == "wav2vec_bert":
         compute_dtype = settings.GetOption("realtime_whisper_precision")
         return wav2vec_bert.Wav2VecBert(compute_type=compute_dtype, device=ai_device)
@@ -697,6 +707,13 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
             # microsoft SpeechT5
             result = audio_model.transcribe(audio_sample)
 
+        elif settings.GetOption("stt_type") == "transformer_whisper":
+            # Whisper Huggingface Transformer
+            audio_model.set_compute_type(settings.GetOption("whisper_precision"))
+            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            result = audio_model.transcribe(audio_sample, model=settings.GetOption("model"), task=whisper_task,
+                                            language=whisper_language, return_timestamps=False,
+                                            beam_size=whisper_beam_size)
         elif settings.GetOption("stt_type") == "wav2vec_bert":
             # Wav2VecBert
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))

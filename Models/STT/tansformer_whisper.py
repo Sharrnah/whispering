@@ -4,15 +4,14 @@ import torch
 import gc
 
 import yaml
-from transformers import Wav2Vec2BertForCTC, Wav2Vec2BertProcessor
+from transformers import WhisperForConditionalGeneration, WhisperProcessor
 from Models.Singleton import SingletonMeta
-from Models.TextCorrection import T5
 
 from pathlib import Path
 import downloader
 
 
-class Wav2VecBert(metaclass=SingletonMeta):
+class TransformerWhisper(metaclass=SingletonMeta):
     model = None
     previous_model = None
     processor = None
@@ -22,14 +21,14 @@ class Wav2VecBert(metaclass=SingletonMeta):
     text_correction_model = None
 
     currently_downloading = False
-    model_cache_path = Path(".cache/wav2vec-bert2.0")
+    model_cache_path = Path(".cache/whisper-transformer")
     MODEL_LINKS = {}
     MODELS_LIST_URLS = [
-        #"https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Wav2VecBert/models.yaml",
-        #"https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Wav2VecBert/models.yaml",
-        "https://s3.libs.space:9000/ai-models/Wav2VecBert/models.yaml",
+        #"https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/whisper-transformer/models.yaml",
+        #"https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/whisper-transformer/models.yaml",
+        "https://s3.libs.space:9000/ai-models/whisper-transformer/models.yaml",
     ]
-    _debug_skip_dl = True
+    _debug_skip_dl = False
 
     def __init__(self, compute_type="float32", device="cpu"):
         os.makedirs(self.model_cache_path, exist_ok=True)
@@ -49,9 +48,9 @@ class Wav2VecBert(metaclass=SingletonMeta):
         elif dtype_str == "4bit":
             return {'dtype': torch.float32, '4bit': True, '8bit': False}
         elif dtype_str == "8bit":
-            return {'dtype': torch.float32, '4bit': False, '8bit': True}
+            return {'dtype': torch.float16, '4bit': False, '8bit': True}
         else:
-            return {'dtype': torch.float32, '4bit': False, '8bit': False}
+            return {'dtype': torch.float16, '4bit': False, '8bit': False}
 
     def set_compute_type(self, compute_type):
         self.compute_type = compute_type
@@ -63,7 +62,7 @@ class Wav2VecBert(metaclass=SingletonMeta):
         if not self._debug_skip_dl:
             if not downloader.download_extract(self.MODELS_LIST_URLS,
                                                str(self.model_cache_path.resolve()),
-                                               '', title="Speech 2 Text (Wav2VecBert2 Model list)", extract_format="none"):
+                                               '', title="Speech 2 Text (Whisper-Transformer Model list)", extract_format="none"):
                 print("Model list not downloaded. Using cached version.")
 
         # Load model list
@@ -71,19 +70,6 @@ class Wav2VecBert(metaclass=SingletonMeta):
             with open(self.model_cache_path / "models.yaml", "r") as file:
                 self.MODEL_LINKS = yaml.load(file, Loader=yaml.FullLoader)
                 file.close()
-
-    def get_languages(self):
-        if not self.MODEL_LINKS:
-            # Return a default value or message. Here, we return an empty tuple as a fallback.
-            return ()
-
-        # Generate a list of dictionaries, each containing the language code and language name
-        languages = []
-        for language, details in self.MODEL_LINKS.items():
-            # Extract the lang_code for the current language entry
-            lang_name = details.get("lang_name", "")  # Fallback to an empty string if not found
-            languages.append({"code": language, "name": lang_name})
-        return tuple(languages)
 
     def download_model(self, model_name):
         model_directory = Path(self.model_cache_path / model_name)
@@ -110,12 +96,12 @@ class Wav2VecBert(metaclass=SingletonMeta):
             for file in self.MODEL_LINKS[model_name]["files"]:
                 if not downloader.download_extract(file["urls"],
                                                    str(model_directory.resolve()),
-                                                   file["checksum"], title="Speech 2 Text (Wav2VecBert2) - " + model_name, extract_format="none"):
+                                                   file["checksum"], title="Speech 2 Text (Whisper-Transformer) - " + model_name, extract_format="none"):
                     print(f"Download failed: {file}")
 
         self.currently_downloading = False
 
-    def load_model(self, model='english', compute_type="float32", device="cpu"):
+    def load_model(self, model='small', compute_type="float32", device="cpu"):
         if self.previous_model is None or model != self.previous_model:
             compute_dtype = self._str_to_dtype_dict(compute_type).get('dtype', torch.float32)
             compute_4bit = self._str_to_dtype_dict(self.compute_type).get('4bit', False)
@@ -133,35 +119,38 @@ class Wav2VecBert(metaclass=SingletonMeta):
 
                 self.previous_model = model
                 self.release_model()
-                print(f"Loading wav2vec model: {model} on {device} with {compute_type} precision...")
-                self.model = Wav2Vec2BertForCTC.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit)
+                print(f"Loading Whisper-Transformer model: {model} on {device} with {compute_type} precision...")
+                self.model = WhisperForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit)
                 if not compute_8bit and not compute_4bit:
                     self.model = self.model.to(self.compute_device)
-                self.processor = Wav2Vec2BertProcessor.from_pretrained(str(Path(self.model_cache_path / model).resolve()))
+                self.processor = WhisperProcessor.from_pretrained(str(Path(self.model_cache_path / model).resolve()))
 
-                # load text correction model
-                self.text_correction_model = T5.TextCorrectionT5(compute_type, device)
+                self.model.config.forced_decoder_ids = None
 
-    def transcribe(self, audio_sample, task, language) -> dict:
-        self.load_model(language, self.compute_type, self.compute_device)
+    def transcribe(self, audio_sample, model, task, language,
+                   return_timestamps=False, beam_size=4) -> dict:
+        self.load_model(model, self.compute_type, self.compute_device)
 
         compute_dtype = self._str_to_dtype_dict(self.compute_type).get('dtype', torch.float32)
 
         if self.model is not None and self.processor is not None:
-            input_features = self.processor(audio=audio_sample, sampling_rate=16000, return_tensors="pt").to(self.compute_device).to(compute_dtype)
+            input_features = self.processor(audio_sample, sampling_rate=16000, return_tensors="pt").to(self.compute_device).to(compute_dtype).input_features
+
+            transcriptions = [""]
 
             with torch.no_grad():
-                logits = self.model(**input_features).logits
+                predicted_ids = self.model.generate(input_features,
+                                                    task=task, language=language, num_beams=beam_size,
+                                                    return_timestamps=return_timestamps,
+                                                    )
+                transcriptions = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)
 
-            pred_ids = torch.argmax(logits, dim=-1)
+            #result_text = self.processor.tokenizer._normalize(transcription)
 
-            result_text = self.processor.batch_decode(pred_ids)
-
-            if self.text_correction_model is not None and result_text[0] != "":
-                result_text[0] = self.text_correction_model.translate(result_text[0], language)
+            result_text = ''.join(transcriptions).strip()
 
             return {
-                'text': result_text[0],
+                'text': result_text,
                 'type': task,
                 'language': language
             }
@@ -174,7 +163,7 @@ class Wav2VecBert(metaclass=SingletonMeta):
 
     def release_model(self):
         if self.model is not None:
-            print("Releasing wav2vec model...")
+            print("Releasing Whisper-Transformer model...")
             if hasattr(self.model, 'model'):
                 del self.model.model
             if hasattr(self.model, 'feature_extractor'):
@@ -204,16 +193,15 @@ class Wav2VecBert(metaclass=SingletonMeta):
                 # Initialize the model in the data dictionary if it doesn't exist
                 if model_name not in data:
                     data[model_name] = {
-                        'lang_name': model_name.capitalize(),
                         'files': []
                     }
 
                 # Add the file details to the model's files list
                 file_data = {
                     'urls': [
-                        f'https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Wav2VecBert/{model_name}/{file}',
-                        f'https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Wav2VecBert/{model_name}/{file}',
-                        f'https://s3.libs.space:9000/ai-models/Wav2VecBert/{model_name}/{file}'
+                        f'https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/whisper-transformer/{model_name}/{file}',
+                        f'https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/whisper-transformer/{model_name}/{file}',
+                        f'https://s3.libs.space:9000/ai-models/whisper-transformer/{model_name}/{file}'
                     ],
                     'checksum': checksum
                 }

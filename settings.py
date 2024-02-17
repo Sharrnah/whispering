@@ -60,7 +60,7 @@ TRANSLATE_SETTINGS = {
     "repetition_penalty": 1.0,  # penalize the score of previously generated tokens (set > 1 to penalize)
     "no_repeat_ngram_size": 0,  # prevent repetitions of ngrams with this size
     "whisper_precision": "float32",  # for original Whisper can be "float16" or "float32", for faster-whisper "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
-    "stt_type": "faster_whisper",  # can be "faster_whisper", "original_whisper", "speech_t5" or "seamless_m4t".
+    "stt_type": "faster_whisper",  # can be "faster_whisper", "original_whisper", "transformer_whisper", "speech_t5", "seamless_m4t" etc.
     "temperature_fallback": True,  # Set to False to disable temperature fallback which is the reason for some slowdowns, but decreases quality.
     "beam_size": 5,  # Beam size for beam search. (higher = more accurate, but slower)
     "whisper_cpu_threads": 0,  # Number of threads to use when running on CPU (4 by default)
@@ -256,7 +256,7 @@ def GetAvailableSettingValues():
         "ai_device": ["None", "cuda", "cpu"],
         "model": get_available_models(),
         "whisper_task": ["transcribe", "translate"],
-        "stt_type": ["faster_whisper", "original_whisper", "seamless_m4t", "speech_t5", "whisper_cpp", "wav2vec_bert", ""],
+        "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "seamless_m4t", "speech_t5", "whisper_cpp", "wav2vec_bert", ""],
         "tts_ai_device": ["cuda", "cpu"],
         "txt_translator_device": ["cuda", "cpu"],
         "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "Seamless_M4T"],
