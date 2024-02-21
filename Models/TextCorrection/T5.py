@@ -30,8 +30,8 @@ class TextCorrectionT5(metaclass=SingletonMeta):
     model_cache_path = Path(".cache/text_correction_t5")
     MODEL_LINKS = {}
     MODELS_LIST_URLS = [
-        #"https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/TextCorrectionT5/models.yaml",
-        #"https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/TextCorrectionT5/models.yaml",
+        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/TextCorrectionT5/models.yaml",
+        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/TextCorrectionT5/models.yaml",
         "https://s3.libs.space:9000/ai-models/TextCorrectionT5/models.yaml",
     ]
     _debug_skip_dl = False
@@ -190,12 +190,12 @@ class TextCorrectionT5(metaclass=SingletonMeta):
 
         # Iterate through the directory
         for root, dirs, files in os.walk(directory):
+            ws_version_file = None
+            # Get the model name from the directory name
+            model_name = os.path.basename(root)
             for file in files:
                 # Calculate the SHA256 checksum
                 checksum = downloader.sha256_checksum(os.path.join(root, file))
-
-                # Get the model name from the directory name
-                model_name = os.path.basename(root)
 
                 # Initialize the model in the data dictionary if it doesn't exist
                 if model_name not in data:
@@ -215,7 +215,13 @@ class TextCorrectionT5(metaclass=SingletonMeta):
                     ],
                     'checksum': checksum
                 }
-                data[model_name]['files'].append(file_data)
+                if file == "WS_VERSION":
+                    ws_version_file = file_data
+                else:
+                    data[model_name]['files'].append(file_data)
+
+            if ws_version_file is not None:
+                data[model_name]['files'].insert(0, ws_version_file)
 
         # Write to YAML file
         with open(os.path.join(directory, filename), 'w') as file:

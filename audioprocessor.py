@@ -26,6 +26,7 @@ import Models.STT.whisper_audio_markers as whisper_audio_markers
 import Models.STT.speecht5 as speech_t5
 import Models.STT.tansformer_whisper as transformer_whisper
 import Models.STT.wav2vec_bert as wav2vec_bert
+import Models.STT.nemo_canary as nemo_canary
 import Models.Multi.seamless_m4t as seamless_m4t
 import csv
 from datetime import datetime
@@ -139,6 +140,10 @@ def seamless_m4t_get_languages():
 def wav2vec_bert_get_languages():
     wav2vec_bert_model = wav2vec_bert.Wav2VecBert()
     return wav2vec_bert_model.get_languages()
+
+
+def nemo_canary_get_languages():
+    return nemo_canary.NemoCanary.get_languages()
 
 
 def remove_repetitions(text, language='english'):
@@ -421,6 +426,12 @@ def load_whisper(model, ai_device):
             return wav2vec_bert.Wav2VecBert(compute_type=compute_dtype, device=ai_device)
         except Exception as e:
             print("Failed to load Wav2VecBert model. Application exits. " + str(e))
+    elif stt_type == "nemo_canary":
+        compute_dtype = settings.GetOption("whisper_precision")
+        try:
+            return nemo_canary.NemoCanary(compute_type=compute_dtype, device=ai_device)
+        except Exception as e:
+            print("Failed to load Nemo Canary model. Application exits. " + str(e))
 
     # return None if no stt model is loaded
     return None
@@ -447,6 +458,9 @@ def load_realtime_whisper(model, ai_device):
     elif settings.GetOption("stt_type") == "wav2vec_bert":
         compute_dtype = settings.GetOption("realtime_whisper_precision")
         return wav2vec_bert.Wav2VecBert(compute_type=compute_dtype, device=ai_device)
+    elif settings.GetOption("stt_type") == "nemo_canary":
+        compute_dtype = settings.GetOption("realtime_whisper_precision")
+        return nemo_canary.NemoCanary(compute_type=compute_dtype, device=ai_device)
 
 
 def convert_audio(audio_bytes: bytes):
@@ -720,6 +734,17 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
             audio_model.set_compute_device(settings.GetOption("ai_device"))
             result = audio_model.transcribe(audio_sample, task=whisper_task,
                                             language=whisper_language)
+
+        elif settings.GetOption("stt_type") == "nemo_canary":
+            # Nemo Canary
+            audio_model.set_compute_type(settings.GetOption("whisper_precision"))
+            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            result = audio_model.transcribe(audio_sample, task=whisper_task,
+                                            source_lang=whisper_language,
+                                            target_lang=stt_target_language,
+                                            beam_size=whisper_beam_size,
+                                            length_penalty=whisper_faster_length_penalty,
+                                            temperature=1.0,)
 
         if result is None or (last_whisper_result == result.get('text').strip() and not final_audio):
             print("skipping... result: ", result)

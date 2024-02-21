@@ -110,7 +110,7 @@ def set_min_time_between_messages(time_in_seconds):
 
 def _send_osc_message():
     global last_message_sent_time, min_time_between_messages
-    print("min_time_between_messages: " + str(min_time_between_messages))
+    #print("min_time_between_messages: " + str(min_time_between_messages))
     while True:
         try:
             # Wait for a message to be available in the queue. This will block until a message is available.
