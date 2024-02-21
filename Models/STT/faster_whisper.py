@@ -571,7 +571,6 @@ def download_model(model: str, compute_type: str = "float32"):
             compute_type = "float32"
             model_path = Path(model_cache_path / (model + "-ct2"))
 
-
     pretrained_lang_model_file = Path(model_path / "model.bin")
 
     if not Path(model_path).exists() or not pretrained_lang_model_file.is_file():
@@ -642,7 +641,7 @@ class FasterWhisper(metaclass=SingletonMeta):
         model_cache_path = Path(".cache/whisper")
         os.makedirs(model_cache_path, exist_ok=True)
         model_folder_name = model + "-ct2"
-        if compute_type == "float16" or compute_type == "int8_float16":
+        if compute_type == "float16" or compute_type == "int8_float16" or compute_type == "int16" or compute_type == "int8":
             model_folder_name = model + "-ct2-fp16"
         # special case for models that are only available in one precision (as float16 vs float32 showed no difference in large-v3 and distilled versions)
         if compute_type not in MODEL_LINKS[model]:
