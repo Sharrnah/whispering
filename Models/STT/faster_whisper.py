@@ -540,7 +540,7 @@ def needs_download(model: str, compute_type: str = "float32"):
     if compute_type not in MODEL_LINKS[model]:
         if compute_type == "float32":
             model_path = Path(model_cache_path / (model + "-ct2-fp16"))
-        if compute_type == "float16":
+        elif compute_type == "float16":
             model_path = Path(model_cache_path / (model + "-ct2"))
 
     pretrained_lang_model_file = Path(model_path / "model.bin")
@@ -567,7 +567,7 @@ def download_model(model: str, compute_type: str = "float32"):
         if compute_type == "float32":
             compute_type = "float16"
             model_path = Path(model_cache_path / (model + "-ct2-fp16"))
-        if compute_type == "float16":
+        elif compute_type == "float16":
             compute_type = "float32"
             model_path = Path(model_cache_path / (model + "-ct2"))
 
@@ -647,7 +647,7 @@ class FasterWhisper(metaclass=SingletonMeta):
         if compute_type not in MODEL_LINKS[model]:
             if compute_type == "float32":
                 model_folder_name = model + "-ct2-fp16"
-            if compute_type == "float16":
+            elif compute_type == "float16":
                 model_folder_name = model + "-ct2"
         model_path = Path(model_cache_path / model_folder_name)
 
