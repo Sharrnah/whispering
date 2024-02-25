@@ -814,9 +814,13 @@ def whisper_worker():
 
         # start processing audio thread if audio_model is not None
         if audio_model is not None:
-            threading.Thread(target=whisper_ai_thread, args=(
-                audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio),
-                             daemon=True).start()
+            if settings.GetOption("thread_per_transcription"):
+                threading.Thread(target=whisper_ai_thread, args=(
+                    audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio),
+                                 daemon=True).start()
+            else:
+                whisper_ai_thread(audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result,
+                                  final_audio)
 
 
 def start_whisper_thread():

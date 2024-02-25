@@ -600,21 +600,26 @@ class FasterWhisper(metaclass=SingletonMeta):
     loaded_settings = {}
 
     transcription_count = 0
-    reload_after_transcriptions = 1000
+    reload_after_transcriptions = 0
 
     def __init__(self, model: str, device: str = "cpu", compute_type: str = "float32", cpu_threads: int = 0,
                  num_workers: int = 1):
         if self.model is None:
             self.load_model(model, device, compute_type, cpu_threads, num_workers)
 
+    def set_reload_after_transcriptions(self, reload_after_transcriptions: int):
+        self.reload_after_transcriptions = reload_after_transcriptions
+
     def release_model(self):
-        if hasattr(self.model, 'model'):
-            del self.model.model
-        if hasattr(self.model, 'feature_extractor'):
-            del self.model.feature_extractor
-        if hasattr(self.model, 'hf_tokenizer'):
-            del self.model.hf_tokenizer
-        del self.model
+        print("Reloading model...")
+        if self.model is not None:
+            if hasattr(self.model, 'model'):
+                del self.model.model
+            if hasattr(self.model, 'feature_extractor'):
+                del self.model.feature_extractor
+            if hasattr(self.model, 'hf_tokenizer'):
+                del self.model.hf_tokenizer
+            del self.model
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         gc.collect()
@@ -696,7 +701,7 @@ class FasterWhisper(metaclass=SingletonMeta):
         }
 
         #self.transcription_count += 1
-        #if self.transcription_count % self.reload_after_transcriptions == 0:
+        #if self.reload_after_transcriptions > 0 and (self.transcription_count % self.reload_after_transcriptions == 0):
         #    self.release_model()
 
         return result

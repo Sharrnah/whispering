@@ -127,6 +127,7 @@ class NemoCanary(metaclass=SingletonMeta):
             self.download_model(model)
 
         if self.previous_model is None or model != self.previous_model:
+            print(f"Loading NeMo Canary model: {model} on {device} with {compute_type} precision...")
             self.model = EncDecMultiTaskModel.restore_from(str(Path(self.model_cache_path / model / (model+".nemo")).resolve()), map_location=torch.device(device))
             #self.model.half()
             self.previous_model = model
@@ -172,7 +173,7 @@ class NemoCanary(metaclass=SingletonMeta):
             yaml.dump(data, file, default_flow_style=False)
 
     def transcribe(self, audio_sample, task, source_lang=None, target_lang='en',
-                   return_timestamps=False, beam_size=4, **kwargs) -> dict:
+                   return_timestamps=False, **kwargs) -> dict:
 
         model = "canary-1b"
         if "model" in kwargs:

@@ -90,6 +90,7 @@ TRANSLATE_SETTINGS = {
     "normalize_gain_factor": 2.0,
     "denoise_audio": False,  # if enabled, audio will be de-noised before processing.
     "denoise_audio_post_filter": False,  # Enable post filter for some minor, extra noise reduction.
+    "thread_per_transcription": False,  # Use a separate thread for each transcription.
 
     "realtime": False,  # if enabled, Whisper will process audio in realtime.
     "realtime_whisper_model": "",  # model used for realtime transcription. (empty for using same model as model setting)
