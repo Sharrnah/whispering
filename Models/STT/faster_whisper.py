@@ -662,14 +662,15 @@ class FasterWhisper(metaclass=SingletonMeta):
 
         # temporary fix for large-v3 loading (https://github.com/guillaumekln/faster-whisper/issues/547)
         # @TODO: this is a temporary fix for large-v3
-        n_mels = 80
-        use_tf_tokenizer = False
-        if model == "large-v3":
-            n_mels = 128
-            #use_tf_tokenizer = True
+        #n_mels = 80
+        #use_tf_tokenizer = False
+        #if model == "large-v3":
+        #    n_mels = 128
 
+        #self.model = WhisperModel(str(Path(model_path).resolve()), device=device, compute_type=compute_type,
+        #                          cpu_threads=cpu_threads, num_workers=num_workers, feature_size=n_mels, use_tf_tokenizer=use_tf_tokenizer)
         self.model = WhisperModel(str(Path(model_path).resolve()), device=device, compute_type=compute_type,
-                                  cpu_threads=cpu_threads, num_workers=num_workers, feature_size=n_mels, use_tf_tokenizer=use_tf_tokenizer)
+                                  cpu_threads=cpu_threads, num_workers=num_workers)
 
     def transcribe(self, audio_sample, task, language, condition_on_previous_text,
                    initial_prompt, logprob_threshold, no_speech_threshold, temperature, beam_size,

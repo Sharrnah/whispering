@@ -1,9 +1,9 @@
 # noinspection PyPackageRequirements
+import sys
 import yaml
 import os
 from pathlib import Path
 from click import core
-from whisper import available_models
 import threading
 
 import Utilities
@@ -227,7 +227,10 @@ def GetArgumentSettingFallback(ctx, argument_name, fallback_setting_name):
 
 
 def get_available_models():
-    available_models_list = available_models()
+    available_models_list = []
+    if 'whisper' not in sys.modules or 'available_models' not in dir(sys.modules['whisper']):
+        from whisper import available_models
+        available_models_list = available_models()
 
     # add custom models to list
     if GetOption("stt_type") == "faster_whisper":

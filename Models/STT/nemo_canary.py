@@ -2,11 +2,9 @@ import json
 import os
 
 import torch
-import gc
 
 import yaml
 from nemo.collections.asr.models import EncDecMultiTaskModel
-import nemo.collections.asr as nemo_asr
 from Models.Singleton import SingletonMeta
 
 from pathlib import Path
@@ -15,6 +13,14 @@ import downloader
 import soundfile as sf
 import tempfile
 
+#try:
+#    from pytorch_quantization import nn as quant_nn
+#    from pytorch_quantization import quant_modules
+#except ImportError:
+#    raise ImportError(
+#        "pytorch-quantization is not installed. Install from "
+#        "https://github.com/NVIDIA/TensorRT/tree/master/tools/pytorch-quantization."
+#    )
 
 LANGUAGES = {
     "en": "English",
@@ -49,6 +55,8 @@ class NemoCanary(metaclass=SingletonMeta):
         os.makedirs(self.model_cache_path, exist_ok=True)
         self.compute_type = compute_type
         self.compute_device = device
+
+        self.load_model_list()
 
         #if self._debug_skip_dl:
         #    # generate models.yaml
@@ -126,10 +134,16 @@ class NemoCanary(metaclass=SingletonMeta):
         if not self._debug_skip_dl:
             self.download_model(model)
 
-        if self.previous_model is None or model != self.previous_model:
+        torch.set_grad_enabled(False)
+
+        #quant_modules.initialize()
+
+        if self.previous_model is None or self.model is None or model != self.previous_model:
             print(f"Loading NeMo Canary model: {model} on {device} with {compute_type} precision...")
             self.model = EncDecMultiTaskModel.restore_from(str(Path(self.model_cache_path / model / (model+".nemo")).resolve()), map_location=torch.device(device))
             #self.model.half()
+            #self.model.cuda()
+            self.model.eval()
             self.previous_model = model
 
     def generate_models_yaml(self, directory, filename):
@@ -205,6 +219,7 @@ class NemoCanary(metaclass=SingletonMeta):
         else:
             taskname = "s2t_translation"
 
+        self.model.change_decoding_strategy(None)
         decode_cfg = self.model.cfg.decoding
         changed_cfg = False
         if beam_size != decode_cfg.beam.beam_size:
@@ -219,6 +234,13 @@ class NemoCanary(metaclass=SingletonMeta):
 
         if changed_cfg:
             self.model.change_decoding_strategy(decode_cfg)
+
+        # setup for buffered inference
+        self.model.cfg.preprocessor.dither = 0.0
+        self.model.cfg.preprocessor.pad_to = 0
+
+        #feature_stride = self.model.cfg.preprocessor['window_stride']
+        #model_stride_in_secs = feature_stride * 8  # 8 = model stride, which is 8 for FastConformer
 
         #transcript = self.model.transcribe([audio_sample], batch_size=8, num_workers=2, taskname=task, source_lang=source_lang, target_lang=target_lang,)
         #transcript = self.model.transcribe([audio_sample], batch_size=8, num_workers=2,)
@@ -240,7 +262,8 @@ class NemoCanary(metaclass=SingletonMeta):
                 "source_lang": source_lang,
                 "target_lang": target_lang,
                 "pnc": "yes",
-                "answer": "na",
+                #"answer": "na",
+                "answer": "predict",
             }]
 
             manifest_path = os.path.join(tmpdirname, "manifest.json")
@@ -248,8 +271,16 @@ class NemoCanary(metaclass=SingletonMeta):
                 for entry in manifest_data:
                     manifest_file.write(json.dumps(entry) + "\n")
 
+            compute_type = self._str_to_dtype_dict(self.compute_type).get('dtype', torch.float32)
+
             # Transcribe using the model
-            predicted_text = self.model.transcribe(manifest_path, batch_size=24)
+            if not self.compute_device.startswith("cuda"):
+                with torch.no_grad():
+                    predicted_text = self.model.transcribe(manifest_path, batch_size=16)
+            else:
+                with torch.cuda.amp.autocast(dtype=compute_type):
+                    with torch.no_grad():
+                        predicted_text = self.model.transcribe(manifest_path, batch_size=16)
 
             result = {
                 'text': "".join(predicted_text),
