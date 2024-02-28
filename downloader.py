@@ -60,7 +60,7 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
                                                                                           "extract_format": extract_format}}))
         while True:
             if os.path.isfile(local_dl_file + ".finished"):
-                if sha256_checksum(local_dl_file + ".finished") == checksum:
+                if sha256_checksum(local_dl_file + ".finished") == checksum or checksum == "":
                     success = True
                 break
             else:

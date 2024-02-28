@@ -1,9 +1,9 @@
 # noinspection PyPackageRequirements
+import sys
 import yaml
 import os
 from pathlib import Path
 from click import core
-from whisper import available_models
 import threading
 
 import Utilities
@@ -60,7 +60,7 @@ TRANSLATE_SETTINGS = {
     "repetition_penalty": 1.0,  # penalize the score of previously generated tokens (set > 1 to penalize)
     "no_repeat_ngram_size": 0,  # prevent repetitions of ngrams with this size
     "whisper_precision": "float32",  # for original Whisper can be "float16" or "float32", for faster-whisper "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
-    "stt_type": "faster_whisper",  # can be "faster_whisper", "original_whisper", "speech_t5" or "seamless_m4t".
+    "stt_type": "faster_whisper",  # can be "faster_whisper", "original_whisper", "transformer_whisper", "speech_t5", "seamless_m4t" etc.
     "temperature_fallback": True,  # Set to False to disable temperature fallback which is the reason for some slowdowns, but decreases quality.
     "beam_size": 5,  # Beam size for beam search. (higher = more accurate, but slower)
     "whisper_cpu_threads": 0,  # Number of threads to use when running on CPU (4 by default)
@@ -90,6 +90,7 @@ TRANSLATE_SETTINGS = {
     "normalize_gain_factor": 2.0,
     "denoise_audio": False,  # if enabled, audio will be de-noised before processing.
     "denoise_audio_post_filter": False,  # Enable post filter for some minor, extra noise reduction.
+    "thread_per_transcription": False,  # Use a separate thread for each transcription.
 
     "realtime": False,  # if enabled, Whisper will process audio in realtime.
     "realtime_whisper_model": "",  # model used for realtime transcription. (empty for using same model as model setting)
@@ -226,7 +227,10 @@ def GetArgumentSettingFallback(ctx, argument_name, fallback_setting_name):
 
 
 def get_available_models():
-    available_models_list = available_models()
+    available_models_list = []
+    if 'whisper' not in sys.modules or 'available_models' not in dir(sys.modules['whisper']):
+        from whisper import available_models
+        available_models_list = available_models()
 
     # add custom models to list
     if GetOption("stt_type") == "faster_whisper":
@@ -256,18 +260,18 @@ def GetAvailableSettingValues():
         "ai_device": ["None", "cuda", "cpu"],
         "model": get_available_models(),
         "whisper_task": ["transcribe", "translate"],
-        "stt_type": ["faster_whisper", "original_whisper", "seamless_m4t", "speech_t5", ""],
+        "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "seamless_m4t", "speech_t5", "wav2vec_bert", "nemo_canary", ""],
         "tts_ai_device": ["cuda", "cpu"],
         "txt_translator_device": ["cuda", "cpu"],
         "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "Seamless_M4T"],
         "txt_translator_size": ["small", "medium", "large"],
-        "txt_translator_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16"],
+        "txt_translator_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit"],
         "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
         "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
-        "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16"],
+        "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit"],
         #"whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
         "realtime_whisper_model": [""] + get_available_models(),
-        "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16"],
+        "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit"],
         #"realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8"],
         "osc_type_transfer": ["source", "translation_result", "both", "both_inverted"],
         "osc_send_type": ["full", "full_or_scroll", "scroll", "chunks"],

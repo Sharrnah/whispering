@@ -19,6 +19,10 @@ rem             --hidden-import=pyworld ^
 rem             --hidden-import=torchcrepe ^
 rem             --hidden-import=grpcio ^
 rem             --hidden-import=grpc ^
+rem             --hidden-import=annotated_types ^
+rem             --hidden-import=Cython ^
+rem             --hidden-import=nemo_toolkit ^
+rem             --hidden-import=nemo ^
 rem             --copy-metadata rich ^
 rem             --copy-metadata tqdm ^
 rem             --copy-metadata regex ^
@@ -57,6 +61,10 @@ rem             --collect-all pyworld ^
 rem             --collect-all torchcrepe ^
 rem             --collect-all grpcio ^
 rem             --collect-all grpc ^
+rem             --collect-all annotated_types ^
+rem             --collect-all Cython ^
+rem             --collect-all nemo_toolkit ^
+rem             --collect-all nemo ^
 rem             --collect-submodules fairseq ^
 rem             --add-data ".cache/nltk/tokenizers/punkt;./nltk_data/tokenizers/punkt" ^
 rem             -i app-icon.ico
