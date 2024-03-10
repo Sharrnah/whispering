@@ -3,6 +3,8 @@
 Whispering Tiger is a free and Open-Source tool that can listen/watch to any **audio stream** or **in-game image** on your machine and prints out the transcription or translation
 to a web browser using Websockets or over OSC (examples are **Streaming-overlays** or **VRChat**).
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/sharrnah)
+
 <img src=images/vrchat.png width=400><img src=images/streaming-overlay.png width=400>
 
 
