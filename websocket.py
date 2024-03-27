@@ -71,9 +71,13 @@ def translate_request(msgObj, websocket):
     orig_text = msgObj["value"]["text"]
     text = orig_text
     if msgObj["value"]["to_lang"] != "":  # if to_lang is empty, don't translate
+        to_romaji = False
+        if "to_romaji" in msgObj["value"]:
+            to_romaji = msgObj["value"]["to_romaji"]
         text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(orig_text,
                                                                            msgObj["value"]["from_lang"],
-                                                                           msgObj["value"]["to_lang"])
+                                                                           msgObj["value"]["to_lang"],
+                                                                           to_romaji)
         AnswerMessage(websocket, json.dumps(
             {"type": "translate_result", "translate_result": text, "txt_from_lang": txt_from_lang,
              "txt_to_lang": txt_to_lang}))
@@ -165,12 +169,15 @@ def tts_plugin_process(msgObj, websocket, download=False):
 
 def ocr_req(msgObj, websocket):
     window_name = settings.GetOption("ocr_window_name")
+    to_romaji = False
+    if "to_romaji" in msgObj["value"]:
+        to_romaji = msgObj["value"]["to_romaji"]
     ocr_result, image, bounding_boxes = easyocr.run_image_processing(window_name, ['en', msgObj["value"]["ocr_lang"]])
     if len(ocr_result) > 0:
         image_data = base64.b64encode(image).decode('utf-8')
         translate_result, txt_from_lang, txt_to_lang = (
             texttranslate.TranslateLanguage(" -- ".join(ocr_result), msgObj["value"]["from_lang"],
-                                            msgObj["value"]["to_lang"]))
+                                            msgObj["value"]["to_lang"], to_romaji))
         AnswerMessage(websocket, json.dumps(
             {"type": "translate_result", "original_text": "\n".join(ocr_result),
              "translate_result": "\n".join(translate_result.split(" -- ")), "txt_from_lang": txt_from_lang,
