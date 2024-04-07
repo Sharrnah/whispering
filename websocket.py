@@ -201,7 +201,7 @@ def websocketMessageHandler(msgObj, websocket):
 
         # handle plugin activation / deactivation before setting the option
         if msgObj["name"] == "plugins":
-            for plugin_name, is_enabled in msgObj["value"].items():
+            for plugin_name, is_enabled in list(msgObj["value"].items()):
                 for plugin_inst in Plugins.plugins:
                     if plugin_name == type(plugin_inst).__name__:
                         if plugin_name in settings.GetOption("plugins") and is_enabled != settings.GetOption("plugins")[plugin_name]:
