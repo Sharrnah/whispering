@@ -698,57 +698,79 @@ def numpy_array_to_wav_bytes(audio: np.ndarray, sample_rate: int = 22050) -> Byt
     return buff
 
 
+def audio_bytes_to_wav(audio_bytes, channels=1, sample_rate=16000):
+    final_wavfile = io.BytesIO()
+    wavefile = wave.open(final_wavfile, 'wb')
+    wavefile.setnchannels(channels)
+    wavefile.setsampwidth(2)
+    wavefile.setframerate(sample_rate)
+    wavefile.writeframes(audio_bytes)
+
+    final_wavfile.seek(0)
+    return_data = final_wavfile.read()
+    wavefile.close()
+    return return_data
+
+
+def split_audio_with_padding(audio_bytes, chunk_size):
+    # Assuming 16-bit (2 bytes) audio, calculate bytes per frame
+    bytes_per_sample = 2
+    bytes_per_frame = chunk_size * bytes_per_sample
+
+    # Initialize the list to hold audio frames
+    audio_frames = []
+
+    # Iterate over the audio bytes to split into frames
+    for i in range(0, len(audio_bytes), bytes_per_frame):
+        frame = audio_bytes[i:i+bytes_per_frame]
+
+        # If the frame is shorter than bytes_per_frame, pad it with zeros
+        if len(frame) < bytes_per_frame:
+            frame += b'\x00' * (bytes_per_frame - len(frame))
+
+        audio_frames.append(frame)
+
+    return audio_frames
+
 # ======================================
 # buffered audio streaming playback
 # ======================================
 
-class CircularBuffer:
-    def __init__(self, size):
-        self.buffer = np.zeros(size, dtype=np.int16)
-        self.size = size
-        self.start = 0
-        self.end = 0
 
-    def expand_buffer(self, min_new_size):
-        new_size = max(min_new_size, int(self.size * 1.5))  # Increase by 50%
-        new_buffer = np.zeros(new_size, dtype=self.buffer.dtype)
-        existing_data = self.read()  # Read the existing data
-        self.buffer = new_buffer
-        self.size = new_size
-        self.start = 0
-        self.end = len(existing_data)
-        self.buffer[:self.end] = existing_data
+class CircularBuffer:
+    def __init__(self, max_chunks):
+        self.buffer = []
+        self.max_chunks = max_chunks
+        self.total_size = 0  # Keep track of the total size
 
     def append(self, data):
-        len_data = len(data)
-        # Calculate the space available in the buffer
-        available_space = self.size - self.end if self.end >= self.start else self.start - self.end
-        if len_data > available_space:
-            self.expand_buffer(self.size + len_data)
-
-        next_end = (self.end + len_data) % self.size
-        if next_end < self.end:  # Wrap around case
-            self.buffer[self.end:] = data[:self.size - self.end]
-            self.buffer[:next_end] = data[self.size - self.end:]
-        else:
-            self.buffer[self.end:next_end] = data
-        self.end = next_end
+        # Ensure 'data' is a NumPy array or compatible
+        data_size = data.size  # Assuming 'data' is an array, use '.size'
+        # Remove oldest data if adding new data exceeds max_chunks
+        while len(self.buffer) >= self.max_chunks:
+            removed_data = self.buffer.pop(0)
+            self.total_size -= removed_data.size  # Update total size
+        self.buffer.append(data)
+        self.total_size += data_size  # Update total size
 
     def read(self):
-        if self.start == self.end:
-            return np.array([])
-        data = self.buffer[self.start:self.end] if self.end > self.start else np.concatenate((self.buffer[self.start:], self.buffer[:self.end]))
-        self.start = self.end
+        # Concatenate all chunks into a single NumPy array
+        if not self.buffer:
+            return np.array([])  # Return an empty array if buffer is empty
+
+        data = np.concatenate(self.buffer)
+        # Reset the buffer and total size after reading
+        self.buffer = []
+        self.total_size = 0
         return data
 
     def clear(self):
-        self.buffer = np.zeros(self.size, dtype=self.buffer.dtype)
-        self.start = 0
-        self.end = 0
+        self.buffer = []
+        self.total_size = 0
 
 
 class AudioStreamer:
-    def __init__(self, device, source_sample_rate=44100, target_channels=-1, is_mono=None, dtype="int16", buffer_size=4096, playback_channels=2, buffer_sample_size=1024):
+    def __init__(self, device, source_sample_rate=44100, target_channels=-1, is_mono=None, dtype="int16", buffer_size=4096, playback_channels=2, buffer_sample_size=1024, tag=""):
         self.device = device
         self.recorded_sample_rate = source_sample_rate
         self.target_channels = target_channels
@@ -757,10 +779,17 @@ class AudioStreamer:
         self.format = pyaudio.paInt16 if self.dtype == "int16" else pyaudio.paFloat32
         self.playback_channels = playback_channels
         self.buffer_sample_size = buffer_sample_size
+        self.is_playing = False
+        self.tag = tag
+        self.stop_playing_timeout = 3.0  # time of no audio data to consider it stopped playing (in seconds)
 
+        self.playback_thread = None
         self.lock = threading.Lock()
-        self.buffer = CircularBuffer(buffer_size)
+        self.buffer_size = buffer_size
+        self.buffer = CircularBuffer(self.buffer_size)
         self.init_stream()
+
+        self.carry_over_data = np.array([], dtype=self.dtype)  # Initialize carry_over_data
 
     def init_stream(self):
         with self.lock:
@@ -772,14 +801,21 @@ class AudioStreamer:
 
     def add_audio_chunk(self, chunk):
         with self.lock:
+            if isinstance(chunk, bytes):
+                dtype = np.int16 if self.dtype == "int16" else np.float32
+                chunk = np.frombuffer(chunk, dtype=dtype)
+            if isinstance(chunk, torch.Tensor):
+                chunk = chunk.detach().cpu().numpy()
+
             if chunk.size == 0:
                 return
 
             resampled_chunk = resample_audio(chunk, self.recorded_sample_rate, self.target_sample_rate, target_channels=self.target_channels, is_mono=self.is_mono, dtype=self.dtype)
+
             self.buffer.append(resampled_chunk)
 
             # Start playback if enough data is buffered
-            buffered_data_length = (self.buffer.end - self.buffer.start) % self.buffer.size
+            buffered_data_length = self.buffer.total_size
             if not self.started and buffered_data_length >= self.buffer_sample_size:
                 self.start_playback()
 
@@ -787,20 +823,65 @@ class AudioStreamer:
         self.started = True
         self.playback_thread = threading.Thread(target=self.playback_loop)
         self.playback_thread.start()
+        self.is_playing = True
+        # Add the playback thread to the global list
+        with audio_list_lock:
+            audio_threads.append((self.playback_thread, self.tag))
 
     def playback_loop(self):
+        accumulated_data = np.array([], dtype=self.dtype)  # For accumulating audio data
+        bytes_per_sample = np.dtype(self.dtype).itemsize
+        frame_size_bytes = self.playback_channels * bytes_per_sample
+        last_data_time = time.time()
+
         while self.started:
             with self.lock:
-                data = self.buffer.read()
-            if data.size > 0:
-                self.stream.write(data.tobytes())
-            else:
+                new_data = self.buffer.read()
+
+            if new_data.size > 0:
+                # Prepend carry-over data (if any) to new data
+                if self.carry_over_data.size > 0:
+                    accumulated_data = np.concatenate((self.carry_over_data, new_data))
+                    self.carry_over_data = np.array([], dtype=self.dtype)  # Reset carry-over data
+                else:
+                    accumulated_data = np.concatenate((accumulated_data, new_data))
+
+            # Ensure we only write data that fits into the frame size
+            while accumulated_data.nbytes >= frame_size_bytes:
+                complete_frames = accumulated_data.nbytes // frame_size_bytes
+                bytes_to_write = complete_frames * frame_size_bytes
+
+                data_to_write = accumulated_data[:bytes_to_write // bytes_per_sample].tobytes()
+                remaining_data = accumulated_data[bytes_to_write // bytes_per_sample:]
+
+                self.stream.write(data_to_write)
+                last_data_time = time.time()
+
+                accumulated_data = remaining_data  # Update accumulated data with leftovers
+
+            if not new_data.size:
+                if time.time() - last_data_time > self.stop_playing_timeout:
+                    self.is_playing = False
+                    self.carry_over_data = np.array([], dtype=self.dtype)  # Reset carry-over data
+                    with audio_list_lock:
+                        if (self.playback_thread, self.tag) in audio_threads:
+                            audio_threads.remove((self.playback_thread, self.tag))
                 time.sleep(0.01)
+
+        # Handle any leftover data when stopping
+        if accumulated_data.size > 0:
+            self.carry_over_data = accumulated_data  # Preserve this for the next batch
 
     def stop(self):
         with self.lock:
             self.buffer.clear()
             self.started = False
+
+            # Remove the playback thread from the global list
+            with audio_list_lock:
+                if (self.playback_thread, self.tag) in audio_threads:
+                    audio_threads.remove((self.playback_thread, self.tag))
+
             if self.playback_thread and self.playback_thread.is_alive():
                 self.playback_thread.join()
 
@@ -813,7 +894,14 @@ class AudioStreamer:
                 pyaudio_pool.manage_unused()
 
             self.playback_thread = None
+            self.is_playing = False
+
+            self.buffer = CircularBuffer(self.buffer_size)
+            self.carry_over_data = np.array([], dtype=self.dtype)  # Initialize carry_over_data
 
     def restart(self):
         self.stop()
         self.init_stream()
+
+    def is_audio_playing(self):
+        return self.is_playing
