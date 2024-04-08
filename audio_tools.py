@@ -755,17 +755,14 @@ class CircularBuffer:
 
 
 class AudioStreamer:
-    def __init__(self, device_index=0, source_sample_rate=44100, buffer_size=1024, is_mono=None, playback_channels=2, dtype=np.int16, tag=""):
+    def __init__(self, device_index=0, source_sample_rate=44100, buffer_size=2048, is_mono=None, playback_channels=2, dtype=np.int16, tag=""):
         self.device_index = device_index
         self.source_sample_rate = source_sample_rate
         self.is_mono = is_mono
-        #self.buffer_size = buffer_size - (buffer_size % self.element_size)
         self.buffer_size = buffer_size
-        #self.element_size = np.dtype(dtype).itemsize * playback_channels
-        self.element_size = self.buffer_size * playback_channels
         self.playback_channels = playback_channels
         self.dtype = dtype
-        self.buffer = CircularBuffer(self.element_size)
+        self.buffer = CircularBuffer(self.buffer_size)
         self.tag = tag
         self.playback_thread = None
         self.lock = threading.Lock()
@@ -773,6 +770,10 @@ class AudioStreamer:
         self.p = None
         self.stream = None
         self.init_stream(source_sample_rate)
+        self.before_playback_hook_func = None
+
+    def set_before_playback_hook(self, hook_func):
+        self.before_playback_hook_func = hook_func
 
     def init_stream(self, desired_sample_rate):
         self.p = pyaudio_pool.acquire()
@@ -785,6 +786,10 @@ class AudioStreamer:
         with self.lock:
             if isinstance(chunk, np.ndarray) or isinstance(chunk, bytes):
                 dtype = np.int16 if self.dtype == "int16" else np.float32
+
+                if self.before_playback_hook_func is not None:
+                    chunk = self.before_playback_hook_func(chunk, self.source_sample_rate)
+
                 chunk = np.frombuffer(chunk, dtype=dtype) if isinstance(chunk, bytes) else chunk
                 chunk = resample_audio(chunk, self.source_sample_rate, self.actual_sample_rate, target_channels=self.playback_channels, is_mono=self.is_mono, dtype=self.dtype)
                 chunk = chunk.tobytes()
@@ -814,9 +819,6 @@ class AudioStreamer:
                         data_accumulated = bytearray()  # Clear the accumulator
 
                     self.stream.write(data_to_play)
-
-                    #if available_size == 0 and len(data_accumulated) == 0:
-                    #    break
 
                 if available_size == 0 and len(data_accumulated) == 0:
                     break  # Exit loop if no data is left
