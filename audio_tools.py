@@ -759,10 +759,12 @@ class AudioStreamer:
         self.device_index = device_index
         self.source_sample_rate = source_sample_rate
         self.is_mono = is_mono
+        #self.buffer_size = buffer_size - (buffer_size % self.element_size)
         self.buffer_size = buffer_size
+        #self.element_size = np.dtype(dtype).itemsize * playback_channels
+        self.element_size = self.buffer_size * playback_channels
         self.playback_channels = playback_channels
         self.dtype = dtype
-        self.element_size = np.dtype(dtype).itemsize
         self.buffer = CircularBuffer(self.element_size)
         self.tag = tag
         self.playback_thread = None
@@ -775,7 +777,7 @@ class AudioStreamer:
     def init_stream(self, desired_sample_rate):
         self.p = pyaudio_pool.acquire()
         self.actual_sample_rate = get_closest_sample_rate_of_device(self.device_index, desired_sample_rate)
-        self.stream = self.p.open(format=self.p.get_format_from_width(self.element_size),
+        self.stream = self.p.open(format=self.p.get_format_from_width(np.dtype(self.dtype).itemsize),
                                   channels=self.playback_channels, rate=int(self.actual_sample_rate), output=True,
                                   output_device_index=self.device_index)
 
@@ -812,8 +814,9 @@ class AudioStreamer:
                         data_accumulated = bytearray()  # Clear the accumulator
 
                     self.stream.write(data_to_play)
-                    if available_size == 0 and len(data_accumulated) == 0:
-                        break
+
+                    #if available_size == 0 and len(data_accumulated) == 0:
+                    #    break
 
                 if available_size == 0 and len(data_accumulated) == 0:
                     break  # Exit loop if no data is left
