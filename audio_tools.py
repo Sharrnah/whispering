@@ -819,13 +819,13 @@ class AudioStreamer:
                     break  # Exit loop if no data is left
 
             with audio_list_lock:
-                if self.playback_thread in audio_threads:
-                    audio_threads.remove(self.playback_thread)
+                if (self.playback_thread, self.tag) in audio_threads:
+                    audio_threads.remove((self.playback_thread, self.tag))
             self.playback_thread = None
 
         self.playback_thread = threading.Thread(target=playback_loop, name=self.tag)
         with audio_list_lock:
-            audio_threads.append(self.playback_thread)
+            audio_threads.append((self.playback_thread, self.tag))
         self.playback_thread.start()
 
     def stop(self):
@@ -838,6 +838,6 @@ class AudioStreamer:
             pyaudio_pool.release(self.p)
             self.p = None
             with audio_list_lock:
-                if self.playback_thread in audio_threads:
-                    audio_threads.remove(self.playback_thread)
+                if (self.playback_thread, self.tag) in audio_threads:
+                    audio_threads.remove((self.playback_thread, self.tag))
             self.playback_thread = None
