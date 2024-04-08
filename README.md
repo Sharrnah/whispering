@@ -35,6 +35,8 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
   - OpenAI's [Whisper](https://github.com/openai/whisper), Supports ~98 languages
   - Meta's [Seamless M4T](https://github.com/facebookresearch/seamless_communication), multi modal, Supports ~101 languages
   - Microsoft's [Speech T5](https://github.com/microsoft/SpeechT5), English only
+  - NVIDIA's [NeMo Canary](https://github.com/NVIDIA/NeMo), English, Spanish, German, and French
+  - Wav2Vec Bert 2.0, English and German
 - **Text translation**
   - LID _[Language Identification]_ (Supports 200 languages)
   - NLLB-200 (single model, Supporting 200 languages, high accuracy)
@@ -46,7 +48,7 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
   - Silero
 - **VAD** _[Voice Activity Detection]_
   - Silero-VAD
-- **RVC** _[Retrieval-based Voice Conversion]_ (Convert your voice or the voice in audio files)
+- **RVC** _[Retrieval-based Voice Conversion]_ (Convert your voice, the voice in audio files or from Text-to-Speech)
   - RVC (Using the [RVC STS Whispering Tiger Plugin](https://gist.github.com/Sharrnah/8d906a3657f097702079451ff762ed95)) 
 - **LLM** _[Large language model]_ (Continuation of text. automatic answer generation etc.) **Proof of concept**
   - FLAN-T5, GPT-J, Bloomz etc. (Using the [Whispering TIger Plugin for LLM](https://gist.github.com/Sharrnah/eeaf2acda3e92d8eed1747f05a3f4102))
