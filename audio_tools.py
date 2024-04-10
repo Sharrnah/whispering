@@ -742,12 +742,16 @@ class CircularBuffer:
         self.buffer = bytearray()
         self.element_size = element_size
 
+    def set_size(self, element_size):
+        self.element_size = element_size
+
     def append(self, data):
         self.buffer += data
 
     def read(self, size):
-        data = self.buffer[:size]
-        self.buffer = self.buffer[size:]
+        actual_read_size = min(size, len(self.buffer))
+        data = self.buffer[:actual_read_size]
+        self.buffer = self.buffer[actual_read_size:]
         return data
 
     def get_available_size(self):
@@ -759,13 +763,15 @@ class AudioStreamer:
         self.device_index = device_index
         self.source_sample_rate = source_sample_rate
         self.is_mono = is_mono
-        self.buffer_size = buffer_size
         self.playback_channels = playback_channels
         self.dtype = dtype
+        self.np_dtype = np.int16 if self.dtype == "int16" else np.float32
+        self.buffer_size = buffer_size * (np.dtype(self.dtype).itemsize * self.playback_channels)  # buffer size in bytes for resampled size
         self.buffer = CircularBuffer(self.buffer_size)
         self.tag = tag
         self.playback_thread = None
         self.lock = threading.Lock()
+        self.stop_playing_timeout = 2.0
         # PyAudio instance and stream will be set in init_stream
         self.p = None
         self.stream = None
@@ -784,45 +790,54 @@ class AudioStreamer:
 
     def add_audio_chunk(self, chunk):
         with self.lock:
-            if isinstance(chunk, np.ndarray) or isinstance(chunk, bytes):
-                dtype = np.int16 if self.dtype == "int16" else np.float32
-
-                if self.before_playback_hook_func is not None:
-                    chunk = self.before_playback_hook_func(chunk, self.source_sample_rate)
-
-                chunk = np.frombuffer(chunk, dtype=dtype) if isinstance(chunk, bytes) else chunk
-                chunk = resample_audio(chunk, self.source_sample_rate, self.actual_sample_rate, target_channels=self.playback_channels, is_mono=self.is_mono, dtype=self.dtype)
-                chunk = chunk.tobytes()
             self.buffer.append(chunk)
-            if self.playback_thread is None or not self.playback_thread.is_alive():
+            if self.buffer.get_available_size() >= self.buffer_size and (self.playback_thread is None or not self.playback_thread.is_alive()):
                 self.start_playback()
 
     def start_playback(self):
         def playback_loop():
             data_accumulated = bytearray()
+            last_data_time = time.time()
+            has_data_been_written = False
             while True:
-                with self.lock:  # Ensure thread-safe access to the buffer
+                with self.lock:
                     available_size = self.buffer.get_available_size()
                     if available_size > 0:
-                        data_accumulated += self.buffer.read(available_size)
+                        # Read the maximum available data that fits into full elements
+                        buffer_entry = self.buffer.read(available_size)
+                        data_accumulated += buffer_entry
 
-                # Process and play back if there's enough data or if it's the final chunk
-                while len(data_accumulated) >= self.buffer_size or (available_size == 0 and len(data_accumulated) > 0):
-                    if len(data_accumulated) >= self.buffer_size:
-                        data_to_play = bytes(data_accumulated[:self.buffer_size])
-                        data_accumulated = data_accumulated[self.buffer_size:]
-                    else:  # This is the last chunk, potentially smaller than buffer_size
-                        # Pad the final chunk to ensure it's the correct size
+                while len(data_accumulated) >= self.buffer_size:
+                    data_to_play = bytes(data_accumulated[:self.buffer_size])
+                    data_accumulated = data_accumulated[self.buffer_size:]
+                    last_data_time = time.time()
+
+                    if isinstance(data_to_play, np.ndarray) or isinstance(data_to_play, bytes):
+                        if self.before_playback_hook_func is not None:
+                            data_to_play = self.before_playback_hook_func(data_to_play, self.source_sample_rate)
+
+                        data_to_play = np.frombuffer(data_to_play, dtype=self.np_dtype) if isinstance(data_to_play, bytes) else data_to_play
+                        data_to_play = resample_audio(data_to_play, self.source_sample_rate, self.actual_sample_rate, target_channels=self.playback_channels, is_mono=self.is_mono, dtype=self.dtype)
+                        data_to_play = data_to_play.tobytes()
+                    self.stream.write(data_to_play)
+                    has_data_been_written = True
+
+                with self.lock:
+                    if available_size == 0 and len(data_accumulated) > 0:
+                        # If this is the last chunk and it's not full, pad it
                         padding_length = self.buffer_size - len(data_accumulated)
                         padding = b'\x00' * padding_length
                         data_to_play = bytes(data_accumulated) + padding
-                        data_accumulated = bytearray()  # Clear the accumulator
+                        last_data_time = time.time()
+                        self.stream.write(data_to_play)
+                        has_data_been_written = True
+                        data_accumulated = bytearray()  # Clear after writing
 
-                    self.stream.write(data_to_play)
-
-                if available_size == 0 and len(data_accumulated) == 0:
-                    break  # Exit loop if no data is left
-
+                    if available_size == 0 and len(data_accumulated) == 0:
+                        time.sleep(0.05)
+                        # Check if playback should stop due to inactivity
+                        if has_data_been_written and time.time() - last_data_time > self.stop_playing_timeout:
+                            break  # Exiting the loop stops playback
             with audio_list_lock:
                 if (self.playback_thread, self.tag) in audio_threads:
                     audio_threads.remove((self.playback_thread, self.tag))
@@ -835,6 +850,9 @@ class AudioStreamer:
 
     def stop(self):
         with self.lock:
+            with audio_list_lock:
+                if (self.playback_thread, self.tag) in audio_threads:
+                    audio_threads.remove((self.playback_thread, self.tag))
             if self.playback_thread and self.playback_thread.is_alive():
                 self.playback_thread.join()
             if self.stream:
@@ -842,7 +860,4 @@ class AudioStreamer:
                 self.stream.close()
             pyaudio_pool.release(self.p)
             self.p = None
-            with audio_list_lock:
-                if (self.playback_thread, self.tag) in audio_threads:
-                    audio_threads.remove((self.playback_thread, self.tag))
             self.playback_thread = None
