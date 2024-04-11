@@ -738,11 +738,39 @@ def split_audio_with_padding(audio_bytes, chunk_size):
 
 
 class CircularBuffer:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.buffer = bytearray(capacity)
+        self.head = 0  # Read pointer
+        self.tail = 0  # Write pointer
+        self.count = 0  # Number of items in the buffer
+
+    def append(self, data):
+        for byte in data:
+            self.buffer[self.tail] = byte
+            self.tail = (self.tail + 1) % self.capacity
+            if self.count < self.capacity:
+                self.count += 1
+            else:
+                self.head = (self.head + 1) % self.capacity  # Move head forward if overwriting
+
+    def read(self, size):
+        if size > self.count:
+            size = self.count
+        data = bytearray(size)
+        for i in range(size):
+            data[i] = self.buffer[self.head]
+            self.head = (self.head + 1) % self.capacity
+        self.count -= size
+        return data
+
+    def get_available_size(self):
+        return self.capacity - self.count
+
+
+class QueueBuffer:
     def __init__(self, element_size):
         self.buffer = bytearray()
-        self.element_size = element_size
-
-    def set_size(self, element_size):
         self.element_size = element_size
 
     def append(self, data):
@@ -767,7 +795,7 @@ class AudioStreamer:
         self.dtype = dtype
         self.np_dtype = np.int16 if self.dtype == "int16" else np.float32
         self.buffer_size = buffer_size * (np.dtype(self.dtype).itemsize * self.playback_channels)  # buffer size in bytes for resampled size
-        self.buffer = CircularBuffer(self.buffer_size)
+        self.buffer = QueueBuffer(self.buffer_size)
         self.tag = tag
         self.playback_thread = None
         self.lock = threading.Lock()
@@ -782,6 +810,8 @@ class AudioStreamer:
         self.before_playback_hook_func = hook_func
 
     def init_stream(self, desired_sample_rate):
+        if self.p is not None:
+            pyaudio_pool.release(self.p)
         self.p = pyaudio_pool.acquire()
         self.actual_sample_rate = get_closest_sample_rate_of_device(self.device_index, desired_sample_rate)
         self.stream = self.p.open(format=self.p.get_format_from_width(np.dtype(self.dtype).itemsize),
