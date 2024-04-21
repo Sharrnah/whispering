@@ -252,8 +252,8 @@ if __name__ == '__main__':
             audio_chunk = stream.read(CHUNK, exception_on_overflow=False)
             # special case which seems to be needed for WASAPI
             if needs_sample_rate_conversion:
-                audio_chunk = audio_tools.resample_audio(audio_chunk, recorded_sample_rate, default_sample_rate, -1,
-                                                         is_mono=is_mono).tobytes()
+                audio_chunk = audio_tools.resample_audio(audio_chunk, recorded_sample_rate, default_sample_rate, target_channels=1,
+                                                         input_channels=1).tobytes()
 
             _, peak_amplitude = audio_processing_recording.process_audio_chunk(audio_chunk, default_sample_rate, None)
             highest_peak_amplitude = max(highest_peak_amplitude, peak_amplitude)
