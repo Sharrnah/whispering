@@ -813,15 +813,21 @@ class AudioStreamer:
         if self.p is not None:
             pyaudio_pool.release(self.p)
         self.p = pyaudio_pool.acquire()
+        print("dtype itemsize: ", np.dtype(self.dtype).itemsize)
+        print("format width: ", self.p.get_format_from_width(np.dtype(self.dtype).itemsize))
         self.actual_sample_rate = get_closest_sample_rate_of_device(self.device_index, desired_sample_rate)
+        print("Actual sample rate: ", int(self.actual_sample_rate))
+        print("Playback channels: ", self.playback_channels)
         self.stream = self.p.open(format=self.p.get_format_from_width(np.dtype(self.dtype).itemsize),
                                   channels=self.playback_channels, rate=int(self.actual_sample_rate), output=True,
                                   output_device_index=self.device_index)
 
     def add_audio_chunk(self, chunk):
         with self.lock:
+            print("adding audio chunk of size: ", len(chunk))
             self.buffer.append(chunk)
             if self.buffer.get_available_size() >= self.buffer_size and (self.playback_thread is None or not self.playback_thread.is_alive()):
+                print("Starting playback thread on add_chunk")
                 self.start_playback()
 
     def start_playback(self):
@@ -832,14 +838,18 @@ class AudioStreamer:
             while True:
                 with self.lock:
                     available_size = self.buffer.get_available_size()
+                    print("Available size: ", available_size)
                     if available_size > 0:
                         # Read the maximum available data that fits into full elements
                         buffer_entry = self.buffer.read(available_size)
+                        print("Buffer entry size: ", len(buffer_entry))
                         data_accumulated += buffer_entry
+                        print("Data accumulated size: ", len(data_accumulated))
 
                 while len(data_accumulated) >= self.buffer_size:
                     data_to_play = bytes(data_accumulated[:self.buffer_size])
                     data_accumulated = data_accumulated[self.buffer_size:]
+                    print("Playing audio chunk of size 1: ", len(data_to_play))
                     last_data_time = time.time()
 
                     if isinstance(data_to_play, np.ndarray) or isinstance(data_to_play, bytes):
@@ -849,6 +859,7 @@ class AudioStreamer:
                         data_to_play = np.frombuffer(data_to_play, dtype=self.np_dtype) if isinstance(data_to_play, bytes) else data_to_play
                         data_to_play = resample_audio(data_to_play, self.source_sample_rate, self.actual_sample_rate, target_channels=self.playback_channels, is_mono=self.is_mono, dtype=self.dtype)
                         data_to_play = data_to_play.tobytes()
+                        print("Resampled audio chunk size: ", len(data_to_play))
                     self.stream.write(data_to_play)
                     has_data_been_written = True
 
@@ -858,6 +869,7 @@ class AudioStreamer:
                         padding_length = self.buffer_size - len(data_accumulated)
                         padding = b'\x00' * padding_length
                         data_to_play = bytes(data_accumulated) + padding
+                        print("Playing audio chunk of size 2: ", len(data_to_play))
                         last_data_time = time.time()
                         self.stream.write(data_to_play)
                         has_data_been_written = True
@@ -868,11 +880,14 @@ class AudioStreamer:
                         # Check if playback should stop due to inactivity
                         if has_data_been_written and time.time() - last_data_time > self.stop_playing_timeout:
                             break  # Exiting the loop stops playback
+
+            print("Stopping playback due to inactivity.")
             with audio_list_lock:
                 if (self.playback_thread, self.tag) in audio_threads:
                     audio_threads.remove((self.playback_thread, self.tag))
             self.playback_thread = None
 
+        print("Starting playback thread")
         self.playback_thread = threading.Thread(target=playback_loop, name=self.tag)
         with audio_list_lock:
             audio_threads.append((self.playback_thread, self.tag))
@@ -891,3 +906,4 @@ class AudioStreamer:
             pyaudio_pool.release(self.p)
             self.p = None
             self.playback_thread = None
+            print("Stopped audio streamer")

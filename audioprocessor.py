@@ -24,12 +24,13 @@ from Models.TTS import silero
 import Models.STT.faster_whisper as faster_whisper
 import Models.STT.whisper_audio_markers as whisper_audio_markers
 import Models.STT.speecht5 as speech_t5
+#import Models.STT.whisper_cpp as whisper_cpp
 import Models.STT.tansformer_whisper as transformer_whisper
 import Models.STT.wav2vec_bert as wav2vec_bert
 import Models.STT.nemo_canary as nemo_canary
 import Models.Multi.seamless_m4t as seamless_m4t
+# import Models.STT.whisperx as whisperx
 import csv
-from datetime import datetime
 
 # Plugins
 import Plugins
@@ -250,17 +251,18 @@ def plugin_process(predicted_text, result_obj, final_audio):
                 plugin_inst.stt_intermediate(predicted_text, result_obj)
 
 
-# replace {src} and {trg} with source and target language in osc prefix
-def build_whisper_translation_osc_prefix(result_obj):
-    prefix = settings.GetOption("osc_chat_prefix")
+def replace_osc_placeholders(text, result_obj):
     txt_translate_enabled = settings.GetOption("txt_translate")
     whisper_task = settings.GetOption("whisper_task")
 
+    # replace \n with new line
+    text = text.replace("\\n", "\n")
+
     # replace {src} with source language
     if "language" in result_obj and result_obj["language"] is not None:
-        prefix = prefix.replace("{src}", result_obj["language"])
+        text = text.replace("{src}", result_obj["language"])
     elif "language" in result_obj and result_obj["language"] is None:
-        prefix = prefix.replace("{src}", "?")
+        text = text.replace("{src}", "?")
 
     if txt_translate_enabled and "txt_translation" in result_obj and "txt_translation_target" in result_obj:
         # replace {trg} with target language
@@ -268,21 +270,28 @@ def build_whisper_translation_osc_prefix(result_obj):
         if target_language is None:
             target_language = result_obj["txt_translation_target"]
         if target_language is not None:
-            prefix = prefix.replace("{trg}", target_language)
+            text = text.replace("{trg}", target_language)
     else:
         if "target_lang" in result_obj and result_obj["target_lang"] is not None:
             # replace {trg} with target language of whisper
-            prefix = prefix.replace("{trg}", result_obj["target_lang"])
+            text = text.replace("{trg}", result_obj["target_lang"])
         elif whisper_task == "transcribe":
             # replace {trg} with target language of whisper
             if "language" in result_obj and result_obj["language"] is not None:
-                prefix = prefix.replace("{trg}", result_obj["language"])
+                text = text.replace("{trg}", result_obj["language"])
         elif whisper_task == "translate":
             # replace {trg} with target language of whisper
-            prefix = prefix.replace("{trg}", "en")
+            text = text.replace("{trg}", "en")
         else:
-            prefix = prefix.replace("{trg}", "?")
-    return prefix
+            text = text.replace("{trg}", "?")
+    return text
+
+
+# replace {src} and {trg} with source and target language in osc prefix
+def build_whisper_translation_osc_prefix(result_obj):
+    prefix = settings.GetOption("osc_chat_prefix")
+
+    return replace_osc_placeholders(prefix, result_obj)
 
 
 def send_message(predicted_text, result_obj, final_audio):
@@ -314,14 +323,16 @@ def send_message(predicted_text, result_obj, final_audio):
         osc_initial_time_limit = settings.GetOption("osc_initial_time_limit")
         osc_scroll_size = settings.GetOption("osc_scroll_size")
         osc_max_scroll_size = settings.GetOption("osc_max_scroll_size")
+        osc_type_transfer_split = settings.GetOption("osc_type_transfer_split")
+        osc_type_transfer_split = replace_osc_placeholders(osc_type_transfer_split, result_obj)
 
         osc_text = predicted_text
         if settings.GetOption("osc_type_transfer") == "source":
             osc_text = result_obj["text"]
         elif settings.GetOption("osc_type_transfer") == "both":
-            osc_text = result_obj["text"] + settings.GetOption("osc_type_transfer_split") + predicted_text
+            osc_text = result_obj["text"] + osc_type_transfer_split + predicted_text
         elif settings.GetOption("osc_type_transfer") == "both_inverted":
-            osc_text = predicted_text + settings.GetOption("osc_type_transfer_split") + result_obj["text"]
+            osc_text = predicted_text + osc_type_transfer_split + result_obj["text"]
 
         message = build_whisper_translation_osc_prefix(result_obj) + osc_text
 
@@ -392,7 +403,11 @@ def load_whisper(model, ai_device):
     stt_type = settings.GetOption("stt_type")
     if stt_type == "original_whisper":
         try:
-            return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
+            set_ai_device = ai_device
+            if ai_device == "direct-ml":
+                import torch_directml
+                set_ai_device = torch_directml.device()
+            return whisper.load_model(model, download_root=".cache/whisper", device=set_ai_device)
         except Exception as e:
             print("Failed to load whisper model. Application exits. " + str(e))
             sys.exit(1)
@@ -420,6 +435,11 @@ def load_whisper(model, ai_device):
             return transformer_whisper.TransformerWhisper(compute_type=compute_dtype, device=ai_device)
         except Exception as e:
             print("Failed to load transformer_whisper model. Application exits. " + str(e))
+    #elif stt_type == "whisper_cpp":
+    #    try:
+    #        return whisper_cpp.WhisperCpp(model=model)
+    #    except Exception as e:
+    #        print("Failed to load whisper_cpp model. Application exits. " + str(e))
     elif stt_type == "wav2vec_bert":
         compute_dtype = settings.GetOption("whisper_precision")
         try:
@@ -455,6 +475,8 @@ def load_realtime_whisper(model, ai_device):
     elif settings.GetOption("stt_type") == "transformer_whisper":
         compute_dtype = settings.GetOption("realtime_whisper_precision")
         return transformer_whisper.TransformerWhisper(compute_type=compute_dtype, device=ai_device)
+    #elif settings.GetOption("stt_type") == "whisper_cpp":
+    #    return whisper_cpp.WhisperCpp(model=model)
     elif settings.GetOption("stt_type") == "wav2vec_bert":
         compute_dtype = settings.GetOption("realtime_whisper_precision")
         return wav2vec_bert.Wav2VecBert(compute_type=compute_dtype, device=ai_device)
@@ -469,6 +491,7 @@ def convert_audio(audio_bytes: bytes):
 
     audio_clip = audio_clip.set_frame_rate(whisper.audio.SAMPLE_RATE)
     audio_clip = audio_clip.set_channels(1)
+    # audio_clip = audio_clip.set_sample_width(2)
 
     return np.frombuffer(audio_clip.get_array_of_samples(), np.int16).flatten().astype(np.float32) / 32768.0
 
@@ -537,9 +560,6 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
     repetition_penalty = settings.GetOption("repetition_penalty")
     no_repeat_ngram_size = settings.GetOption("no_repeat_ngram_size")
 
-    # convert audio to numpy array, change channels to 1 etc.
-    audio_sample = convert_audio(audio_data)
-
     # do not process audio if it is older than the last result
     if not final_audio and current_audio_timestamp < last_audio_timestamp:
         print("Audio is older than last result. Skipping...")
@@ -547,6 +567,8 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
 
     result = None
     try:
+        audio_data = convert_audio(audio_data)
+
         if settings.GetOption("stt_type") == "original_whisper":
             # official whisper model
             whisper_fp16 = False
@@ -557,7 +579,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                 realtime_whisper_fp16 = False
                 if settings.GetOption("realtime_whisper_precision") == "float16":  # set precision
                     realtime_whisper_fp16 = True
-                result = audio_model_realtime.transcribe(audio_sample, task=whisper_task,
+                result = audio_model_realtime.transcribe(audio_data, task=whisper_task,
                                                          language=whisper_language,
                                                          condition_on_previous_text=whisper_condition_on_previous_text,
                                                          initial_prompt=whisper_initial_prompt,
@@ -568,7 +590,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                          beam_size=whisper_beam_size_realtime,
                                                          word_timestamps=whisper_word_timestamps)
             else:
-                result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
+                result = audio_model.transcribe(audio_data, task=whisper_task, language=whisper_language,
                                                 condition_on_previous_text=whisper_condition_on_previous_text,
                                                 initial_prompt=whisper_initial_prompt,
                                                 logprob_threshold=whisper_logprob_threshold,
@@ -581,7 +603,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
             # faster whisper
             if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
                 if not settings.GetOption("whisper_apply_voice_markers"):
-                    result = audio_model_realtime.transcribe(audio_sample, task=whisper_task,
+                    result = audio_model_realtime.transcribe(audio_data, task=whisper_task,
                                                              language=whisper_language,
                                                              condition_on_previous_text=whisper_condition_on_previous_text,
                                                              prompt_reset_on_temperature=prompt_reset_on_temperature,
@@ -597,7 +619,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                              repetition_penalty=repetition_penalty,
                                                              no_repeat_ngram_size=no_repeat_ngram_size)
                 else:
-                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_sample, audio_model)
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_data, audio_model)
                     result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
                                                                        task=whisper_task,
                                                                        language=whisper_language,
@@ -618,7 +640,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
 
             else:
                 if not settings.GetOption("whisper_apply_voice_markers"):
-                    result = audio_model.transcribe(audio_sample, task=whisper_task,
+                    result = audio_model.transcribe(audio_data, task=whisper_task,
                                                     language=whisper_language,
                                                     condition_on_previous_text=whisper_condition_on_previous_text,
                                                     prompt_reset_on_temperature=prompt_reset_on_temperature,
@@ -635,7 +657,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                     no_repeat_ngram_size=no_repeat_ngram_size)
                 else:
                     print("Applying voice markers.")
-                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_sample, audio_model)
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_data, audio_model)
                     result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
                                                                        task=whisper_task,
                                                                        language=whisper_language,
@@ -657,7 +679,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
             # facebook seamless M4T
             if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
                 if not settings.GetOption("whisper_apply_voice_markers"):
-                    result = audio_model_realtime.transcribe(audio_sample,
+                    result = audio_model_realtime.transcribe(audio_data,
                                                              source_lang=whisper_language,
                                                              target_lang=stt_target_language,
                                                              beam_size=whisper_beam_size_realtime,
@@ -667,7 +689,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                              )
                 else:
                     print("Applying voice markers.")
-                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_sample, audio_model)
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_data, audio_model)
                     result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
                                                                        task=whisper_task,
                                                                        language=whisper_language,
@@ -688,7 +710,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                     del marker_audio_tool
             else:
                 if not settings.GetOption("whisper_apply_voice_markers"):
-                    result = audio_model.transcribe(audio_sample,
+                    result = audio_model.transcribe(audio_data,
                                                     source_lang=whisper_language,
                                                     target_lang=stt_target_language,
                                                     beam_size=whisper_beam_size,
@@ -698,7 +720,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                     )
                 else:
                     print("Applying voice markers.")
-                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_sample, audio_model)
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_data, audio_model)
                     result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
                                                                        task=whisper_task,
                                                                        language=whisper_language,
@@ -719,27 +741,46 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
 
         elif settings.GetOption("stt_type") == "speech_t5":
             # microsoft SpeechT5
-            result = audio_model.transcribe(audio_sample)
+            result = audio_model.transcribe(audio_data)
 
         elif settings.GetOption("stt_type") == "transformer_whisper":
             # Whisper Huggingface Transformer
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
             audio_model.set_compute_device(settings.GetOption("ai_device"))
-            result = audio_model.transcribe(audio_sample, model=settings.GetOption("model"), task=whisper_task,
+            result = audio_model.transcribe(audio_data, model=settings.GetOption("model"), task=whisper_task,
                                             language=whisper_language, return_timestamps=False,
                                             beam_size=whisper_beam_size)
+
+        #elif settings.GetOption("stt_type") == "whisper_cpp":
+        #    # WhisperCPP
+        #    result = audio_model.transcribe(audio_sample, task=whisper_task,
+        #                                    language=whisper_language,
+        #                                    condition_on_previous_text=whisper_condition_on_previous_text,
+        #                                    prompt_reset_on_temperature=prompt_reset_on_temperature,
+        #                                    initial_prompt=whisper_initial_prompt,
+        #                                    logprob_threshold=whisper_logprob_threshold,
+        #                                    no_speech_threshold=whisper_no_speech_threshold,
+        #                                    temperature=whisper_temperature_fallback_option,
+        #                                    beam_size=whisper_beam_size,
+        #                                    word_timestamps=whisper_word_timestamps,
+        #                                    without_timestamps=whisper_faster_without_timestamps,
+        #                                    patience=whisper_faster_beam_search_patience,
+        #                                    length_penalty=whisper_faster_length_penalty,
+        #                                    repetition_penalty=repetition_penalty,
+        #                                    no_repeat_ngram_size=no_repeat_ngram_size)
+
         elif settings.GetOption("stt_type") == "wav2vec_bert":
             # Wav2VecBert
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
             audio_model.set_compute_device(settings.GetOption("ai_device"))
-            result = audio_model.transcribe(audio_sample, task=whisper_task,
+            result = audio_model.transcribe(audio_data, task=whisper_task,
                                             language=whisper_language)
 
         elif settings.GetOption("stt_type") == "nemo_canary":
             # Nemo Canary
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
             audio_model.set_compute_device(settings.GetOption("ai_device"))
-            result = audio_model.transcribe(audio_sample, task=whisper_task,
+            result = audio_model.transcribe(audio_data, task=whisper_task,
                                             source_lang=whisper_language,
                                             target_lang=stt_target_language,
                                             beam_size=whisper_beam_size,
@@ -785,6 +826,7 @@ def whisper_worker():
         queue_data = None
         audio = None
         audio_timestamp = None
+        realtime_mode = settings.GetOption("realtime")
         try:
             queue_data = q.get(timeout=queue_timeout)
             audio = queue_data["data"]
@@ -804,8 +846,8 @@ def whisper_worker():
             continue
 
         # skip if queue is full
-        if settings.GetOption("realtime") and q.qsize() >= max_queue_size and not final_audio or \
-                not settings.GetOption("realtime") and q.qsize() >= max_queue_size:
+        if realtime_mode and q.qsize() >= max_queue_size and not final_audio or \
+                not realtime_mode and q.qsize() >= max_queue_size:
             continue
 
         # skip if audio is too old, except if it's the final audio
