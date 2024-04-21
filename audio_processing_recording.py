@@ -126,7 +126,7 @@ class AudioProcessor:
         self.settings = settings
 
         self.diarization_model = None
-        self.typing_indicator_function = None
+        self.typing_indicator_function = typing_indicator_function
 
         self._new_speaker = False
         self.new_speaker_audio = None
