@@ -466,6 +466,8 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
         recorded_sample_rate = int(dev_info['defaultSampleRate'])
         needs_sample_rate_conversion = (sample_rate != recorded_sample_rate)
 
+        print(f"Max channels supported by the device: {int(dev_info['maxInputChannels'])}")
+
         try:
             # First fallback with 2 channels
             stream = py_audio.open(format=sample_format,
