@@ -185,14 +185,15 @@ def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target
     # Convert the audio chunk to a numpy array
     if isinstance(audio_chunk, bytes):
         audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
-        if input_channels is not None:
-            audio_data = audio_data.reshape(-1, input_channels)
     elif isinstance(audio_chunk, torch.Tensor):
-        audio_data = audio_chunk.numpy()
+        audio_data = audio_chunk.detach().cpu().numpy()
     elif isinstance(audio_chunk, np.ndarray):
         audio_data = audio_chunk
     else:
         raise ValueError("Unsupported audio data type")
+
+    if input_channels is not None:
+        audio_data = audio_data.reshape(-1, input_channels)
 
     # Automatically determine the number of original channels if not specified
     if input_channels is None and audio_data.ndim > 1:
@@ -223,8 +224,6 @@ def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target
     else:
         # Handling for multi-channel including stereo
         resampled_data = []
-        #for i in range(audio_data.shape[1]):  # Process each channel separately
-        #    resampled_data.append(_resample(audio_data[:, i], scale))
         for i in range(audio_data.shape[1]):  # Process each channel separately
             channel_data = audio_data[:, i]
             if channel_data.ndim > 1:
