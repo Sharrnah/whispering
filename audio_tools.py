@@ -158,7 +158,7 @@ def _uninterleave(data):
     return data.reshape(2, len(data) // 2, order='F')
 
 
-def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=1, input_channels=None, dtype="int16"):
+def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=None, input_channels=None, dtype="int16"):
     """
     Resample audio data and optionally convert between different channel configurations.
 
@@ -171,67 +171,59 @@ def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target
     :param dtype: The desired data type of the output audio, either "int16", "int32", "int8", or "float32".
     :return: A NumPy array containing the resampled and potentially re-channelled audio data.
     """
-    # Determine the data type for audio data
-    audio_data_dtype = np.float32
-    if dtype == "int8":
-        audio_data_dtype = np.int8
-    elif dtype == "int16":
-        audio_data_dtype = np.int16
-    elif dtype == "int32":
-        audio_data_dtype = np.int32
-    elif dtype == "float32":
-        audio_data_dtype = np.float32
+    dtype_map = {
+        "int8": np.int8,
+        "int16": np.int16,
+        "int32": np.int32,
+        "float32": np.float32
+    }
+    audio_data_dtype = dtype_map.get(dtype, np.int16)
 
-    # Convert the audio chunk to a numpy array
-    if isinstance(audio_chunk, bytes):
-        audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
-    elif isinstance(audio_chunk, torch.Tensor):
-        audio_data = audio_chunk.detach().cpu().numpy()
-    elif isinstance(audio_chunk, np.ndarray):
-        audio_data = audio_chunk
-    else:
-        raise ValueError("Unsupported audio data type")
+    if isinstance(audio_chunk, torch.Tensor):
+        audio_chunk = audio_chunk.detach().cpu().numpy()
+    elif isinstance(audio_chunk, bytes):
+        audio_chunk = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
+
+    if audio_chunk.size % input_channels != 0:
+        raise ValueError("The total size of audio_chunk is not a multiple of input_channels.")
 
     if input_channels is not None:
-        audio_data = audio_data.reshape(-1, input_channels)
+        # Ensure that the audio data is reshaped to (-1, input_channels) if possible
+        audio_data = audio_chunk.reshape(-1, input_channels)
+    else:
+        audio_data = audio_chunk
+        input_channels = len(audio_data.shape)
 
-    # Automatically determine the number of original channels if not specified
-    if input_channels is None and audio_data.ndim > 1:
-        input_channels = audio_data.shape[1]
-    elif audio_data.ndim == 1:
-        input_channels = 1
-
-    # Handle channel conversion
-    if target_channels is not None and target_channels != input_channels:
-        if target_channels == 1 and input_channels > 1:  # Convert to mono
-            audio_data = audio_data.mean(axis=1)
-        elif target_channels > 1:
-            if input_channels == 1:  # Mono to multi-channel
-                audio_data = np.tile(audio_data[:, np.newaxis], (1, target_channels))
-            elif input_channels == 2 and target_channels > 2:  # Stereo to multi-channel
-                left, right = _uninterleave(audio_data)
-                additional_channels = [left, right] + [np.zeros_like(left) for _ in range(target_channels - 2)]
-                audio_data = _interleave(*additional_channels)
-            elif input_channels > 2:  # Reshape from multi-channel if reducing channels
-                audio_data = audio_data[:, :target_channels]  # Simply truncate channels
-
-    # Calculate the scaling factor for resampling
+    # Calculate resampling scale
     scale = target_sample_rate / recorded_sample_rate
 
-    # Perform resampling
-    if audio_data.ndim == 1:
-        audio_data = _resample(audio_data, scale)
-    else:
-        # Handling for multi-channel including stereo
-        resampled_data = []
-        for i in range(audio_data.shape[1]):  # Process each channel separately
-            channel_data = audio_data[:, i]
-            if channel_data.ndim > 1:
-                channel_data = channel_data.flatten()  # Ensure the data is flat
-            resampled_data.append(_resample(channel_data, scale))
-        audio_data = np.vstack(resampled_data).T
+    # Process the channels
+    resampled_channels = []
+    for i in range(input_channels):
+        channel_data = audio_data[:, i]
+        resampled_channel = _resample(channel_data, scale)
+        resampled_channels.append(resampled_channel)
 
-    return audio_data.astype(audio_data_dtype)
+    # Adjust the number of channels to match target_channels if specified
+    if target_channels is not None:
+        adjusted_channels = []
+        if target_channels > input_channels:
+            # Extend by repeating the last channel to fill the new channels
+            extended_channels = resampled_channels + [resampled_channels[-1]] * (target_channels - input_channels)
+            adjusted_channels = extended_channels
+        elif target_channels < input_channels:
+            # Reduce channels by averaging them in groups
+            group_size = len(resampled_channels) // target_channels
+            adjusted_channels = [np.mean(resampled_channels[i:i+group_size], axis=0) for i in range(0, len(resampled_channels), group_size)]
+        resampled_channels = adjusted_channels
+
+    # Interleave channels back into a single array if more than one channel
+    if len(resampled_channels) > 1:
+        resampled_audio_data = _interleave(*resampled_channels)
+    else:
+        resampled_audio_data = resampled_channels[0]
+
+    return np.asarray(resampled_audio_data, dtype=audio_data_dtype)
 
 
 def get_closest_sample_rate_of_device(device_index, target_sample_rate, fallback_sample_rate=44100):
