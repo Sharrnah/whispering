@@ -192,7 +192,7 @@ def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target
         audio_data = audio_chunk.reshape(-1, input_channels)
     else:
         audio_data = audio_chunk
-        input_channels = len(audio_data.shape)
+        input_channels = audio_data.shape[1] if len(audio_data.shape) > 1 else 1
 
     # Calculate resampling scale
     scale = target_sample_rate / recorded_sample_rate
@@ -201,12 +201,13 @@ def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target
     resampled_channels = []
     for i in range(input_channels):
         channel_data = audio_data[:, i]
-        resampled_channel = _resample(channel_data, scale)
-        resampled_channels.append(resampled_channel)
+        if recorded_sample_rate != target_sample_rate:
+            channel_data = _resample(channel_data, scale)
+        resampled_channels.append(channel_data)
 
     # Adjust the number of channels to match target_channels if specified
     if target_channels is not None:
-        adjusted_channels = []
+        adjusted_channels = resampled_channels
         if target_channels > input_channels:
             # Extend by repeating the last channel to fill the new channels
             extended_channels = resampled_channels + [resampled_channels[-1]] * (target_channels - input_channels)
