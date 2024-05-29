@@ -38,7 +38,10 @@ def save_to_wav(data, filename, sample_rate, channels=1):
 def call_plugin_sts(plugins, wavefiledata, sample_rate):
     for plugin_inst in plugins.plugins:
         if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'sts'):
-            plugin_inst.sts(wavefiledata, sample_rate)
+            try:
+                plugin_inst.sts(wavefiledata, sample_rate)
+            except Exception as e:
+                print("Error in plugin sts method: " + str(e))
 
 
 def process_audio_chunk(audio_chunk, sample_rate, vad_model=None):

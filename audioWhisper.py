@@ -139,7 +139,10 @@ if __name__ == '__main__':
         if not settings.GetOption("plugin_timer_stopped"):
             for plugin_inst in plugins.plugins:
                 if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'timer'):
-                    plugin_inst.timer()
+                    try:
+                        plugin_inst.timer()
+                    except Exception as e:
+                        print(f"Error calling plugin timer for {plugin_inst.__class__.__name__}: {e}")
         else:
             if settings.GetOption("plugin_current_timer") <= 0.0:
                 settings.SetOption("plugin_current_timer", settings.GetOption("plugin_timer_timeout"))
@@ -154,7 +157,10 @@ if __name__ == '__main__':
     def call_plugin_sts(plugins, wavefiledata, sample_rate):
         for plugin_inst in plugins.plugins:
             if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'sts'):
-                plugin_inst.sts(wavefiledata, sample_rate)
+                try:
+                    plugin_inst.sts(wavefiledata, sample_rate)
+                except Exception as e:
+                    print(f"Error calling plugin sts for {plugin_inst.__class__.__name__}: {e}")
 
 
     #def call_plugin_sts_chunk(plugins, wavefiledata, sample_rate):
@@ -563,11 +569,14 @@ if __name__ == '__main__':
         import Plugins
         print("initializing plugins...")
         for plugin_inst in Plugins.plugins:
-            plugin_inst.init()
-            if plugin_inst.is_enabled(False):
-                print(plugin_inst.__class__.__name__ + " is enabled")
-            else:
-                print(plugin_inst.__class__.__name__ + " is disabled")
+            try:
+                plugin_inst.init()
+                if plugin_inst.is_enabled(False):
+                    print(plugin_inst.__class__.__name__ + " is enabled")
+                else:
+                    print(plugin_inst.__class__.__name__ + " is disabled")
+            except Exception as e:
+                print(f"Error initializing plugin {plugin_inst.__class__.__name__}: {e}")
 
         # Load textual translation dependencies
         if txt_translator.lower() != "none" and txt_translator != "":

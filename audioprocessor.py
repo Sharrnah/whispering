@@ -245,10 +245,16 @@ def plugin_process(predicted_text, result_obj, final_audio):
     for plugin_inst in Plugins.plugins:
         if final_audio:
             if hasattr(plugin_inst, 'stt'):
-                plugin_inst.stt(predicted_text, result_obj)
+                try:
+                    plugin_inst.stt(predicted_text, result_obj)
+                except Exception as e:
+                    print("Error while processing plugin stt: " + str(e))
         else:
             if hasattr(plugin_inst, 'stt_intermediate'):
-                plugin_inst.stt_intermediate(predicted_text, result_obj)
+                try:
+                    plugin_inst.stt_intermediate(predicted_text, result_obj)
+                except Exception as e:
+                    print("Error while processing plugin stt_intermediate: " + str(e))
 
 
 def replace_osc_placeholders(text, result_obj):
@@ -819,7 +825,7 @@ def whisper_worker():
 
     last_whisper_result = ""
 
-    print("Speech2Text AI Ready. You can now say something!")
+    print("Whispering Tiger is now ready!")
 
     while True:
         final_audio = False
