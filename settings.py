@@ -228,7 +228,8 @@ def GetArgumentSettingFallback(ctx, argument_name, fallback_setting_name):
 
 def get_available_models():
     available_models_list = []
-    if 'whisper' not in sys.modules or 'available_models' not in dir(sys.modules['whisper']):
+    #if 'whisper' not in sys.modules or 'available_models' not in dir(sys.modules['whisper']):
+    if '_whisper' in GetOption("stt_type"):
         from whisper import available_models
         available_models_list = available_models()
 
@@ -236,11 +237,13 @@ def get_available_models():
     if GetOption("stt_type") == "faster_whisper":
         available_models_list.insert(0, "medium-distilled.en")
         available_models_list.insert(0, "large-distilled-v2.en")
+        available_models_list.insert(0, "large-distilled-v3.en")
         available_models_list.insert(0, "small.eu")
         available_models_list.insert(0, "medium.eu")
         available_models_list.insert(0, "small.de")
         available_models_list.insert(0, "medium.de")
         available_models_list.insert(0, "large-v2.de2")
+        available_models_list.insert(0, "large-distilled-v3.de")
         available_models_list.insert(0, "small.de-swiss")
         available_models_list.insert(0, "medium.mix-jpv2")
         available_models_list.insert(0, "large-v2.mix-jp")
@@ -260,7 +263,7 @@ def GetAvailableSettingValues():
         "ai_device": ["None", "cuda", "cpu"],
         "model": get_available_models(),
         "whisper_task": ["transcribe", "translate"],
-        "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "seamless_m4t", "speech_t5", "wav2vec_bert", "nemo_canary", ""],
+        "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", ""],
         "tts_ai_device": ["cuda", "cpu"],
         "txt_translator_device": ["cuda", "cpu"],
         "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "Seamless_M4T"],
