@@ -721,9 +721,56 @@ def audio_bytes_to_wav(audio_bytes, channels=1, sample_rate=16000):
     return return_data
 
 
-def split_audio_with_padding(audio_bytes, chunk_size):
-    # Assuming 16-bit (2 bytes) audio, calculate bytes per frame
-    bytes_per_sample = 2
+def wav_bytes_to_numpy_array(wav_bytes):
+    """
+    Converts a WAV bytes object to a NumPy array.
+
+    Args:
+        wav_bytes (bytes): The bytes object containing WAV file data.
+
+    Returns:
+        np.ndarray: A NumPy array representing the audio data.
+    """
+    # Use an io.BytesIO object as the file for wave to read from.
+    with io.BytesIO(wav_bytes) as wav_file:
+        with wave.open(wav_file, 'rb') as wav_reader:
+            # Extract audio data
+            n_channels = wav_reader.getnchannels()
+            sample_width = wav_reader.getsampwidth()
+            frame_rate = wav_reader.getframerate()
+            n_frames = wav_reader.getnframes()
+            frames = wav_reader.readframes(n_frames)
+
+            # Determine the correct data type for the numpy array
+            dtype_map = {1: np.int8, 2: np.int16, 4: np.int32}
+            if sample_width in dtype_map:
+                dtype = dtype_map[sample_width]
+            else:
+                print("Unsupported sample width")
+                return None
+
+            # Convert audio bytes to a NumPy array
+            audio_array = np.frombuffer(frames, dtype=dtype)
+
+            # If stereo (or more channels), reshape the array
+            if n_channels > 1:
+                audio_array = audio_array.reshape(-1, n_channels)
+
+            return audio_array
+
+
+def split_audio_with_padding(audio_bytes, chunk_size, bytes_per_sample = 2, merge_to_bytes=True):
+    """
+    Args:
+        audio_bytes:
+        chunk_size:
+        bytes_per_sample: 1 byte for 8-bit audio, 2 bytes for 16-bit, 3 bytes for 24-bit
+        merge_to_bytes:
+
+    Returns:
+        bytes or list of bytes if merge_to_bytes is true
+    """
+
     bytes_per_frame = chunk_size * bytes_per_sample
 
     # Initialize the list to hold audio frames
@@ -738,6 +785,9 @@ def split_audio_with_padding(audio_bytes, chunk_size):
             frame += b'\x00' * (bytes_per_frame - len(frame))
 
         audio_frames.append(frame)
+
+    if merge_to_bytes:
+        return b''.join(audio_frames)
 
     return audio_frames
 

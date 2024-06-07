@@ -491,6 +491,8 @@ if __name__ == '__main__':
             settings.SetOption("whisper_languages", audioprocessor.whisper_get_languages())
         elif settings.GetOption("stt_type") == "seamless_m4t":
             settings.SetOption("whisper_languages", audioprocessor.seamless_m4t_get_languages())
+        elif settings.GetOption("stt_type") == "mms":
+            settings.SetOption("whisper_languages", audioprocessor.mms_get_languages())
         elif settings.GetOption("stt_type") == "speech_t5":
             # speech t5 only supports english
             print(f"speechT5 is an English-only model. only English speech is supported.")
