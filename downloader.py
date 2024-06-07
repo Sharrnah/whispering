@@ -59,8 +59,8 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
                                                                                           "title": title,
                                                                                           "extract_format": extract_format}}))
         while True:
-            if os.path.isfile(local_dl_file + ".finished"):
-                if sha256_checksum(local_dl_file + ".finished") == checksum or checksum == "":
+            if os.path.isfile(local_dl_file + ".finished") and os.path.isfile(local_dl_file):
+                if sha256_checksum(local_dl_file) == checksum or checksum == "":
                     success = True
                 break
             else:
@@ -69,10 +69,9 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
 
         # remove the zip file after extraction, or just rename if not a compressed file
         if success:
+            os.remove(local_dl_file + ".finished")
             if extract_format != "none":
-                os.remove(local_dl_file + ".finished")
-            else:
-                os.rename(local_dl_file + ".finished", local_dl_file)
+                os.remove(local_dl_file)
 
     else:
         if not alt_fallback and fallback_extract_func is None:
