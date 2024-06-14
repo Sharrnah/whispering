@@ -7,7 +7,7 @@ import copy
 
 import settings
 
-SUPPORTED_WIDGET_TYPES = ["button", "slider", "select", "textarea", "hyperlink", "label", "file_open", "file_save",
+SUPPORTED_WIDGET_TYPES = ["button", "slider", "select", "textarea", "textfield", "hyperlink", "label", "file_open", "file_save",
                           "folder_open", "dir_open"]
 
 
@@ -180,6 +180,10 @@ def plugin_custom_event_call(event_name, data_obj):
     for plugin_inst in plugins:
         call_func_name = 'on_'+plugin_event_name+'_call'
         if hasattr(plugin_inst, call_func_name):
-            data_obj = getattr(plugin_inst, call_func_name)(data_obj)
-            return data_obj
+            try:
+                data_obj = getattr(plugin_inst, call_func_name)(data_obj)
+                return data_obj
+            except Exception as e:
+                print(f"Error in plugin {plugin_inst.__class__.__name__} on {call_func_name}: {e}")
+                traceback.print_exc()
     return None

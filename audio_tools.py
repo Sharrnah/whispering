@@ -158,75 +158,73 @@ def _uninterleave(data):
     return data.reshape(2, len(data) // 2, order='F')
 
 
-def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=-1, is_mono=None,
-                   dtype="int16"):
+def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=None, input_channels=None, dtype="int16"):
     """
-    Resample audio data and optionally convert between stereo and mono.
+    Resample audio data and optionally convert between different channel configurations.
 
-    :param audio_chunk: The raw audio data chunk as bytes, NumPy array or PyTorch Tensor.
+    :param audio_chunk: The raw audio data chunk as bytes, NumPy array, or PyTorch Tensor.
     :param recorded_sample_rate: The sample rate of the input audio.
     :param target_sample_rate: The desired target sample rate for the output.
-    :param target_channels: The desired number of channels in the output.
-        - '-1': Average the left and right channels to create mono audio. (default)
-        - '0': Extract the first channel (left channel) data.
-        - '1': Extract the second channel (right channel) data.
-        - '2': Keep stereo channels (or copy the mono channel to both channels if is_mono is True).
-    :param is_mono: Specify whether the input audio is mono. If None, it will be determined from the shape of the audio data.
-    :param dtype: The desired data type of the output audio, either "int16" or "float32".
-    :return: A NumPy array containing the resampled audio data.
+    :param target_channels: The desired number of channels in the output. If None, keep original number of channels.
+                            If positive integer, resample to that many channels.
+    :param input_channels: Number of channels in the input audio data. If None, auto-detect from data shape.
+    :param dtype: The desired data type of the output audio, either "int16", "int32", "int8", or "float32".
+    :return: A NumPy array containing the resampled and potentially re-channelled audio data.
     """
-    # Determine the data type for audio data
-    audio_data_dtype = np.float32
-    if dtype == "int8":
-        audio_data_dtype = np.int8
-    elif dtype == "int16":
-        audio_data_dtype = np.int16
-    elif dtype == "int32":
-        audio_data_dtype = np.int32
-    elif dtype == "float32":
-        audio_data_dtype = np.float32
+    dtype_map = {
+        "int8": np.int8,
+        "int16": np.int16,
+        "int32": np.int32,
+        "float32": np.float32
+    }
+    audio_data_dtype = dtype_map.get(dtype, np.int16)
 
-    # Convert the audio chunk to a numpy array
     if isinstance(audio_chunk, torch.Tensor):
         audio_chunk = audio_chunk.detach().cpu().numpy()
+    elif isinstance(audio_chunk, bytes):
+        audio_chunk = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
 
-    audio_data = np.frombuffer(audio_chunk, dtype=audio_data_dtype)
+    if audio_chunk.size % input_channels != 0:
+        raise ValueError("The total size of audio_chunk is not a multiple of input_channels.")
 
-    # Determine if the audio is mono or stereo; assume mono if the shape has one dimension
-    if is_mono is None:
-        is_mono = len(audio_data.shape) == 1
+    if input_channels is not None:
+        # Ensure that the audio data is reshaped to (-1, input_channels) if possible
+        audio_data = audio_chunk.reshape(-1, input_channels)
+    else:
+        audio_data = audio_chunk
+        input_channels = audio_data.shape[1] if len(audio_data.shape) > 1 else 1
 
-    # If stereo, reshape the data to have two columns (left and right channels)
-    if not is_mono:
-        audio_data = audio_data.reshape(-1, 2)
-
-    # Handle channel conversion based on the target_channels parameter
-    # -1 means converting stereo to mono by taking the mean of both channels
-    # 0 or 1 means selecting one of the stereo channels
-    # 2 means duplicating the mono channel to make it stereo
-    if target_channels == -1 and not is_mono:
-        audio_data = audio_data.mean(axis=1)
-    elif target_channels in [0, 1] and not is_mono:
-        audio_data = audio_data[:, target_channels]
-    elif target_channels == 2 and is_mono:
-        audio_data = _interleave(audio_data, audio_data)
-
-    # Calculate the scaling factor for resampling
+    # Calculate resampling scale
     scale = target_sample_rate / recorded_sample_rate
 
-    # Perform resampling based on whether the audio is mono or stereo
-    # If mono or selected one channel, use _resample directly
-    # If stereo, split into left and right, resample separately, then interleave
-    if is_mono or target_channels in [0, 1, -1]:
-        audio_data = _resample(audio_data, scale)
-    else:  # Stereo
-        left, right = _uninterleave(audio_data)
-        left_resampled = _resample(left, scale)
-        right_resampled = _resample(right, scale)
-        audio_data = _interleave(left_resampled, right_resampled)
+    # Process the channels
+    resampled_channels = []
+    for i in range(input_channels):
+        channel_data = audio_data[:, i]
+        if recorded_sample_rate != target_sample_rate:
+            channel_data = _resample(channel_data, scale)
+        resampled_channels.append(channel_data)
 
-    # Return the resampled audio data with the specified dtype
-    return np.asarray(audio_data, dtype=audio_data_dtype)
+    # Adjust the number of channels to match target_channels if specified
+    if target_channels is not None:
+        adjusted_channels = resampled_channels
+        if target_channels > input_channels:
+            # Extend by repeating the last channel to fill the new channels
+            extended_channels = resampled_channels + [resampled_channels[-1]] * (target_channels - input_channels)
+            adjusted_channels = extended_channels
+        elif target_channels < input_channels:
+            # Reduce channels by averaging them in groups
+            group_size = len(resampled_channels) // target_channels
+            adjusted_channels = [np.mean(resampled_channels[i:i+group_size], axis=0) for i in range(0, len(resampled_channels), group_size)]
+        resampled_channels = adjusted_channels
+
+    # Interleave channels back into a single array if more than one channel
+    if len(resampled_channels) > 1:
+        resampled_audio_data = _interleave(*resampled_channels)
+    else:
+        resampled_audio_data = resampled_channels[0]
+
+    return np.asarray(resampled_audio_data, dtype=audio_data_dtype)
 
 
 def get_closest_sample_rate_of_device(device_index, target_sample_rate, fallback_sample_rate=44100):
@@ -305,7 +303,7 @@ def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2
 # tensor_sample_with is the sample width of the tensor (if audio is tensor and not bytes) [default is 4 bytes]
 # tensor_channels is the number of channels of the tensor (if audio is tensor and not bytes) [default is 1 channel (mono)]
 def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channel_num=2, target_channels=2,
-               is_mono=True, dtype="int16", tensor_sample_with=4, tensor_channels=1, secondary_device=None,
+               input_channels=1, dtype="int16", tensor_sample_with=4, tensor_channels=1, secondary_device=None,
                stop_play=True, tag=""):
     global audio_threads
 
@@ -347,7 +345,7 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
 
     # resample audio data
     audio_data = resample_audio(frame_data, source_sample_rate, closest_sample_rate, target_channels=target_channels,
-                                is_mono=is_mono, dtype=dtype)
+                                input_channels=input_channels, dtype=dtype)
 
     current_threads = []
 
@@ -436,41 +434,34 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
         py_audio = pyaudio.PyAudio()
 
     needs_sample_rate_conversion = False
-    is_mono = False
-
+    num_of_channels = 2
     recorded_sample_rate = sample_rate
 
     callback = None
-    if audio_processor is not None and "callback" in dir(audio_processor):
+    if audio_processor is not None and hasattr(audio_processor, "callback"):
         callback = audio_processor.callback
 
     try:
-        if callback is not None:
-            audio_processor.needs_sample_rate_conversion = needs_sample_rate_conversion
-            audio_processor.recorded_sample_rate = recorded_sample_rate
-            audio_processor.is_mono = is_mono
-
+        # First attempt with user-specified settings
         stream = py_audio.open(format=sample_format,
                                channels=channels,
-                               rate=sample_rate,
+                               rate=recorded_sample_rate,
                                input=True,
                                input_device_index=device_index,
                                frames_per_buffer=chunk,
                                stream_callback=callback)
     except Exception as e:
-        print("opening stream failed, falling back to default sample rate")
+        print(f"Failed to open stream with channels={channels} and rate={sample_rate}: {e}")
+        print("Attempting to use default device settings...")
+
         dev_info = py_audio.get_device_info_by_index(device_index)
-
-        # channel_number = int(dev_info['maxInputChannels'])
         recorded_sample_rate = int(dev_info['defaultSampleRate'])
-        print("default sample rate: {}".format(recorded_sample_rate))
-        needs_sample_rate_conversion = True
-        try:
-            if callback is not None:
-                audio_processor.needs_sample_rate_conversion = needs_sample_rate_conversion
-                audio_processor.recorded_sample_rate = recorded_sample_rate
-                audio_processor.is_mono = is_mono
+        needs_sample_rate_conversion = (sample_rate != recorded_sample_rate)
 
+        print(f"Max channels supported by the device: {int(dev_info['maxInputChannels'])}")
+
+        try:
+            # First fallback with 2 channels
             stream = py_audio.open(format=sample_format,
                                    channels=2,
                                    rate=recorded_sample_rate,
@@ -479,23 +470,41 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
                                    frames_per_buffer=chunk,
                                    stream_callback=callback)
         except Exception as e:
-            print("opening stream failed, falling back to mono")
-            # try again with mono
-            is_mono = True
+            print(f"Failed with 2 channels at default rate {recorded_sample_rate}: {e}")
+            try:
+                # Second fallback with 1 channel (mono)
+                stream = py_audio.open(format=sample_format,
+                                       channels=1,
+                                       rate=recorded_sample_rate,
+                                       input=True,
+                                       input_device_index=device_index,
+                                       frames_per_buffer=chunk,
+                                       stream_callback=callback)
+                num_of_channels = 1
+            except Exception as e:
+                print(f"Failed with 1 channel at default rate {recorded_sample_rate}: {e}")
+                # Third fallback with max channels supported by the device
+                max_channels = int(dev_info['maxInputChannels'])
+                try:
+                    stream = py_audio.open(format=sample_format,
+                                           channels=max_channels,
+                                           rate=recorded_sample_rate,
+                                           input=True,
+                                           input_device_index=device_index,
+                                           frames_per_buffer=chunk,
+                                           stream_callback=callback)
+                    num_of_channels = max_channels
+                except Exception as e:
+                    print(f"Failed with max channels ({max_channels}) at default rate {recorded_sample_rate}: {e}")
+                    raise Exception("Unable to open any audio stream.")
 
-            if callback is not None:
-                audio_processor.needs_sample_rate_conversion = needs_sample_rate_conversion
-                audio_processor.recorded_sample_rate = recorded_sample_rate
-                audio_processor.is_mono = is_mono
-            stream = py_audio.open(format=sample_format,
-                                   channels=1,
-                                   rate=recorded_sample_rate,
-                                   input=True,
-                                   input_device_index=device_index,
-                                   frames_per_buffer=chunk,
-                                   stream_callback=callback)
+    # Update the audio_processor with the final stream settings
+    if callback is not None:
+        audio_processor.needs_sample_rate_conversion = needs_sample_rate_conversion
+        audio_processor.recorded_sample_rate = recorded_sample_rate
+        audio_processor.input_channel_num = num_of_channels
 
-    return stream, needs_sample_rate_conversion, recorded_sample_rate, is_mono
+    return stream, needs_sample_rate_conversion, recorded_sample_rate, num_of_channels
 
 
 # Function to calculate LUFS
@@ -687,8 +696,8 @@ def load_wav_to_bytes(wav_path, target_sample_rate=16000):
         else:
             print("Unsupported audio sample width: " + str(audio_sample_width))
 
-    return resample_audio(audio_bytes, audio_sample_rate, target_sample_rate, target_channels=-1,
-                          is_mono=channels == 1, dtype=dtype)
+    return resample_audio(audio_bytes, audio_sample_rate, target_sample_rate, target_channels=1,
+                          input_channels=channels, dtype=dtype)
 
 
 def numpy_array_to_wav_bytes(audio: np.ndarray, sample_rate: int = 22050) -> BytesIO:
@@ -712,9 +721,56 @@ def audio_bytes_to_wav(audio_bytes, channels=1, sample_rate=16000):
     return return_data
 
 
-def split_audio_with_padding(audio_bytes, chunk_size):
-    # Assuming 16-bit (2 bytes) audio, calculate bytes per frame
-    bytes_per_sample = 2
+def wav_bytes_to_numpy_array(wav_bytes):
+    """
+    Converts a WAV bytes object to a NumPy array.
+
+    Args:
+        wav_bytes (bytes): The bytes object containing WAV file data.
+
+    Returns:
+        np.ndarray: A NumPy array representing the audio data.
+    """
+    # Use an io.BytesIO object as the file for wave to read from.
+    with io.BytesIO(wav_bytes) as wav_file:
+        with wave.open(wav_file, 'rb') as wav_reader:
+            # Extract audio data
+            n_channels = wav_reader.getnchannels()
+            sample_width = wav_reader.getsampwidth()
+            frame_rate = wav_reader.getframerate()
+            n_frames = wav_reader.getnframes()
+            frames = wav_reader.readframes(n_frames)
+
+            # Determine the correct data type for the numpy array
+            dtype_map = {1: np.int8, 2: np.int16, 4: np.int32}
+            if sample_width in dtype_map:
+                dtype = dtype_map[sample_width]
+            else:
+                print("Unsupported sample width")
+                return None
+
+            # Convert audio bytes to a NumPy array
+            audio_array = np.frombuffer(frames, dtype=dtype)
+
+            # If stereo (or more channels), reshape the array
+            if n_channels > 1:
+                audio_array = audio_array.reshape(-1, n_channels)
+
+            return audio_array
+
+
+def split_audio_with_padding(audio_bytes, chunk_size, bytes_per_sample = 2, merge_to_bytes=True):
+    """
+    Args:
+        audio_bytes:
+        chunk_size:
+        bytes_per_sample: 1 byte for 8-bit audio, 2 bytes for 16-bit, 3 bytes for 24-bit
+        merge_to_bytes:
+
+    Returns:
+        bytes or list of bytes if merge_to_bytes is true
+    """
+
     bytes_per_frame = chunk_size * bytes_per_sample
 
     # Initialize the list to hold audio frames
@@ -729,6 +785,9 @@ def split_audio_with_padding(audio_bytes, chunk_size):
             frame += b'\x00' * (bytes_per_frame - len(frame))
 
         audio_frames.append(frame)
+
+    if merge_to_bytes:
+        return b''.join(audio_frames)
 
     return audio_frames
 
@@ -787,10 +846,10 @@ class QueueBuffer:
 
 
 class AudioStreamer:
-    def __init__(self, device_index=0, source_sample_rate=44100, buffer_size=2048, is_mono=None, playback_channels=2, dtype=np.int16, tag=""):
+    def __init__(self, device_index=0, source_sample_rate=44100, buffer_size=2048, input_channels=None, playback_channels=2, dtype=np.int16, tag=""):
         self.device_index = device_index
         self.source_sample_rate = source_sample_rate
-        self.is_mono = is_mono
+        self.input_channels = input_channels
         self.playback_channels = playback_channels
         self.dtype = dtype
         self.np_dtype = np.int16 if self.dtype == "int16" else np.float32
@@ -805,6 +864,7 @@ class AudioStreamer:
         self.stream = None
         self.init_stream(source_sample_rate)
         self.before_playback_hook_func = None
+        self.verbose = False
 
     def set_before_playback_hook(self, hook_func):
         self.before_playback_hook_func = hook_func
@@ -813,15 +873,23 @@ class AudioStreamer:
         if self.p is not None:
             pyaudio_pool.release(self.p)
         self.p = pyaudio_pool.acquire()
+        print("dtype itemsize: ", np.dtype(self.dtype).itemsize)
+        print("format width: ", self.p.get_format_from_width(np.dtype(self.dtype).itemsize))
         self.actual_sample_rate = get_closest_sample_rate_of_device(self.device_index, desired_sample_rate)
+        print("Actual sample rate: ", int(self.actual_sample_rate))
+        print("Playback channels: ", self.playback_channels)
         self.stream = self.p.open(format=self.p.get_format_from_width(np.dtype(self.dtype).itemsize),
                                   channels=self.playback_channels, rate=int(self.actual_sample_rate), output=True,
                                   output_device_index=self.device_index)
 
     def add_audio_chunk(self, chunk):
         with self.lock:
+            if self.verbose:
+                print("adding audio chunk of size: ", len(chunk))
             self.buffer.append(chunk)
             if self.buffer.get_available_size() >= self.buffer_size and (self.playback_thread is None or not self.playback_thread.is_alive()):
+                if self.verbose:
+                    print("Starting playback thread on add_chunk")
                 self.start_playback()
 
     def start_playback(self):
@@ -832,14 +900,22 @@ class AudioStreamer:
             while True:
                 with self.lock:
                     available_size = self.buffer.get_available_size()
+                    if self.verbose:
+                        print("Available size: ", available_size)
                     if available_size > 0:
                         # Read the maximum available data that fits into full elements
                         buffer_entry = self.buffer.read(available_size)
+                        if self.verbose:
+                            print("Buffer entry size: ", len(buffer_entry))
                         data_accumulated += buffer_entry
+                        if self.verbose:
+                            print("Data accumulated size: ", len(data_accumulated))
 
                 while len(data_accumulated) >= self.buffer_size:
                     data_to_play = bytes(data_accumulated[:self.buffer_size])
                     data_accumulated = data_accumulated[self.buffer_size:]
+                    if self.verbose:
+                        print("Playing audio chunk of size 1: ", len(data_to_play))
                     last_data_time = time.time()
 
                     if isinstance(data_to_play, np.ndarray) or isinstance(data_to_play, bytes):
@@ -847,8 +923,10 @@ class AudioStreamer:
                             data_to_play = self.before_playback_hook_func(data_to_play, self.source_sample_rate)
 
                         data_to_play = np.frombuffer(data_to_play, dtype=self.np_dtype) if isinstance(data_to_play, bytes) else data_to_play
-                        data_to_play = resample_audio(data_to_play, self.source_sample_rate, self.actual_sample_rate, target_channels=self.playback_channels, is_mono=self.is_mono, dtype=self.dtype)
+                        data_to_play = resample_audio(data_to_play, self.source_sample_rate, self.actual_sample_rate, target_channels=self.playback_channels, input_channels=self.input_channels, dtype=self.dtype)
                         data_to_play = data_to_play.tobytes()
+                        if self.verbose:
+                            print("Resampled audio chunk size: ", len(data_to_play))
                     self.stream.write(data_to_play)
                     has_data_been_written = True
 
@@ -858,6 +936,8 @@ class AudioStreamer:
                         padding_length = self.buffer_size - len(data_accumulated)
                         padding = b'\x00' * padding_length
                         data_to_play = bytes(data_accumulated) + padding
+                        if self.verbose:
+                            print("Playing audio chunk of size 2: ", len(data_to_play))
                         last_data_time = time.time()
                         self.stream.write(data_to_play)
                         has_data_been_written = True
@@ -868,11 +948,16 @@ class AudioStreamer:
                         # Check if playback should stop due to inactivity
                         if has_data_been_written and time.time() - last_data_time > self.stop_playing_timeout:
                             break  # Exiting the loop stops playback
+
+            if self.verbose:
+                print("Stopping playback due to inactivity.")
             with audio_list_lock:
                 if (self.playback_thread, self.tag) in audio_threads:
                     audio_threads.remove((self.playback_thread, self.tag))
             self.playback_thread = None
 
+        if self.verbose:
+            print("Starting playback thread")
         self.playback_thread = threading.Thread(target=playback_loop, name=self.tag)
         with audio_list_lock:
             audio_threads.append((self.playback_thread, self.tag))
@@ -891,3 +976,4 @@ class AudioStreamer:
             pyaudio_pool.release(self.p)
             self.p = None
             self.playback_thread = None
+            print("Stopped audio streamer")

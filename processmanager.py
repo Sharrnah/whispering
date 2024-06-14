@@ -108,8 +108,11 @@ def kill_process(process):
             p_sec += 1
     if p_sec >= timeout_sec:
         process.kill()  # supported from python 2.6
-    # remove process from list
-    all_processes.remove(process)
+    # remove process from list if its in the list
+    if process in all_processes:
+        all_processes.remove(process)
+    else:
+        print('Process is not in the list.')
     print('Process killed')
 
 

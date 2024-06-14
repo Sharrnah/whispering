@@ -430,7 +430,7 @@ class Silero:
 
     def play_audio(self, audio, device=None):
         source_sample_rate = 24000
-        source_is_mono = True
+        source_channels = 1
 
         if device is None:
             device = settings.GetOption("device_default_out_index")
@@ -450,7 +450,7 @@ class Silero:
                                source_sample_rate=source_sample_rate,
                                audio_device_channel_num=2,
                                target_channels=1,
-                               is_mono=source_is_mono,
+                               input_channels=source_channels,
                                dtype="float32",
                                tensor_sample_with=4,
                                tensor_channels=1,

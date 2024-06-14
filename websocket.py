@@ -164,7 +164,10 @@ def tts_plugin_process(msgObj, websocket, download=False):
 
     for plugin_inst in Plugins.plugins:
         if hasattr(plugin_inst, 'tts'):
-            plugin_inst.tts(text, device, websocket, download)
+            try:
+                plugin_inst.tts(text, device, websocket, download)
+            except Exception as e:
+                print("Plugin TTS failed:", e)
 
 
 def ocr_req(msgObj, websocket):
@@ -191,7 +194,10 @@ def plugin_event_handler(msgObj, websocket):
     for plugin_inst in Plugins.plugins:
         if pluginClassName == type(plugin_inst).__name__:
             if hasattr(plugin_inst, 'on_event_received'):
-                plugin_inst.on_event_received(msgObj, websocket)
+                try:
+                    plugin_inst.on_event_received(msgObj, websocket)
+                except Exception as e:
+                    print("Plugin event failed:", e)
                 return
 
 
@@ -208,10 +214,16 @@ def websocketMessageHandler(msgObj, websocket):
                             settings.SetOption(msgObj["name"], msgObj["value"])
                             if is_enabled:
                                 if hasattr(plugin_inst, 'on_enable'):
-                                    plugin_inst.on_enable()
+                                    try:
+                                        plugin_inst.on_enable()
+                                    except Exception as e:
+                                        print("Plugin enable failed:", e)
                             else:
                                 if hasattr(plugin_inst, 'on_disable'):
-                                    plugin_inst.on_disable()
+                                    try:
+                                        plugin_inst.on_disable()
+                                    except Exception as e:
+                                        print("Plugin disable failed:", e)
 
         settings.SetOption(msgObj["name"], msgObj["value"])
         BroadcastMessage(json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}),
