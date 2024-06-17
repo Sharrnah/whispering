@@ -170,3 +170,24 @@ def download_thread(url, extract_dir, checksum, num_retries=3, timeout=60):
     dl_thread = threading.Thread(target=download_file_simple, args=(url, extract_dir, checksum, num_retries, timeout))
     dl_thread.start()
     dl_thread.join()
+
+
+def check_file_hashes(path, hash_list) -> bool:
+    """
+    Go over the list of hashes in hash_list and check if the file exists and if the hash matches.
+    hash_list example:
+    {
+        "generation_config.json": "1149807b43a0dd788e052bfcb47c012b0b182946b66c63b3ecdf9aad2d9b5f66",
+        "config.json": "b5b4368433a25df0943929beaf6833db03b767b150990ee078fe62c5a7b31434",
+        # ...
+    }
+    Returns True if all hashes match, False otherwise.
+    """
+    for file_name, expected_hash in hash_list.items():
+        file_path = os.path.join(path, file_name)
+        if not os.path.isfile(file_path):
+            return False
+        actual_hash = sha256_checksum(file_path)
+        if actual_hash.lower() != expected_hash.lower():
+            return False
+    return True
