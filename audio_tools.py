@@ -944,7 +944,7 @@ class AudioStreamer:
                         data_accumulated = bytearray()  # Clear after writing
 
                     if available_size == 0 and len(data_accumulated) == 0:
-                        time.sleep(0.05)
+                        time.sleep(0.01)
                         # Check if playback should stop due to inactivity
                         if has_data_been_written and time.time() - last_data_time > self.stop_playing_timeout:
                             break  # Exiting the loop stops playback
