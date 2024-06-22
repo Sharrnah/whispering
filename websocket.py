@@ -445,7 +445,8 @@ class SocketServerThread(object):
 
 def set_loading_state(key, value):
     LOADING_QUEUE[key] = value
-    BroadcastMessage(json.dumps({"type": "loading_state", "data": LOADING_QUEUE}))
+    #BroadcastMessage(json.dumps({"type": "loading_state", "data": LOADING_QUEUE}))
+    print(json.dumps({"type": "loading_state", "data": {"name": key, "value": value}}))
 
 
 def get_loading_state(key):

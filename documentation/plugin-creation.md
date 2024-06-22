@@ -62,6 +62,7 @@ The following structs are available:
 - `{"type": "button", "label": "Batch Generate", "style": "primary"}` - A button (style can be "primary" or "default")
 - `{"type": "select", "label": "Label", "value": "default value", "options": ["default value", "option2", "option3"]}` - A select box 
 - `{"type": "textarea", "rows": 5, "value": ""}` - A textarea
+- `{"type": "textfield", "password": false, "value": ""}` - A textfield (password field if "password" is true)
 - `{"type": "hyperlink", "label": "hyperlink", "value": "https://github.com/Sharrnah/whispering-ui"}`
 - `{"type": "label", "label": "Some infotext in a label.", "style": "center"}` - A label (style can be "left", "right" or "center")
 - `{"type": "file_open", "accept": ".wav,.mp3", "value": "bark_clone_voice/clone_voice.wav"}` - A file open dialog (accept can be any file extension or a comma separated list of file extensions)

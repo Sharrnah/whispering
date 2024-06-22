@@ -535,12 +535,15 @@ def needs_download(model: str, compute_type: str = "float32"):
     model_cache_path = Path(".cache/whisper")
     model_path = Path(model_cache_path / (model + "-ct2"))
     if compute_type == "float16" or compute_type == "int8_float16" or compute_type == "int16" or compute_type == "int8":
+        compute_type = "float16"
         model_path = Path(model_cache_path / (model + "-ct2-fp16"))
     # special case for models that are only available in one precision (as float16 vs float32 showed no difference in large-v3 and distilled versions)
     if compute_type not in MODEL_LINKS[model]:
         if compute_type == "float32":
+            compute_type = "float16"
             model_path = Path(model_cache_path / (model + "-ct2-fp16"))
         elif compute_type == "float16":
+            compute_type = "float32"
             model_path = Path(model_cache_path / (model + "-ct2"))
 
     pretrained_lang_model_file = Path(model_path / "model.bin")
@@ -678,6 +681,12 @@ class FasterWhisper(metaclass=SingletonMeta):
                    prompt_reset_on_temperature: float = 0.5, repetition_penalty: float = 1,
                    no_repeat_ngram_size: int = 0) -> dict:
 
+        # large-v3 fix see https://github.com/SYSTRAN/faster-whisper/issues/777
+        compression_ratio_threshold = 2.4
+        if "-v3" in self.loaded_model_size:
+            compression_ratio_threshold -= .2
+            logprob_threshold += .3
+
         result_segments, audio_info = self.model.transcribe(audio_sample, task=task,
                                                             language=language,
                                                             condition_on_previous_text=condition_on_previous_text,
@@ -693,10 +702,19 @@ class FasterWhisper(metaclass=SingletonMeta):
                                                             length_penalty=length_penalty,
                                                             repetition_penalty=repetition_penalty,
                                                             no_repeat_ngram_size=no_repeat_ngram_size,
+                                                            compression_ratio_threshold=compression_ratio_threshold,
                                                             )
 
+        transcription = ""
+        for segment in result_segments:
+            # large-v3 hallucination improvement by only checking no_speech_threshold
+            if segment.no_speech_prob > no_speech_threshold and "-v3" in self.loaded_model_size:
+                continue
+            transcription += segment.text + " "
+
+        transcription = transcription.strip()
         result = {
-            'text': " ".join([segment.text for segment in result_segments]),
+            'text': transcription,
             'type': task,
             'language': audio_info.language
         }
