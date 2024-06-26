@@ -69,6 +69,7 @@ The following structs are available:
 - `{"type": "file_save", "accept": ".npz", "value": "last_prompt.npz"}` - A file save dialog (accept can be any file extension or a comma separated list of file extensions)
 - `{"type": "folder_open", "accept": "", "value": ""}` - A folder open dialog
 - `{"type": "dir_open", "accept": "", "value": ""}` - Alias for a folder open dialog
+- `{"type": "select_audio", "device_type": "input|output", "value": ""}` - List of audio devices. Only listing input / output devices if device_type = "input" / device_type = "output"
 
 ## Custom Plugin events
 You can use event calls in plugins using `Plugins.plugin_custom_call(event_name, data_obj)`.

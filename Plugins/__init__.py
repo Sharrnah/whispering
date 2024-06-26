@@ -8,7 +8,7 @@ import copy
 import settings
 
 SUPPORTED_WIDGET_TYPES = ["button", "slider", "select", "textarea", "textfield", "hyperlink", "label", "file_open", "file_save",
-                          "folder_open", "dir_open"]
+                          "folder_open", "dir_open", "select_audio"]
 
 
 class Base:
@@ -62,6 +62,10 @@ class Base:
                         # keep value
                         init_settings[settings_name]["value"] = plugin_settings[self.__class__.__name__][settings_name][
                             "value"]
+                        # keep keys that start with an underscore
+                        for key in plugin_settings[self.__class__.__name__][settings_name]:
+                            if key.startswith('_'):
+                                init_settings[settings_name][key] = plugin_settings[self.__class__.__name__][settings_name][key]
                     elif "value" in init_settings[settings_name] and type(
                             plugin_settings[self.__class__.__name__][settings_name]) == type(
                         init_settings[settings_name]["value"]):
