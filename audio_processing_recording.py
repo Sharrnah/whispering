@@ -200,6 +200,7 @@ class AudioProcessor:
             speaker_change_split = self.settings.GetOption("speaker_change_split")
             min_speakers = self.settings.GetOption("min_speakers")
             max_speakers = self.settings.GetOption("max_speakers")
+            min_speaker_length = self.settings.GetOption("min_speaker_length")
 
             clip_duration = phrase_time_limit
             fps = 0
@@ -257,14 +258,16 @@ class AudioProcessor:
                     use_speaker_diarization and self._new_speaker and self.diarization_model is not None and len(
                 self.frames) > 0):
 
-                clip = []
+                #clip = []
                 # merge all frames to one audio clip
-                for i in range(0, len(self.frames)):
-                    if self.frames[i] is not None:
-                        clip.append(self.frames[i])
+                #for i in range(0, len(self.frames)):
+                #    if self.frames[i] is not None:
+                #        clip.append(self.frames[i])
 
-                if len(clip) > 0:
-                    wavefiledata = b''.join(clip)
+                #if len(clip) > 0:
+                #    wavefiledata = b''.join(clip)
+                if len(self.frames) > 0:
+                    wavefiledata = b''.join(self.frames)
                 else:
                     return None, pyaudio.paContinue
 
@@ -281,11 +284,15 @@ class AudioProcessor:
                         normalize_gain_factor, verbose=self.verbose
                     )
                     wavefiledata = audio_tools.convert_audio_datatype_to_integer(wavefiledata, np.int16)
-                    wavefiledata = wavefiledata.tobytes()
+                    #wavefiledata = wavefiledata.tobytes()
 
                 # remove silence from audio
                 if silence_cutting_enabled:
-                    wavefiledata_np = np.frombuffer(wavefiledata, np.int16)
+                    if type(wavefiledata) is bytes:
+                        wavefiledata_np = np.frombuffer(wavefiledata, np.int16)
+                    else:
+                        wavefiledata_np = wavefiledata
+
                     if len(wavefiledata_np) >= self.block_size_samples:
                         wavefiledata = audio_tools.remove_silence_parts(
                             wavefiledata_np, self.default_sample_rate,
@@ -293,7 +300,10 @@ class AudioProcessor:
                             keep_silence_length=keep_silence_length,
                             verbose=self.verbose
                         )
-                        wavefiledata = wavefiledata.tobytes()
+                        #wavefiledata = wavefiledata.tobytes()
+
+                if type(wavefiledata) is np.array:
+                    wavefiledata = wavefiledata.tobytes()
 
                 # debug save of audio clip
                 # save_to_wav(wavefiledata, "resampled_audio_chunk.wav", self.default_sample_rate)
@@ -319,9 +329,9 @@ class AudioProcessor:
 
                     wave_file_bytes = audio_tools.audio_bytes_to_wav(wavefiledata, channels=CHANNELS,
                                                                      sample_rate=SAMPLE_RATE)
-                    if self.diarization_model is not None and use_speaker_diarization:
-                        wave_file_bytes = self.diarization_model.diarize(wave_file_bytes, min_speakers=min_speakers,
-                                                                         max_speakers=max_speakers)
+                    #if self.diarization_model is not None and use_speaker_diarization:
+                    #    wave_file_bytes = self.diarization_model.diarize(wave_file_bytes, min_speakers=min_speakers,
+                    #                                                     max_speakers=max_speakers, min_segment_length=min_speaker_length)
 
                     if isinstance(wave_file_bytes, list):
                         for audio_segment in wave_file_bytes:
@@ -397,7 +407,7 @@ class AudioProcessor:
                 self.frames.append(audio_chunk)
                 self.start_time = time.time()
                 if self.settings.GetOption("realtime"):
-                    clip = []
+                    #clip = []
                     frame_count = len(self.frames)
                     # send realtime intermediate results every x frames and every x seconds (making sure its at least x frame length)
                     if frame_count % self.settings.GetOption(
@@ -409,11 +419,12 @@ class AudioProcessor:
                                                                        args=(self.osc_ip, self.osc_port, False))
                             typing_indicator_thread.start()
                         # merge all frames to one audio clip
-                        for i in range(0, len(self.frames)):
-                            clip.append(self.frames[i])
+                        #for i in range(0, len(self.frames)):
+                        #    clip.append(self.frames[i])
 
-                        if len(clip) > 0:
-                            wavefiledata = b''.join(clip)
+                        #if len(clip) > 0:
+                        if len(self.frames) > 0:
+                            wavefiledata = b''.join(self.frames)
                         else:
                             return None, pyaudio.paContinue
 
@@ -432,11 +443,15 @@ class AudioProcessor:
                                 verbose=self.verbose
                             )
                             wavefiledata = audio_tools.convert_audio_datatype_to_integer(wavefiledata, np.int16)
-                            wavefiledata = wavefiledata.tobytes()
+                            #wavefiledata = wavefiledata.tobytes()
 
                         # remove silence from audio
                         if silence_cutting_enabled:
-                            wavefiledata_np = np.frombuffer(wavefiledata, np.int16)
+                            if type(wavefiledata) is bytes:
+                                wavefiledata_np = np.frombuffer(wavefiledata, np.int16)
+                            else:
+                                wavefiledata_np = wavefiledata
+                            #wavefiledata_np = np.frombuffer(wavefiledata, np.int16)
                             if len(wavefiledata_np) >= self.block_size_samples:
                                 wavefiledata = audio_tools.remove_silence_parts(
                                     wavefiledata_np, self.default_sample_rate,
@@ -444,7 +459,10 @@ class AudioProcessor:
                                     keep_silence_length=keep_silence_length,
                                     verbose=self.verbose
                                 )
-                                wavefiledata = wavefiledata.tobytes()
+                                #wavefiledata = wavefiledata.tobytes()
+
+                        if type(wavefiledata) is np.array:
+                            wavefiledata = wavefiledata.tobytes()
 
                         if wavefiledata is not None and len(wavefiledata) > 0:
                             # denoise audio
@@ -453,23 +471,63 @@ class AudioProcessor:
 
                             wave_file_bytes = audio_tools.audio_bytes_to_wav(wavefiledata, channels=CHANNELS,
                                                                              sample_rate=SAMPLE_RATE)
-                            if self.diarization_model is not None and use_speaker_diarization:
-                                wave_file_bytes = self.diarization_model.diarize(wave_file_bytes,
-                                                                                 min_speakers=min_speakers,
-                                                                                 max_speakers=max_speakers)
 
-                            if isinstance(wave_file_bytes, list):
+
+                            # write wav file if configured to do so (debugging!!!)
+                            transcription_save_audio_dir = self.settings.GetOption("transcription_save_audio_dir")
+                            if transcription_save_audio_dir is not None and transcription_save_audio_dir != "":
+                                start_time_str = Utilities.ns_to_datetime(time.time_ns(), formatting='%Y-%m-%d %H_%M_%S-%f')
+                                audio_file_name = f"audio_transcript_{start_time_str}_intermediate.wav"
+
+                                transcription_save_audio_dir = Path(transcription_save_audio_dir)
+                                audio_file_path = transcription_save_audio_dir / audio_file_name
+
+                                threading.Thread(
+                                    target=save_to_wav,
+                                    args=(wavefiledata, str(audio_file_path.resolve()), self.default_sample_rate,)
+                                ).start()
+
+                            tmp_wave_file_bytes = None
+                            if self.diarization_model is not None and use_speaker_diarization:
+                                #tmp_wave_file_bytes = b''.join(self.frames)
+                                tmp_wave_file_bytes = wavefiledata
+
+                                tmp_wave_file_bytes = self.diarization_model.diarize(tmp_wave_file_bytes,
+                                                                                 sample_rate=self.default_sample_rate,
+                                                                                 min_speakers=min_speakers,
+                                                                                 max_speakers=max_speakers,
+                                                                                 min_segment_length=min_speaker_length,
+                                                                                 bytes_sample_rate=self.recorded_sample_rate,
+                                                                                 bytes_channel_num=self.input_channel_num)
+
+
+                            if isinstance(tmp_wave_file_bytes, list) and tmp_wave_file_bytes:
                                 print("multiple speaker audio detected")
-                                self.audio_queue.put(
-                                    {'time': time.time_ns(), 'data': wave_file_bytes[-1], 'final': False})
-                                if speaker_change_split and len(wave_file_bytes) > 1:
-                                    self.new_speaker_audio = self.frames[-1]
-                                    # self.new_speaker_audio = wave_file_bytes[-1]
+
+                                #self.audio_queue.put(
+                                #    {'time': time.time_ns(), 'data': tmp_wave_file_bytes[-1], 'final': False})
+                                if speaker_change_split and len(tmp_wave_file_bytes) > 1:
+                                    print("detected new speaker")
+                                    #self.frames = [audio_tools.split_audio_with_padding(frame, CHUNK, merge_to_bytes=True) for frame in wave_file_bytes[:-1]]
+                                    self.frames = [frame for frame in tmp_wave_file_bytes[:-1]]
+                                    #self.frames = [audio_tools.resample_audio(frame,
+                                    #                                          recorded_sample_rate=self.default_sample_rate,
+                                    #                                          target_sample_rate=self.recorded_sample_rate,
+                                    #                                          target_channels=self.input_channel_num,
+                                    #                                          input_channels=self.input_channel_num,
+                                    #                                          dtype="int16",
+                                    #                                          ) for frame in wave_file_bytes[:-1]]
+
+                                    #self.new_speaker_audio = audio_tools.split_audio_with_padding(wave_file_bytes[-1], CHUNK, merge_to_bytes=True)
+
+                                    self.new_speaker_audio = tmp_wave_file_bytes[-1]
+                                    ##self.new_speaker_audio = audio_tools.split_audio_with_padding(wave_file_bytes[-1], CHUNK)
                                     # remove last element from frames list
-                                    self.frames.pop()
+                                    #self.frames.pop()
                                     # convert into bytes per audio frame
-                                    # self.frames = audio_tools.split_audio_with_padding(wave_file_bytes[0], CHUNK)
+                                    ##self.frames = audio_tools.split_audio_with_padding(wave_file_bytes[0], CHUNK)
                                     self._new_speaker = True
+                                #elif not isinstance(wave_file_bytes, list):
                             else:
                                 self.audio_queue.put(
                                     {'time': time.time_ns(), 'data': wave_file_bytes, 'final': False})
