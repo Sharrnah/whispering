@@ -553,7 +553,7 @@ def normalize_audio_lufs(audio, sample_rate, lower_threshold=-24.0, upper_thresh
     return audio, lufs
 
 
-def convert_audio_datatype_to_float(audio):
+def convert_audio_datatype_to_float(audio, dtype=np.float32):
     """
     Convert audio data to floating-point representation.
 
@@ -562,12 +562,16 @@ def convert_audio_datatype_to_float(audio):
 
     Parameters:
     audio (numpy array): The audio data to be converted.
+    dtype (numpy dtype, optional): The desired float data type for the output. (Defaults to np.float32)
 
     Returns:
     audio (numpy array): The audio data in floating-point representation.
     """
     if np.issubdtype(audio.dtype, np.integer):
-        audio = audio.astype(np.float32) / np.iinfo(audio.dtype).max
+        max_val = np.iinfo(audio.dtype).max + 1  # Use +1 to handle -32768 to 32767 symmetrically for int16
+        audio = audio.astype(dtype) / max_val
+        if np.any((audio < -1) | (audio > 1)):
+            print("Warning: Clipping detected after normalization")
     return audio
 
 
@@ -587,6 +591,9 @@ def convert_audio_datatype_to_integer(audio, dtype=np.int16):
     audio (numpy array): The audio data in integer representation.
     """
     if np.issubdtype(audio.dtype, np.floating):
+        # Clip audio to ensure it remains within the valid range
+        np.clip(audio, -1, 1, out=audio)
+
         audio = (audio * np.iinfo(dtype).max).astype(dtype)
     return audio
 
