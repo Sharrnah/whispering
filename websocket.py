@@ -167,7 +167,7 @@ def tts_plugin_process(msgObj, websocket, download=False):
             try:
                 plugin_inst.tts(text, device, websocket, download)
             except Exception as e:
-                print("Plugin TTS failed:", e)
+                print(f"Plugin TTS failed in Plugin {plugin_inst.__class__.__name__}:", e)
 
 
 def ocr_req(msgObj, websocket):
@@ -201,7 +201,7 @@ def plugin_event_handler(msgObj, websocket):
                 try:
                     plugin_inst.on_event_received(msgObj, websocket)
                 except Exception as e:
-                    print("Plugin event failed:", e)
+                    print(f"Plugin event failed in Plugin {plugin_inst.__class__.__name__}:", e)
                 return
 
 
@@ -221,13 +221,13 @@ def websocketMessageHandler(msgObj, websocket):
                                     try:
                                         plugin_inst.on_enable()
                                     except Exception as e:
-                                        print("Plugin enable failed:", e)
+                                        print(f"Plugin enable failed for {plugin_name}:", e)
                             else:
                                 if hasattr(plugin_inst, 'on_disable'):
                                     try:
                                         plugin_inst.on_disable()
                                     except Exception as e:
-                                        print("Plugin disable failed:", e)
+                                        print(f"Plugin disable failed for {plugin_name}:", e)
 
         settings.SetOption(msgObj["name"], msgObj["value"])
         BroadcastMessage(json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}),

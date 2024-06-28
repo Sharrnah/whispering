@@ -257,13 +257,13 @@ def plugin_process(predicted_text, result_obj, final_audio):
                 try:
                     plugin_inst.stt(predicted_text, result_obj)
                 except Exception as e:
-                    print("Error while processing plugin stt: " + str(e))
+                    print(f"Error while processing plugin stt in Plugin {plugin_inst.__class__.__name__}: " + str(e))
         else:
             if hasattr(plugin_inst, 'stt_intermediate'):
                 try:
                     plugin_inst.stt_intermediate(predicted_text, result_obj)
                 except Exception as e:
-                    print("Error while processing plugin stt_intermediate: " + str(e))
+                    print(f"Error while processing plugin stt_intermediate in Plugin {plugin_inst.__class__.__name__}: " + str(e))
 
 
 def replace_osc_placeholders(text, result_obj):

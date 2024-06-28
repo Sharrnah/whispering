@@ -96,12 +96,12 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
             except Exception as e:
                 print("Error: " + str(e))
         case _:
-            try:
-                for plugin_inst in Plugins.plugins:
+            for plugin_inst in Plugins.plugins:
+                try:
                     if hasattr(plugin_inst, 'text_translate'):
                         translation_text, from_code, to_code = plugin_inst.text_translate(text, from_code, to_code)
-            except Exception as e:
-                print("Error: " + str(e))
+                except Exception as e:
+                    print(f"Error in Plugin {plugin_inst.__class__.__name__}: " + str(e))
 
     if to_romaji:
         translation_text = convert_to_romaji(translation_text)
