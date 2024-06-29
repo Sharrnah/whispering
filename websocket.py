@@ -230,7 +230,7 @@ def websocketMessageHandler(msgObj, websocket):
                                         print(f"Plugin disable failed for {plugin_name}:", e)
 
         settings.SetOption(msgObj["name"], msgObj["value"])
-        BroadcastMessage(json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}),
+        BroadcastMessage(json.dumps({"type": "translate_settings", "data": settings.SETTINGS.get_all_settings()}),
                          exclude_client=websocket)  # broadcast updated settings to all clients
         # reload tts voices if tts model changed
         if msgObj["name"] == "tts_model":
@@ -240,7 +240,7 @@ def websocketMessageHandler(msgObj, websocket):
             VRC_OSCLib.set_min_time_between_messages(msgObj["value"])
 
     if msgObj["type"] == "setting_update_req":
-        AnswerMessage(websocket, json.dumps({"type": "translate_settings", "data": settings.TRANSLATE_SETTINGS}))
+        AnswerMessage(websocket, json.dumps({"type": "translate_settings", "data": settings.SETTINGS.get_all_settings()}))
 
     if msgObj["type"] == "translate_req":
         translate_thread = threading.Thread(target=translate_request, args=(msgObj, websocket))
@@ -328,10 +328,10 @@ async def handler(websocket):
         await send(websocket, json.dumps({"type": "available_tts_voices", "data": silero.tts.list_voices()}))
 
     # send all available setting values
-    await send(websocket, json.dumps({"type": "settings_values", "data": settings.GetAvailableSettingValues()}))
+    await send(websocket, json.dumps({"type": "settings_values", "data": settings.SETTINGS.get_available_setting_values()}))
 
     # send all current settings
-    await send(websocket, json.dumps({"type": "translate_settings", "data": Utilities.handle_bytes(settings.TRANSLATE_SETTINGS)}))
+    await send(websocket, json.dumps({"type": "translate_settings", "data": Utilities.handle_bytes(settings.SETTINGS.get_all_settings())}))
 
     # send loading state
     if len(LOADING_QUEUE) > 0:

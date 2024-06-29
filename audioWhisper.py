@@ -43,7 +43,6 @@ if __name__ == '__main__':
 
     sys.excepthook = handle_exception
 
-    import io
     import signal
     import time
     import threading
@@ -65,8 +64,6 @@ if __name__ == '__main__':
     import pyaudiowpatch as pyaudio
     from whisper import available_models, audio as whisper_audio
 
-    import keyboard
-
     import numpy as np
     import torch
 
@@ -79,6 +76,7 @@ if __name__ == '__main__':
     import wave
 
     from Models.STS import DeepFilterNet
+    from Models.STS import Noisereduce
 
 
     def save_to_wav(data, filename, sample_rate, channels=1):
@@ -99,12 +97,11 @@ if __name__ == '__main__':
     cache_vad_path = Path(Path.cwd() / ".cache" / "silero-vad")
     os.makedirs(cache_vad_path, exist_ok=True)
 
-
     def sigterm_handler(_signo, _stack_frame):
         processmanager.cleanup_subprocesses()
 
         # reset process id
-        settings.SetOption("process_id", 0)
+        settings.SETTINGS.SetOption("process_id", 0)
 
         # it raises SystemExit(0):
         print('Process died')
@@ -134,9 +131,9 @@ if __name__ == '__main__':
 
     def call_plugin_timer(plugins):
         # Call the method every x seconds
-        timer = threading.Timer(settings.GetOption("plugin_timer"), call_plugin_timer, args=[plugins])
+        timer = threading.Timer(settings.SETTINGS.GetOption("plugin_timer"), call_plugin_timer, args=[plugins])
         timer.start()
-        if not settings.GetOption("plugin_timer_stopped"):
+        if not settings.SETTINGS.GetOption("plugin_timer_stopped"):
             for plugin_inst in plugins.plugins:
                 if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'timer'):
                     try:
@@ -144,14 +141,14 @@ if __name__ == '__main__':
                     except Exception as e:
                         print(f"Error calling plugin timer for {plugin_inst.__class__.__name__}: {e}")
         else:
-            if settings.GetOption("plugin_current_timer") <= 0.0:
-                settings.SetOption("plugin_current_timer", settings.GetOption("plugin_timer_timeout"))
+            if settings.SETTINGS.GetOption("plugin_current_timer") <= 0.0:
+                settings.SETTINGS.SetOption("plugin_current_timer", settings.SETTINGS.GetOption("plugin_timer_timeout"))
             else:
-                settings.SetOption("plugin_current_timer",
-                                   settings.GetOption("plugin_current_timer") - settings.GetOption("plugin_timer"))
-                if settings.GetOption("plugin_current_timer") <= 0.0:
-                    settings.SetOption("plugin_timer_stopped", False)
-                    settings.SetOption("plugin_current_timer", 0.0)
+                settings.SETTINGS.SetOption("plugin_current_timer",
+                                   settings.SETTINGS.GetOption("plugin_current_timer") - settings.SETTINGS.GetOption("plugin_timer"))
+                if settings.SETTINGS.GetOption("plugin_current_timer") <= 0.0:
+                    settings.SETTINGS.SetOption("plugin_timer_stopped", False)
+                    settings.SETTINGS.SetOption("plugin_current_timer", 0.0)
 
 
     def call_plugin_sts(plugins, wavefiledata, sample_rate):
@@ -170,10 +167,10 @@ if __name__ == '__main__':
 
 
     def typing_indicator_function(osc_ip, osc_port, send_websocket=True):
-        if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and settings.GetOption(
+        if osc_ip != "0" and settings.SETTINGS.GetOption("osc_auto_processing_enabled") and settings.SETTINGS.GetOption(
                 "osc_typing_indicator"):
             VRC_OSCLib.Bool(True, "/chatbox/typing", IP=osc_ip, PORT=osc_port)
-        if send_websocket and settings.GetOption("websocket_ip") != "0":
+        if send_websocket and settings.SETTINGS.GetOption("websocket_ip") != "0":
             threading.Thread(
                 target=websocket.BroadcastMessage,
                 args=(json.dumps({"type": "processing_start", "data": True}),)
@@ -379,18 +376,18 @@ if __name__ == '__main__':
         if detect_energy:
             # get selected audio api
             audio_api = "MME"
-            if settings.IsArgumentSetting(ctx, "audio_api"):
+            if settings.SETTINGS.is_argument_setting(ctx, "audio_api"):
                 audio_api = ctx.params["audio_api"]
             audio_api_index, audio_api_name = get_audio_api_index_by_name(audio_api)
 
             # get selected audio input device
             device_index = None
-            if settings.IsArgumentSetting(ctx, "device_index"):
+            if settings.SETTINGS.is_argument_setting(ctx, "device_index"):
                 device_index = ctx.params["device_index"]
             device_default_in_index = get_default_audio_device_index_by_api(audio_api, True)
 
             # get selected audio input device by name if possible
-            if settings.IsArgumentSetting(ctx, "audio_input_device"):
+            if settings.SETTINGS.is_argument_setting(ctx, "audio_input_device"):
                 audio_input_device = ctx.params["audio_input_device"]
                 if audio_input_device is not None and audio_input_device != "":
                     if audio_input_device.lower() == "Default".lower():
@@ -406,70 +403,71 @@ if __name__ == '__main__':
             return
 
         # Load settings from file
+        settings_path = settings.DEFAULT_SETTINGS_PATH
         if config is not None:
-            settings.SETTINGS_PATH = Path(Path.cwd() / config)
-        settings.LoadYaml(settings.SETTINGS_PATH)
+            settings_path = Path(Path.cwd() / config)
+        settings.SETTINGS.load_yaml(settings_path)
 
         # set process id
-        settings.SetOption("process_id", os.getpid())
+        settings.SETTINGS.SetOption("process_id", os.getpid())
 
-        settings.SetOption("ui_download", ui_download)
+        settings.SETTINGS.SetOption("ui_download", ui_download)
 
         # enable stt by default
-        settings.SetOption("stt_enabled", True)
+        settings.SETTINGS.SetOption("stt_enabled", True)
 
         # set initial settings
-        settings.SetOption("whisper_task", settings.GetArgumentSettingFallback(ctx, "task", "whisper_task"))
+        settings.SETTINGS.SetOption("whisper_task", settings.SETTINGS.get_argument_setting_fallback(ctx, "task", "whisper_task"))
 
         # set audio settings
-        device_index = settings.GetArgumentSettingFallback(ctx, "device_index", "device_index")
-        settings.SetOption("device_index",
+        device_index = settings.SETTINGS.get_argument_setting_fallback(ctx, "device_index", "device_index")
+        settings.SETTINGS.SetOption("device_index",
                            (device_index if device_index is None or device_index > -1 else None))
-        device_out_index = settings.GetArgumentSettingFallback(ctx, "device_out_index", "device_out_index")
-        settings.SetOption("device_out_index",
+        device_out_index = settings.SETTINGS.get_argument_setting_fallback(ctx, "device_out_index", "device_out_index")
+        settings.SETTINGS.SetOption("device_out_index",
                            (device_out_index if device_out_index is None or device_out_index > -1 else None))
 
-        audio_api = settings.SetOption("audio_api", settings.GetArgumentSettingFallback(ctx, "audio_api", "audio_api"))
+        audio_api = settings.SETTINGS.SetOption("audio_api", settings.SETTINGS.get_argument_setting_fallback(ctx, "audio_api", "audio_api"))
         audio_api_index, audio_api_name = get_audio_api_index_by_name(audio_api)
 
-        audio_input_device = settings.GetOption("audio_input_device")
+        audio_input_device = settings.SETTINGS.GetOption("audio_input_device")
         if audio_input_device is not None and audio_input_device != "":
             if audio_input_device.lower() == "Default".lower():
                 device_index = None
             else:
                 device_index = get_audio_device_index_by_name_and_api(audio_input_device, audio_api_index, True,
                                                                       device_index)
-        settings.SetOption("device_index", device_index)
+        settings.SETTINGS.SetOption("device_index", device_index)
 
-        audio_output_device = settings.GetOption("audio_output_device")
+        audio_output_device = settings.SETTINGS.GetOption("audio_output_device")
         if audio_output_device is not None and audio_output_device != "":
             if audio_output_device.lower() == "Default".lower():
                 device_out_index = None
             else:
                 device_out_index = get_audio_device_index_by_name_and_api(audio_output_device, audio_api_index, False,
                                                                           device_out_index)
-        settings.SetOption("device_out_index", device_out_index)
+        settings.SETTINGS.SetOption("device_out_index", device_out_index)
 
         # set default devices:
         device_default_in_index = get_default_audio_device_index_by_api(audio_api, True)
         device_default_out_index = get_default_audio_device_index_by_api(audio_api, False)
-        settings.SetOption("device_default_in_index", device_default_in_index)
-        settings.SetOption("device_default_out_index", device_default_out_index)
+        settings.SETTINGS.SetOption("device_default_in_index", device_default_in_index)
+        settings.SETTINGS.SetOption("device_default_out_index", device_default_out_index)
 
-        settings.SetOption("condition_on_previous_text",
-                           settings.GetArgumentSettingFallback(ctx, "condition_on_previous_text",
+        settings.SETTINGS.SetOption("condition_on_previous_text",
+                           settings.SETTINGS.get_argument_setting_fallback(ctx, "condition_on_previous_text",
                                                                "condition_on_previous_text"))
-        model = settings.SetOption("model", settings.GetArgumentSettingFallback(ctx, "model", "model"))
+        model = settings.SETTINGS.SetOption("model", settings.SETTINGS.get_argument_setting_fallback(ctx, "model", "model"))
 
-        language = settings.SetOption("current_language",
-                                      settings.GetArgumentSettingFallback(ctx, "language", "current_language"))
+        language = settings.SETTINGS.SetOption("current_language",
+                                      settings.SETTINGS.get_argument_setting_fallback(ctx, "language", "current_language"))
 
-        settings.SetOption("phrase_time_limit", settings.GetArgumentSettingFallback(ctx, "phrase_time_limit",
+        settings.SETTINGS.SetOption("phrase_time_limit", settings.SETTINGS.get_argument_setting_fallback(ctx, "phrase_time_limit",
                                                                                     "phrase_time_limit"))
 
-        pause = settings.SetOption("pause", settings.GetArgumentSettingFallback(ctx, "pause", "pause"))
+        pause = settings.SETTINGS.SetOption("pause", settings.SETTINGS.get_argument_setting_fallback(ctx, "pause", "pause"))
 
-        energy = settings.SetOption("energy", settings.GetArgumentSettingFallback(ctx, "energy", "energy"))
+        energy = settings.SETTINGS.SetOption("energy", settings.SETTINGS.get_argument_setting_fallback(ctx, "energy", "energy"))
 
         print("###################################")
         print("# Whispering Tiger is starting... #")
@@ -480,60 +478,60 @@ if __name__ == '__main__':
         print("")
 
         # check if english only model is loaded, and configure STT languages accordingly.
-        if model.endswith(".en") and "_whisper" in settings.GetOption("stt_type"):
+        if model.endswith(".en") and "_whisper" in settings.SETTINGS.GetOption("stt_type"):
             if language is not None and language not in {"en", "English"}:
                 print(f"{model} is an English-only model but received '{language}' as language; using English instead.")
 
             print(f"{model} is an English-only model. only English speech is supported.")
-            settings.SetOption("whisper_languages", ({"code": "", "name": "Auto"}, {"code": "en", "name": "English"},))
-            settings.SetOption("current_language", "en")
-        elif "_whisper" in settings.GetOption("stt_type") or "whisper_" in settings.GetOption("stt_type"):
-            settings.SetOption("whisper_languages", audioprocessor.whisper_get_languages())
-        elif settings.GetOption("stt_type") == "seamless_m4t":
-            settings.SetOption("whisper_languages", audioprocessor.seamless_m4t_get_languages())
-        elif settings.GetOption("stt_type") == "mms":
-            settings.SetOption("whisper_languages", audioprocessor.mms_get_languages())
-        elif settings.GetOption("stt_type") == "speech_t5":
+            settings.SETTINGS.SetOption("whisper_languages", ({"code": "", "name": "Auto"}, {"code": "en", "name": "English"},))
+            settings.SETTINGS.SetOption("current_language", "en")
+        elif "_whisper" in settings.SETTINGS.GetOption("stt_type") or "whisper_" in settings.SETTINGS.GetOption("stt_type"):
+            settings.SETTINGS.SetOption("whisper_languages", audioprocessor.whisper_get_languages())
+        elif settings.SETTINGS.GetOption("stt_type") == "seamless_m4t":
+            settings.SETTINGS.SetOption("whisper_languages", audioprocessor.seamless_m4t_get_languages())
+        elif settings.SETTINGS.GetOption("stt_type") == "mms":
+            settings.SETTINGS.SetOption("whisper_languages", audioprocessor.mms_get_languages())
+        elif settings.SETTINGS.GetOption("stt_type") == "speech_t5":
             # speech t5 only supports english
             print(f"speechT5 is an English-only model. only English speech is supported.")
-            settings.SetOption("whisper_languages", ({"code": "", "name": "Auto"}, {"code": "en", "name": "English"},))
-            settings.SetOption("current_language", "en")
-        elif settings.GetOption("stt_type") == "wav2vec_bert":
-            settings.SetOption("whisper_languages", audioprocessor.wav2vec_bert_get_languages())
-        elif settings.GetOption("stt_type") == "nemo_canary":
-            settings.SetOption("whisper_languages", audioprocessor.nemo_canary_get_languages())
+            settings.SETTINGS.SetOption("whisper_languages", ({"code": "", "name": "Auto"}, {"code": "en", "name": "English"},))
+            settings.SETTINGS.SetOption("current_language", "en")
+        elif settings.SETTINGS.GetOption("stt_type") == "wav2vec_bert":
+            settings.SETTINGS.SetOption("whisper_languages", audioprocessor.wav2vec_bert_get_languages())
+        elif settings.SETTINGS.GetOption("stt_type") == "nemo_canary":
+            settings.SETTINGS.SetOption("whisper_languages", audioprocessor.nemo_canary_get_languages())
         else:
             # show no language if unspecified STT type
-            settings.SetOption("whisper_languages", ({"code": "", "name": ""},))
+            settings.SETTINGS.SetOption("whisper_languages", ({"code": "", "name": ""},))
 
-        settings.SetOption("ai_device", settings.GetArgumentSettingFallback(ctx, "ai_device", "ai_device"))
-        settings.SetOption("verbose", verbose)
+        settings.SETTINGS.SetOption("ai_device", settings.SETTINGS.get_argument_setting_fallback(ctx, "ai_device", "ai_device"))
+        settings.SETTINGS.SetOption("verbose", verbose)
 
-        osc_ip = settings.SetOption("osc_ip", settings.GetArgumentSettingFallback(ctx, "osc_ip", "osc_ip"))
-        osc_port = settings.SetOption("osc_port", settings.GetArgumentSettingFallback(ctx, "osc_port", "osc_port"))
-        settings.SetOption("osc_address", settings.GetArgumentSettingFallback(ctx, "osc_address", "osc_address"))
-        settings.SetOption("osc_convert_ascii",
-                           str2bool(settings.GetArgumentSettingFallback(ctx, "osc_convert_ascii", "osc_convert_ascii")))
-        osc_min_time_between_messages = settings.SetOption("osc_min_time_between_messages", settings.GetArgumentSettingFallback(ctx, "osc_min_time_between_messages", "osc_min_time_between_messages"))
+        osc_ip = settings.SETTINGS.SetOption("osc_ip", settings.SETTINGS.get_argument_setting_fallback(ctx, "osc_ip", "osc_ip"))
+        osc_port = settings.SETTINGS.SetOption("osc_port", settings.SETTINGS.get_argument_setting_fallback(ctx, "osc_port", "osc_port"))
+        settings.SETTINGS.SetOption("osc_address", settings.SETTINGS.get_argument_setting_fallback(ctx, "osc_address", "osc_address"))
+        settings.SETTINGS.SetOption("osc_convert_ascii",
+                           str2bool(settings.SETTINGS.get_argument_setting_fallback(ctx, "osc_convert_ascii", "osc_convert_ascii")))
+        osc_min_time_between_messages = settings.SETTINGS.SetOption("osc_min_time_between_messages", settings.SETTINGS.get_argument_setting_fallback(ctx, "osc_min_time_between_messages", "osc_min_time_between_messages"))
         VRC_OSCLib.set_min_time_between_messages(osc_min_time_between_messages)
 
-        websocket_ip = settings.SetOption("websocket_ip",
-                                          settings.GetArgumentSettingFallback(ctx, "websocket_ip", "websocket_ip"))
-        websocket_port = settings.SetOption("websocket_port",
-                                            settings.GetArgumentSettingFallback(ctx, "websocket_port", "websocket_port"))
+        websocket_ip = settings.SETTINGS.SetOption("websocket_ip",
+                                          settings.SETTINGS.get_argument_setting_fallback(ctx, "websocket_ip", "websocket_ip"))
+        websocket_port = settings.SETTINGS.SetOption("websocket_port",
+                                            settings.SETTINGS.get_argument_setting_fallback(ctx, "websocket_port", "websocket_port"))
 
-        txt_translator = settings.SetOption("txt_translator",
-                                            settings.GetArgumentSettingFallback(ctx, "txt_translator", "txt_translator"))
-        settings.SetOption("txt_translator_size",
-                           settings.GetArgumentSettingFallback(ctx, "txt_translator_size", "txt_translator_size"))
+        txt_translator = settings.SETTINGS.SetOption("txt_translator",
+                                            settings.SETTINGS.get_argument_setting_fallback(ctx, "txt_translator", "txt_translator"))
+        settings.SETTINGS.SetOption("txt_translator_size",
+                           settings.SETTINGS.get_argument_setting_fallback(ctx, "txt_translator_size", "txt_translator_size"))
 
-        txt_translator_device = settings.SetOption("txt_translator_device",
-                                                   settings.GetArgumentSettingFallback(ctx, "txt_translator_device",
+        txt_translator_device = settings.SETTINGS.SetOption("txt_translator_device",
+                                                   settings.SETTINGS.get_argument_setting_fallback(ctx, "txt_translator_device",
                                                                                        "txt_translator_device"))
         texttranslate.SetDevice(txt_translator_device)
 
-        settings.SetOption("ocr_window_name",
-                           settings.GetArgumentSettingFallback(ctx, "ocr_window_name", "ocr_window_name"))
+        settings.SETTINGS.SetOption("ocr_window_name",
+                           settings.SETTINGS.get_argument_setting_fallback(ctx, "ocr_window_name", "ocr_window_name"))
 
         if websocket_ip != "0":
             websocket.StartWebsocketServer(websocket_ip, websocket_port)
@@ -561,7 +559,7 @@ if __name__ == '__main__':
                 if time.time() - last_wait_time > max_wait:
                     print("timeout while waiting for ui to connect.")
                     ui_download = False
-                    settings.SetOption("ui_download", ui_download)
+                    settings.SETTINGS.SetOption("ui_download", ui_download)
                     break
             if ui_download:  # still true? then ui did connect
                 print("ui connected.")
@@ -597,11 +595,11 @@ if __name__ == '__main__':
         languageClassification.download_model()
 
         # Download faster-whisper model
-        if settings.GetOption("stt_type") == "faster_whisper":
-            whisper_model = settings.GetOption("model")
-            whisper_precision = settings.GetOption("whisper_precision")
-            realtime_whisper_model = settings.GetOption("realtime_whisper_model")
-            realtime_whisper_precision = settings.GetOption("realtime_whisper_precision")
+        if settings.SETTINGS.GetOption("stt_type") == "faster_whisper":
+            whisper_model = settings.SETTINGS.GetOption("model")
+            whisper_precision = settings.SETTINGS.GetOption("whisper_precision")
+            realtime_whisper_model = settings.SETTINGS.GetOption("realtime_whisper_model")
+            realtime_whisper_precision = settings.SETTINGS.GetOption("realtime_whisper_precision")
             # download the model here since its only possible in the main thread
             if faster_whisper.needs_download(whisper_model, whisper_precision):
                 websocket.set_loading_state("downloading_whisper_model", True)
@@ -613,8 +611,8 @@ if __name__ == '__main__':
                 websocket.set_loading_state("downloading_whisper_model", True)
                 faster_whisper.download_model(realtime_whisper_model, realtime_whisper_precision)
                 websocket.set_loading_state("downloading_whisper_model", False)
-        if settings.GetOption("stt_type") == "seamless_m4t":
-            stt_model_size = settings.GetOption("model")
+        if settings.SETTINGS.GetOption("stt_type") == "seamless_m4t":
+            stt_model_size = settings.SETTINGS.GetOption("model")
             if seamless_m4t.SeamlessM4T.needs_download(stt_model_size):
                 websocket.set_loading_state("downloading_whisper_model", True)
                 seamless_m4t.SeamlessM4T.download_model(stt_model_size)
@@ -622,20 +620,24 @@ if __name__ == '__main__':
 
         # load audio filter model
         audio_enhancer = None
-        if settings.GetOption("denoise_audio"):
+        if settings.SETTINGS.GetOption("denoise_audio") == "deepfilter":
             websocket.set_loading_state("loading_denoiser", True)
-            post_filter = settings.GetOption("denoise_audio_post_filter")
+            post_filter = settings.SETTINGS.GetOption("denoise_audio_post_filter")
             audio_enhancer = DeepFilterNet.DeepFilterNet(post_filter=post_filter)
+            websocket.set_loading_state("loading_denoiser", False)
+        elif settings.SETTINGS.GetOption("denoise_audio") == "noise_reduce":
+            websocket.set_loading_state("loading_denoiser", True)
+            audio_enhancer = Noisereduce.Noisereduce()
             websocket.set_loading_state("loading_denoiser", False)
 
         # prepare the plugin timer calls
         call_plugin_timer(Plugins)
 
-        vad_enabled = settings.SetOption("vad_enabled",
-                                         settings.GetArgumentSettingFallback(ctx, "vad_enabled", "vad_enabled"))
+        vad_enabled = settings.SETTINGS.SetOption("vad_enabled",
+                                         settings.SETTINGS.get_argument_setting_fallback(ctx, "vad_enabled", "vad_enabled"))
         try:
-            vad_thread_num = int(float(settings.SetOption("vad_thread_num",
-                                            settings.GetArgumentSettingFallback(ctx, "vad_thread_num", "vad_thread_num"))))
+            vad_thread_num = int(float(settings.SETTINGS.SetOption("vad_thread_num",
+                                            settings.SETTINGS.get_argument_setting_fallback(ctx, "vad_thread_num", "vad_thread_num"))))
         except ValueError as e:
             print("Error assigning vad_thread_num. using 1")
             print(e)
@@ -692,8 +694,8 @@ if __name__ == '__main__':
                         print(e)
 
             # num_samples = 1536
-            vad_frames_per_buffer = int(settings.SetOption("vad_frames_per_buffer",
-                                                 settings.GetArgumentSettingFallback(ctx, "vad_frames_per_buffer",
+            vad_frames_per_buffer = int(settings.SETTINGS.SetOption("vad_frames_per_buffer",
+                                                 settings.SETTINGS.get_argument_setting_fallback(ctx, "vad_frames_per_buffer",
                                                                                      "vad_frames_per_buffer")))
 
             # set default devices if not set
@@ -708,7 +710,7 @@ if __name__ == '__main__':
 
             start_rec_on_volume_threshold = False
 
-            push_to_talk_key = settings.GetOption("push_to_talk_key")
+            push_to_talk_key = settings.SETTINGS.GetOption("push_to_talk_key")
             if push_to_talk_key == "":
                 push_to_talk_key = None
             keyboard_rec_force_stop = False
@@ -755,7 +757,7 @@ if __name__ == '__main__':
 
             while stream.is_active():
                 time.sleep(0.1)
-                #if not settings.GetOption("stt_enabled"):
+                #if not settings.SETTINGS.GetOption("stt_enabled"):
                 #    time.sleep(0.1)
                 #    continue
 
@@ -772,15 +774,15 @@ if __name__ == '__main__':
                 audioprocessor.start_whisper_thread()
 
                 while True:
-                    if not settings.GetOption("stt_enabled"):
+                    if not settings.SETTINGS.GetOption("stt_enabled"):
                         time.sleep(0.1)
                         continue
 
-                    phrase_time_limit = settings.GetOption("phrase_time_limit")
+                    phrase_time_limit = settings.SETTINGS.GetOption("phrase_time_limit")
                     if phrase_time_limit == 0:
                         phrase_time_limit = None
-                    pause = settings.GetOption("pause")
-                    energy = settings.GetOption("energy")
+                    pause = settings.SETTINGS.GetOption("pause")
+                    energy = settings.SETTINGS.GetOption("energy")
 
                     r.energy_threshold = energy
                     r.pause_threshold = pause
@@ -790,15 +792,15 @@ if __name__ == '__main__':
 
                     audio_data = audio.get_wav_data()
 
-                    silence_cutting_enabled = settings.GetOption("silence_cutting_enabled")
-                    silence_offset = settings.GetOption("silence_offset")
-                    max_silence_length = settings.GetOption("max_silence_length")
-                    keep_silence_length = settings.GetOption("keep_silence_length")
+                    silence_cutting_enabled = settings.SETTINGS.GetOption("silence_cutting_enabled")
+                    silence_offset = settings.SETTINGS.GetOption("silence_offset")
+                    max_silence_length = settings.SETTINGS.GetOption("max_silence_length")
+                    keep_silence_length = settings.SETTINGS.GetOption("keep_silence_length")
 
-                    normalize_enabled = settings.GetOption("normalize_enabled")
-                    normalize_lower_threshold = settings.GetOption("normalize_lower_threshold")
-                    normalize_upper_threshold = settings.GetOption("normalize_upper_threshold")
-                    normalize_gain_factor = settings.GetOption("normalize_gain_factor")
+                    normalize_enabled = settings.SETTINGS.GetOption("normalize_enabled")
+                    normalize_lower_threshold = settings.SETTINGS.GetOption("normalize_lower_threshold")
+                    normalize_upper_threshold = settings.SETTINGS.GetOption("normalize_upper_threshold")
+                    normalize_gain_factor = settings.SETTINGS.GetOption("normalize_gain_factor")
                     block_size_samples = int(whisper_audio.SAMPLE_RATE * 0.400)
                     # normalize audio (and make sure it's longer or equal the default block size by pyloudnorm)
                     if normalize_enabled and len(audio_data) >= block_size_samples:
@@ -822,12 +824,12 @@ if __name__ == '__main__':
                             audio_data = audio_data.tobytes()
 
                     # denoise audio
-                    if settings.GetOption("denoise_audio") and audio_enhancer is not None:
+                    if settings.SETTINGS.GetOption("denoise_audio") == "deepfilter" and audio_enhancer is not None:
                         audio_data = audio_enhancer.enhance_audio(audio_data).tobytes()
 
                     # add audio data to the queue
                     wav_audio_bytes = audio_tools.audio_bytes_to_wav(audio_data, channels=CHANNELS, sample_rate=SAMPLE_RATE)
-                    audioprocessor.q.put({'time': time.time_ns(), 'data': wav_audio_bytes, 'final': True})
+                    audioprocessor.q.put({'time': time.time_ns(), 'data': wav_audio_bytes, 'final': True, 'settings': settings.SETTINGS})
 
                     # set typing indicator for VRChat and websocket clients
                     typing_indicator_thread = threading.Thread(target=typing_indicator_function,

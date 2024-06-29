@@ -133,6 +133,9 @@ class AudioProcessor:
 
         self._new_speaker = False
         self.new_speaker_audio = None
+
+
+        self.audio_filter_buffer = None
         # run callback after timeout even if no audio was detected (and such callback not called by pyAudio)
         # self.timer_reset_event = threading.Event()
         # self.timer_thread = threading.Thread(target=self.timer_expired)
@@ -213,32 +216,22 @@ class AudioProcessor:
 
             confidence_threshold = float(self.settings.GetOption("vad_confidence_threshold"))
 
-            # if settings.GetOption("denoise_audio") and audio_enhancer is not None and num_samples < DeepFilterNet.ModelParams().hop_size:
-            #    #print("increase num_samples for denoising")
-            #    num_samples = DeepFilterNet.ModelParams().hop_size
+            ########
+            # create denoise ring buffer
+            ########
+            if self.audio_filter_buffer is None and self.settings.GetOption("denoise_audio") != "" and self.settings.GetOption("denoise_audio_before_trigger") and self.audio_enhancer is not None:
+                # calculate block size for 10 seconds audio
+                ringbuffer_channel_num = 1
+                ringbuffer_audio_bytes_per_sample = 2
+                ringbuffer_audio_length = 10  # ringbuffer audio length in seconds
+                ringbuffer_size = int(self.default_sample_rate * ringbuffer_audio_length * ringbuffer_channel_num * ringbuffer_audio_bytes_per_sample)
+                print("sample size for noise cancelling ring buffer:", ringbuffer_size)
+                self.audio_filter_buffer = audio_tools.CircularByteBuffer(ringbuffer_size)
 
-            # audio_chunk = stream.read(num_samples, exception_on_overflow=False)
+            # copy bytes into variables
+            test_audio_chunk = in_data[:]
+            audio_chunk = in_data[:]
 
-            # denoise audio chunk
-            # if settings.GetOption("denoise_audio") and audio_enhancer is not None:
-            # record more audio to denoise if it's too short
-            # if len(audio_chunk) < DeepFilterNet.ModelParams().hop_size:
-            # while len(audio_chunk) < DeepFilterNet.ModelParams().hop_size:
-            #    audio_chunk += stream.read(num_samples, exception_on_overflow=False)
-            # audio_chunk = audio_enhancer.enhance_audio(audio_chunk, recorded_sample_rate, default_sample_rate, is_mono=is_mono)
-            # needs_sample_rate_conversion = False
-
-            # denoise audio chunk
-            # if settings.GetOption("denoise_audio") and audio_enhancer is not None:
-            #    #if len(audio_chunk) < DeepFilterNet.ModelParams().hop_size:
-            #    #    while len(audio_chunk) < DeepFilterNet.ModelParams().hop_size * 2:
-            #    #        audio_chunk += stream.read(num_samples, exception_on_overflow=False)
-            #    audio_chunk = audio_enhancer.enhance_audio(audio_chunk, recorded_sample_rate, default_sample_rate, is_mono=is_mono)
-            #    needs_sample_rate_conversion = False
-            #    #recorded_sample_rate = audio_enhancer.df_state.sr()
-
-            test_audio_chunk = in_data
-            audio_chunk = in_data
             # special case which seems to be needed for WASAPI
             if self.needs_sample_rate_conversion and test_audio_chunk is not None:
                 test_audio_chunk = audio_tools.resample_audio(test_audio_chunk, self.recorded_sample_rate,
@@ -247,7 +240,39 @@ class AudioProcessor:
 
             new_confidence, peak_amplitude = 0, 0
             if test_audio_chunk is not None:
-                new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.default_sample_rate,
+                # denoise audio
+                if self.settings.GetOption("denoise_audio") != "" and self.settings.GetOption("denoise_audio_before_trigger") and self.audio_enhancer is not None and self.audio_filter_buffer is not None:
+                    # @TODO: audio chunks probably need overlay to prevent crackling noise (possibly buffer underrun because of the processing time of noise filter?)
+                    self.audio_filter_buffer.append(test_audio_chunk)
+                    new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.default_sample_rate,
+                                                                         self.vad_model)
+                    if 0 < energy <= peak_amplitude and new_confidence >= confidence_threshold:
+                        #print("denoising...")
+                        ########
+                        # denoise using a ring buffer (to always work over a larger audio snipped.
+                        ########
+                        test_audio_buffered = self.audio_filter_buffer.get_ordered_buffer()
+                        test_audio_chunk_buffered_enhanced = self.audio_enhancer.enhance_audio(test_audio_buffered, sample_rate=self.default_sample_rate, output_sample_rate=self.default_sample_rate)
+                        chunk_length = len(test_audio_chunk)
+                        test_audio_chunk_denoise = test_audio_chunk_buffered_enhanced[-chunk_length:].tobytes()
+                        # check confidence and peak amplitude again with denoised audio chunk
+                        new_confidence_denoised, peak_amplitude_denoised = process_audio_chunk(test_audio_chunk_denoise, self.default_sample_rate,
+                                                                             self.vad_model)
+
+                        ########
+                        # denoise only on the single chunk
+                        ########
+                        # test_audio_chunk_buffered_enhanced = self.audio_enhancer.enhance_audio(test_audio_chunk, sample_rate=self.default_sample_rate, output_sample_rate=self.default_sample_rate)
+                        # new_confidence_denoised, peak_amplitude_denoised = process_audio_chunk(test_audio_chunk_buffered_enhanced, self.default_sample_rate,
+                        #                                                       self.vad_model)
+
+                        # set the lower value depending on if the initial or denoised values are lower
+                        if new_confidence_denoised < new_confidence:
+                            new_confidence = new_confidence_denoised
+                        if peak_amplitude_denoised < peak_amplitude:
+                            peak_amplitude = peak_amplitude_denoised
+                else:
+                    new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.default_sample_rate,
                                                                      self.vad_model)
 
             # put frames with recognized speech into a list and send to whisper
@@ -321,7 +346,7 @@ class AudioProcessor:
                 if ((not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold)) and len(
                         wavefiledata) > 0:
                     # denoise audio
-                    if self.settings.GetOption("denoise_audio") and self.audio_enhancer is not None:
+                    if self.settings.GetOption("denoise_audio") != "" and self.audio_enhancer is not None:
                         wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata).tobytes()
 
                     # call sts plugin methods
@@ -336,10 +361,10 @@ class AudioProcessor:
                     if isinstance(wave_file_bytes, list):
                         for audio_segment in wave_file_bytes:
                             self.audio_queue.put(
-                                {'time': time.time_ns(), 'data': audio_segment, 'final': True})
+                                {'time': time.time_ns(), 'data': audio_segment, 'final': True, 'settings': self.settings})
                     else:
                         self.audio_queue.put(
-                            {'time': time.time_ns(), 'data': wave_file_bytes, 'final': True})
+                            {'time': time.time_ns(), 'data': wave_file_bytes, 'final': True, 'settings': self.settings})
                     # vad_iterator.reset_states()  # reset model states after each audio
 
                     # write wav file if configured to do so
@@ -400,9 +425,6 @@ class AudioProcessor:
                 # append previous audio chunk to improve recognition on too late audio recording starts
                 if self.previous_audio_chunk is not None:
                     self.frames.append(self.previous_audio_chunk)
-
-                # TODO? send audio_chunk to plugins (RVC )
-                # threading.Thread(target=call_plugin_sts_chunk, args=(self.Plugins, test_audio_chunk, self.default_sample_rate,)).start()
 
                 self.frames.append(audio_chunk)
                 self.start_time = time.time()
@@ -466,12 +488,11 @@ class AudioProcessor:
 
                         if wavefiledata is not None and len(wavefiledata) > 0:
                             # denoise audio
-                            if self.settings.GetOption("denoise_audio") and self.audio_enhancer is not None:
+                            if self.settings.GetOption("denoise_audio") != "" and self.audio_enhancer is not None:
                                 wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata).tobytes()
 
                             wave_file_bytes = audio_tools.audio_bytes_to_wav(wavefiledata, channels=CHANNELS,
                                                                              sample_rate=SAMPLE_RATE)
-
 
                             # write wav file if configured to do so (debugging!!!)
                             transcription_save_audio_dir = self.settings.GetOption("transcription_save_audio_dir")
@@ -530,7 +551,7 @@ class AudioProcessor:
                                 #elif not isinstance(wave_file_bytes, list):
                             else:
                                 self.audio_queue.put(
-                                    {'time': time.time_ns(), 'data': wave_file_bytes, 'final': False})
+                                    {'time': time.time_ns(), 'data': wave_file_bytes, 'final': False, 'settings': self.settings})
 
                         else:
                             self.frames = []

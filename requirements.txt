@@ -73,6 +73,8 @@ keyboard>=0.13.5
 grpcio==1.59.3
 annotated_types==0.6.0
 
+# speaker diarization
+pyannote.audio==3.2.0
 
 #RVC dependencies
 #fairseq @ https://github.com/Sharrnah/fairseq/archive/refs/heads/main.zip
@@ -88,3 +90,6 @@ torchcrepe==0.0.22
 faster-whisper @ https://github.com/SYSTRAN/faster-whisper/archive/refs/heads/master.zip
 #faster-whisper @ https://github.com/Sharrnah/faster-whisper/archive/refs/heads/large-v3.zip
 #whisperx @ https://github.com/Sharrnah/whisperX/archive/refs/heads/main.zip
+
+
+noisereduce

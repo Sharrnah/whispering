@@ -834,6 +834,52 @@ class CircularBuffer:
         return self.capacity - self.count
 
 
+class CircularByteBuffer:
+    def __init__(self, size):
+        self.size = size
+        self.buffer = bytearray(size)
+        self.head = 0
+        self.tail = 0
+        self.full = False
+
+    def append(self, data):
+        if not isinstance(data, bytes):
+            raise TypeError("Data must be of type bytes")
+
+        for byte in data:
+            self.buffer[self.head] = byte
+            if self.full:
+                self.tail = (self.tail + 1) % self.size
+            self.head = (self.head + 1) % self.size
+            self.full = self.head == self.tail
+
+    def get_full_buffer(self):
+        if not self.full and self.head == self.tail:
+            return bytes()
+        elif self.full:
+            return bytes(self.buffer[self.tail:] + self.buffer[:self.head])
+        else:
+            return bytes(self.buffer[self.tail:self.head])
+
+    def get_ordered_buffer(self):
+        if self.full or self.head < self.tail:
+            return bytes(self.buffer[self.tail:] + self.buffer[:self.head])
+        else:
+            return bytes(self.buffer[self.tail:self.head])
+
+    def is_full(self):
+        return self.full
+
+    def is_empty(self):
+        return not self.full and self.head == self.tail
+
+    def clear(self):
+        self.head = 0
+        self.tail = 0
+        self.full = False
+        self.buffer = bytearray(self.size)
+
+
 class QueueBuffer:
     def __init__(self, element_size):
         self.buffer = bytearray()
