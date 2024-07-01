@@ -16,7 +16,8 @@ NON_PERSISTENT_SETTINGS = [
     "whisper_languages", "lang_swap", "verbose",
     "transl_result_textarea_savetts_voice", "transl_result_textarea_sendtts_download",
     "plugin_timer_stopped", "plugin_current_timer", "websocket_final_messages",
-    "device_default_in_index", "device_default_out_index", "ui_download"
+    "device_default_in_index", "device_default_out_index", "ui_download",
+    "audio_processor_caller",
 ]
 
 

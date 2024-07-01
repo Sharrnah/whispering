@@ -1,4 +1,5 @@
 # -*- encoding: utf-8 -*-
+
 if __name__ == '__main__':
     import multiprocessing
     multiprocessing.freeze_support()
@@ -10,7 +11,6 @@ if __name__ == '__main__':
     import traceback
 
     import Utilities
-    import downloader
     import processmanager
     import atexit
 
@@ -71,13 +71,12 @@ if __name__ == '__main__':
 
     import audio_tools
     import audio_processing_recording
-    import sounddevice as sd
 
     import wave
 
     from Models.STS import DeepFilterNet
     from Models.STS import Noisereduce
-
+    from Models.STS import VAD
 
     def save_to_wav(data, filename, sample_rate, channels=1):
         with wave.open(filename, 'wb') as wf:
@@ -151,21 +150,6 @@ if __name__ == '__main__':
                     settings.SETTINGS.SetOption("plugin_current_timer", 0.0)
 
 
-    def call_plugin_sts(plugins, wavefiledata, sample_rate):
-        for plugin_inst in plugins.plugins:
-            if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'sts'):
-                try:
-                    plugin_inst.sts(wavefiledata, sample_rate)
-                except Exception as e:
-                    print(f"Error calling plugin sts for {plugin_inst.__class__.__name__}: {e}")
-
-
-    #def call_plugin_sts_chunk(plugins, wavefiledata, sample_rate):
-    #    for plugin_inst in plugins.plugins:
-    #        if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'sts_chunk'):
-    #            plugin_inst.sts_chunk(wavefiledata, sample_rate)
-
-
     def typing_indicator_function(osc_ip, osc_port, send_websocket=True):
         if osc_ip != "0" and settings.SETTINGS.GetOption("osc_auto_processing_enabled") and settings.SETTINGS.GetOption(
                 "osc_typing_indicator"):
@@ -176,62 +160,6 @@ if __name__ == '__main__':
                 args=(json.dumps({"type": "processing_start", "data": True}),)
             ).start()
 
-
-    def get_host_audio_api_names():
-        audio = pyaudio.PyAudio()
-        host_api_count = audio.get_host_api_count()
-        host_api_names = {}
-        for i in range(host_api_count):
-            host_api_info = audio.get_host_api_info_by_index(i)
-            host_api_names[i] = host_api_info["name"]
-        return host_api_names
-
-
-    def get_default_audio_device_index_by_api(api, is_input=True):
-        devices = sd.query_devices()
-        api_info = sd.query_hostapis()
-        host_api_index = None
-
-        for i, host_api in enumerate(api_info):
-            if api.lower() in host_api['name'].lower():
-                host_api_index = i
-                break
-
-        if host_api_index is None:
-            return None
-
-        api_pyaudio_index, _ = get_audio_api_index_by_name(api)
-
-        default_device_index = api_info[host_api_index]['default_input_device' if is_input else 'default_output_device']
-        default_device_name = devices[default_device_index]['name']
-        return get_audio_device_index_by_name_and_api(default_device_name, api_pyaudio_index, is_input)
-
-
-    def get_audio_device_index_by_name_and_api(name, api, is_input=True, default=None):
-        audio = pyaudio.PyAudio()
-        device_count = audio.get_device_count()
-        for i in range(device_count):
-            device_info = audio.get_device_info_by_index(i)
-            device_name = device_info["name"]
-            if isinstance(device_name, bytes):
-                device_name = Utilities.safe_decode(device_name)
-            if isinstance(name, bytes):
-                name = Utilities.safe_decode(name)
-
-            if device_info["hostApi"] == api and device_info[
-                "maxInputChannels" if is_input else "maxOutputChannels"] > 0 and name in device_name:
-                return i
-        return default
-
-
-    def get_audio_api_index_by_name(name):
-        audio = pyaudio.PyAudio()
-        host_api_count = audio.get_host_api_count()
-        for i in range(host_api_count):
-            host_api_info = audio.get_host_api_info_by_index(i)
-            if name.lower() in host_api_info["name"].lower():
-                return i, host_api_info["name"]
-        return 0, ""
 
 
     def record_highest_peak_amplitude(device_index=-1, record_time=10):
@@ -335,7 +263,7 @@ if __name__ == '__main__':
              config, verbose,
              **kwargs):
         if str2bool(devices):
-            host_audio_api_names = get_host_audio_api_names()
+            host_audio_api_names = audio_tools.get_host_audio_api_names()
             audio = pyaudio.PyAudio()
             # print all available host apis
             print("-------------------------------------------------------------------")
@@ -378,13 +306,13 @@ if __name__ == '__main__':
             audio_api = "MME"
             if settings.SETTINGS.is_argument_setting(ctx, "audio_api"):
                 audio_api = ctx.params["audio_api"]
-            audio_api_index, audio_api_name = get_audio_api_index_by_name(audio_api)
+            audio_api_index, audio_api_name = audio_tools.get_audio_api_index_by_name(audio_api)
 
             # get selected audio input device
             device_index = None
             if settings.SETTINGS.is_argument_setting(ctx, "device_index"):
                 device_index = ctx.params["device_index"]
-            device_default_in_index = get_default_audio_device_index_by_api(audio_api, True)
+            device_default_in_index = audio_tools.get_default_audio_device_index_by_api(audio_api, True)
 
             # get selected audio input device by name if possible
             if settings.SETTINGS.is_argument_setting(ctx, "audio_input_device"):
@@ -393,7 +321,7 @@ if __name__ == '__main__':
                     if audio_input_device.lower() == "Default".lower():
                         device_index = None
                     else:
-                        device_index = get_audio_device_index_by_name_and_api(audio_input_device, audio_api_index, True,
+                        device_index = audio_tools.get_audio_device_index_by_name_and_api(audio_input_device, audio_api_index, True,
                                                                               device_index)
             if device_index is None or device_index < 0:
                 device_index = device_default_in_index
@@ -428,14 +356,14 @@ if __name__ == '__main__':
                            (device_out_index if device_out_index is None or device_out_index > -1 else None))
 
         audio_api = settings.SETTINGS.SetOption("audio_api", settings.SETTINGS.get_argument_setting_fallback(ctx, "audio_api", "audio_api"))
-        audio_api_index, audio_api_name = get_audio_api_index_by_name(audio_api)
+        audio_api_index, audio_api_name = audio_tools.get_audio_api_index_by_name(audio_api)
 
         audio_input_device = settings.SETTINGS.GetOption("audio_input_device")
         if audio_input_device is not None and audio_input_device != "":
             if audio_input_device.lower() == "Default".lower():
                 device_index = None
             else:
-                device_index = get_audio_device_index_by_name_and_api(audio_input_device, audio_api_index, True,
+                device_index = audio_tools.get_audio_device_index_by_name_and_api(audio_input_device, audio_api_index, True,
                                                                       device_index)
         settings.SETTINGS.SetOption("device_index", device_index)
 
@@ -444,13 +372,13 @@ if __name__ == '__main__':
             if audio_output_device.lower() == "Default".lower():
                 device_out_index = None
             else:
-                device_out_index = get_audio_device_index_by_name_and_api(audio_output_device, audio_api_index, False,
+                device_out_index = audio_tools.get_audio_device_index_by_name_and_api(audio_output_device, audio_api_index, False,
                                                                           device_out_index)
         settings.SETTINGS.SetOption("device_out_index", device_out_index)
 
         # set default devices:
-        device_default_in_index = get_default_audio_device_index_by_api(audio_api, True)
-        device_default_out_index = get_default_audio_device_index_by_api(audio_api, False)
+        device_default_in_index = audio_tools.get_default_audio_device_index_by_api(audio_api, True)
+        device_default_out_index = audio_tools.get_default_audio_device_index_by_api(audio_api, False)
         settings.SETTINGS.SetOption("device_default_in_index", device_default_in_index)
         settings.SETTINGS.SetOption("device_default_out_index", device_default_out_index)
 
@@ -534,7 +462,7 @@ if __name__ == '__main__':
                            settings.SETTINGS.get_argument_setting_fallback(ctx, "ocr_window_name", "ocr_window_name"))
 
         if websocket_ip != "0":
-            websocket.StartWebsocketServer(websocket_ip, websocket_port)
+            websocket.main_server = websocket.StartWebsocketServer(websocket_ip, websocket_port)
             if open_browser:
                 open_url = 'file://' + os.getcwd() + '/websocket_clients/websocket-remote/index.html' + '?ws_server=ws://' + (
                     "127.0.0.1" if websocket_ip == "0.0.0.0" else websocket_ip) + ':' + str(websocket_port)
@@ -554,7 +482,7 @@ if __name__ == '__main__':
             print("waiting for ui to connect...")
             max_wait = 15  # wait max 15 seconds for ui to connect
             last_wait_time = time.time()
-            while len(websocket.WS_CLIENTS) == 0 and websocket.UI_CONNECTED["value"] is False:
+            while len(websocket.get_connected_clients()) == 0 and websocket.UI_CONNECTED["value"] is False:
                 time.sleep(0.1)
                 if time.time() - last_wait_time > max_wait:
                     print("timeout while waiting for ui to connect.")
@@ -564,19 +492,6 @@ if __name__ == '__main__':
             if ui_download:  # still true? then ui did connect
                 print("ui connected.")
                 time.sleep(0.5)
-
-        # initialize plugins
-        import Plugins
-        print("initializing plugins...")
-        for plugin_inst in Plugins.plugins:
-            try:
-                plugin_inst.init()
-                if plugin_inst.is_enabled(False):
-                    print(plugin_inst.__class__.__name__ + " is enabled")
-                else:
-                    print(plugin_inst.__class__.__name__ + " is disabled")
-            except Exception as e:
-                print(f"Error initializing plugin {plugin_inst.__class__.__name__}: {e}")
 
         # Load textual translation dependencies
         if txt_translator.lower() != "none" and txt_translator != "":
@@ -630,9 +545,7 @@ if __name__ == '__main__':
             audio_enhancer = Noisereduce.Noisereduce()
             websocket.set_loading_state("loading_denoiser", False)
 
-        # prepare the plugin timer calls
-        call_plugin_timer(Plugins)
-
+        # Initialize VAD model
         vad_enabled = settings.SETTINGS.SetOption("vad_enabled",
                                          settings.SETTINGS.get_argument_setting_fallback(ctx, "vad_enabled", "vad_enabled"))
         try:
@@ -644,69 +557,36 @@ if __name__ == '__main__':
             vad_thread_num = int(1)
 
         if vad_enabled:
-            vad_model = None
-            torch.hub.set_dir(str(Path(cache_vad_path).resolve()))
-            torch.set_num_threads(vad_thread_num)
+            vad_model = VAD.VAD(vad_thread_num)
+
+        # initialize plugins
+        import Plugins
+        print("initializing plugins...")
+        for plugin_inst in Plugins.plugins:
             try:
-                vad_model, vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
-                                                      repo_or_dir="snakers4/silero-vad", model="silero_vad", onnx=False
-                                                      )
-            except:
-                try:
-                    vad_model, vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
-                                                          source="local", model="silero_vad", onnx=False,
-                                                          repo_or_dir=str(Path(
-                                                              cache_vad_path / "snakers4_silero-vad_master").resolve())
-                                                          )
-                except Exception as e:
-                    print("Error loading vad model trying to load from fallback server...")
-                    print(e)
+                plugin_inst.init()
+                if plugin_inst.is_enabled(False):
+                    print(plugin_inst.__class__.__name__ + " is enabled")
+                else:
+                    print(plugin_inst.__class__.__name__ + " is disabled")
+            except Exception as e:
+                print(f"Error initializing plugin {plugin_inst.__class__.__name__}: {e}")
 
-                    vad_fallback_server = {
-                        "urls": [
-                            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/silero/silero-vad.zip",
-                            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/silero/silero-vad.zip",
-                            "https://s3.libs.space:9000/ai-models/silero/silero-vad.zip"
-                        ],
-                        "sha256": "097cfacdc2b2f5b09e0da1273b3e30b0e96c3588445958171a7e339cc5805683",
-                    }
+        # prepare the plugin timer calls
+        call_plugin_timer(Plugins)
 
-                    try:
-                        downloader.download_extract(vad_fallback_server["urls"],
-                                                    str(Path(cache_vad_path).resolve()),
-                                                    vad_fallback_server["sha256"],
-                                                    alt_fallback=True,
-                                                    fallback_extract_func=downloader.extract_zip,
-                                                    fallback_extract_func_args=(
-                                                        str(Path(cache_vad_path / "silero-vad.zip")),
-                                                        str(Path(cache_vad_path).resolve()),
-                                                    ),
-                                                    title="Silero VAD", extract_format="zip")
-
-                        vad_model, vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
-                                                              source="local", model="silero_vad", onnx=False,
-                                                              repo_or_dir=str(Path(
-                                                                  cache_vad_path / "snakers4_silero-vad_master").resolve())
-                                                              )
-
-                    except Exception as e:
-                        print("Error loading vad model.")
-                        print(e)
-
+        if vad_enabled:
             # num_samples = 1536
             vad_frames_per_buffer = int(settings.SETTINGS.SetOption("vad_frames_per_buffer",
                                                  settings.SETTINGS.get_argument_setting_fallback(ctx, "vad_frames_per_buffer",
                                                                                      "vad_frames_per_buffer")))
+            vad_model.set_vad_frames_per_buffer(vad_frames_per_buffer)
 
             # set default devices if not set
             if device_index is None or device_index < 0:
                 device_index = device_default_in_index
 
-            #frames = []
-
             default_sample_rate = SAMPLE_RATE
-
-            previous_audio_chunk = None
 
             start_rec_on_volume_threshold = False
 
@@ -715,14 +595,21 @@ if __name__ == '__main__':
                 push_to_talk_key = None
             keyboard_rec_force_stop = False
 
+            # initialize later plugins
+            # for plugin_inst in Plugins.plugins:
+            #     if hasattr(plugin_inst, 'late_init'):
+            #         try:
+            #             plugin_inst.late_init()
+            #         except Exception as e:
+            #             print(f"Error late initializing plugin {plugin_inst.__class__.__name__}: {e}")
+
             processor = audio_processing_recording.AudioProcessor(
                 default_sample_rate=default_sample_rate,
-                previous_audio_chunk=previous_audio_chunk,
                 start_rec_on_volume_threshold=start_rec_on_volume_threshold,
                 push_to_talk_key=push_to_talk_key,
                 keyboard_rec_force_stop=keyboard_rec_force_stop,
                 vad_model=vad_model,
-                plugins=Plugins,
+                plugins=Plugins.plugins,
                 audio_enhancer=audio_enhancer,
                 osc_ip=osc_ip,
                 osc_port=osc_port,
@@ -767,6 +654,14 @@ if __name__ == '__main__':
             r.energy_threshold = energy
             r.pause_threshold = pause
             r.dynamic_energy_threshold = dynamic_energy
+
+            # # initialize later plugins
+            # for plugin_inst in Plugins.plugins:
+            #     if hasattr(plugin_inst, 'late_init'):
+            #         try:
+            #             plugin_inst.late_init()
+            #         except Exception as e:
+            #             print(f"Error late initializing plugin {plugin_inst.__class__.__name__}: {e}")
 
             with sr.Microphone(sample_rate=whisper_audio.SAMPLE_RATE,
                                device_index=device_index) as source:

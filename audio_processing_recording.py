@@ -36,7 +36,7 @@ def save_to_wav(data, filename, sample_rate, channels=1):
 
 
 def call_plugin_sts(plugins, wavefiledata, sample_rate):
-    for plugin_inst in plugins.plugins:
+    for plugin_inst in plugins:
         if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'sts'):
             try:
                 plugin_inst.sts(wavefiledata, sample_rate)
@@ -48,7 +48,7 @@ def process_audio_chunk(audio_chunk, sample_rate, vad_model=None):
     audio_int16 = np.frombuffer(audio_chunk, np.int16)
     audio_float32 = int2float(audio_int16)
     if vad_model is not None:
-        new_confidence = vad_model(torch.from_numpy(audio_float32), sample_rate).item()
+        new_confidence = vad_model.run_vad(torch.from_numpy(audio_float32), sample_rate).item()
     else:
         new_confidence = 9.9
     peak_amplitude = np.max(np.abs(audio_int16))
@@ -66,7 +66,6 @@ class AudioProcessor:
 
     def __init__(self,
                  default_sample_rate=SAMPLE_RATE,
-                 previous_audio_chunk=None,
                  start_rec_on_volume_threshold=None,
                  push_to_talk_key=None,
                  keyboard_rec_force_stop=None,
@@ -91,11 +90,9 @@ class AudioProcessor:
 
                  verbose=False
                  ):
-        if plugins is None:
-            plugins = []
         self.frames = []
         self.default_sample_rate = default_sample_rate
-        self.previous_audio_chunk = previous_audio_chunk
+        self.previous_audio_chunk = None
         self.start_rec_on_volume_threshold = start_rec_on_volume_threshold
         self.push_to_talk_key = push_to_talk_key
         self.keyboard_rec_force_stop = keyboard_rec_force_stop
@@ -106,7 +103,7 @@ class AudioProcessor:
         self.recorded_sample_rate = recorded_sample_rate
         self.input_channel_num = input_channel_num
 
-        self.Plugins = plugins
+        self.plugins = plugins
         self.audio_enhancer = audio_enhancer
 
         self.osc_ip = osc_ip
@@ -339,7 +336,7 @@ class AudioProcessor:
                 if vad_clip_test:
                     audio_full_int16 = np.frombuffer(wavefiledata, np.int16)
                     audio_full_float32 = int2float(audio_full_int16)
-                    full_audio_confidence = self.vad_model(torch.from_numpy(audio_full_float32),
+                    full_audio_confidence = self.vad_model.run_vad(torch.from_numpy(audio_full_float32),
                                                            self.default_sample_rate).item()
                     print(full_audio_confidence)
 
@@ -350,7 +347,8 @@ class AudioProcessor:
                         wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata).tobytes()
 
                     # call sts plugin methods
-                    call_plugin_sts(self.Plugins, wavefiledata, self.default_sample_rate)
+                    if self.plugins is not None:
+                        call_plugin_sts(self.plugins, wavefiledata, self.default_sample_rate)
 
                     wave_file_bytes = audio_tools.audio_bytes_to_wav(wavefiledata, channels=CHANNELS,
                                                                      sample_rate=SAMPLE_RATE)
@@ -361,10 +359,10 @@ class AudioProcessor:
                     if isinstance(wave_file_bytes, list):
                         for audio_segment in wave_file_bytes:
                             self.audio_queue.put(
-                                {'time': time.time_ns(), 'data': audio_segment, 'final': True, 'settings': self.settings})
+                                {'time': time.time_ns(), 'data': audio_segment, 'final': True, 'settings': self.settings, 'plugins': self.plugins})
                     else:
                         self.audio_queue.put(
-                            {'time': time.time_ns(), 'data': wave_file_bytes, 'final': True, 'settings': self.settings})
+                            {'time': time.time_ns(), 'data': wave_file_bytes, 'final': True, 'settings': self.settings, 'plugins': self.plugins})
                     # vad_iterator.reset_states()  # reset model states after each audio
 
                     # write wav file if configured to do so
@@ -551,7 +549,7 @@ class AudioProcessor:
                                 #elif not isinstance(wave_file_bytes, list):
                             else:
                                 self.audio_queue.put(
-                                    {'time': time.time_ns(), 'data': wave_file_bytes, 'final': False, 'settings': self.settings})
+                                    {'time': time.time_ns(), 'data': wave_file_bytes, 'final': False, 'settings': self.settings, 'plugins': self.plugins})
 
                         else:
                             self.frames = []

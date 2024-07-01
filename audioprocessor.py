@@ -178,7 +178,7 @@ def remove_repetitions(text, language='english', settings=main_settings):
     return text
 
 
-def whisper_result_handling(result, audio_timestamp, final_audio, settings):
+def whisper_result_handling(result, audio_timestamp, final_audio, settings, plugins):
     global last_audio_timestamp
     verbose = settings.GetOption("verbose")
     osc_ip = settings.GetOption("osc_ip")
@@ -239,7 +239,7 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings):
                               )
 
         # send realtime processing data to websocket
-        if not final_audio and predicted_text.strip() != "":
+        if not final_audio and predicted_text.strip() != "" and settings.GetOption("websocket_ip") != "0" and settings.GetOption("websocket_ip") != "":
             websocket.BroadcastMessage(json.dumps({"type": "processing_data", "data": predicted_text}))
             # threading.Thread(
             #    target=websocket.BroadcastMessage,
@@ -247,13 +247,13 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings):
             # ).start()
 
         # send regular message
-        send_message(predicted_text, result, final_audio, settings)
+        send_message(predicted_text, result, final_audio, settings, plugins)
 
         last_audio_timestamp = audio_timestamp
 
 
-def plugin_process(predicted_text, result_obj, final_audio):
-    for plugin_inst in Plugins.plugins:
+def plugin_process(plugins, predicted_text, result_obj, final_audio, settings):
+    for plugin_inst in plugins:
         if final_audio:
             if hasattr(plugin_inst, 'stt'):
                 try:
@@ -266,6 +266,13 @@ def plugin_process(predicted_text, result_obj, final_audio):
                     plugin_inst.stt_intermediate(predicted_text, result_obj)
                 except Exception as e:
                     print(f"Error while processing plugin stt_intermediate in Plugin {plugin_inst.__class__.__name__}: " + str(e))
+    audio_processor_call_name = settings.GetOption("audio_processor_caller")
+    if audio_processor_call_name is not None and audio_processor_call_name != "":
+        Plugins.internal_plugin_custom_event_call(plugins, "audio_processor_stt_"+audio_processor_call_name, {
+            "text": predicted_text,
+            "result_obj": result_obj,
+            "final_audio": final_audio
+        })
 
 
 def replace_osc_placeholders(text, result_obj, settings):
@@ -311,7 +318,7 @@ def build_whisper_translation_osc_prefix(result_obj, settings):
     return replace_osc_placeholders(prefix, result_obj, settings)
 
 
-def send_message(predicted_text, result_obj, final_audio, settings):
+def send_message(predicted_text, result_obj, final_audio, settings, plugins):
     osc_ip = settings.GetOption("osc_ip")
     osc_address = settings.GetOption("osc_address")
     osc_port = settings.GetOption("osc_port")
@@ -325,8 +332,8 @@ def send_message(predicted_text, result_obj, final_audio, settings):
         return
 
     # process plugins
-    if final_audio and not settings.GetOption("realtime") or settings.GetOption("realtime"):
-        plugin_thread = threading.Thread(target=plugin_process, args=(predicted_text, result_obj, final_audio))
+    if ((final_audio and not settings.GetOption("realtime")) or settings.GetOption("realtime")) and plugins is not None:
+        plugin_thread = threading.Thread(target=plugin_process, args=(plugins, predicted_text, result_obj, final_audio, settings,))
         plugin_thread.start()
 
     # Send over OSC
@@ -397,7 +404,7 @@ def send_message(predicted_text, result_obj, final_audio, settings):
         settings.SetOption("plugin_timer_stopped", True)
 
     # Send to Websocket
-    if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and final_audio:
+    if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and websocket_ip != "" and final_audio:
         websocket.BroadcastMessage(json.dumps(result_obj))
         # threading.Thread(
         #    target=websocket.BroadcastMessage,
@@ -529,11 +536,11 @@ def convert_audio(audio_bytes: bytes):
     return np.frombuffer(audio_clip.get_array_of_samples(), np.int16).flatten().astype(np.float32) / 32768.0
 
 
-def whisper_result_thread(result, audio_timestamp, final_audio, settings):
-    whisper_result_handling(result, audio_timestamp, final_audio, settings)
+def whisper_result_thread(result, audio_timestamp, final_audio, settings, plugins):
+    whisper_result_handling(result, audio_timestamp, final_audio, settings, plugins)
 
     # send stop info for processing indicator in websocket client
-    if settings.GetOption("websocket_ip") != "0" and not settings.GetOption("realtime") and final_audio:
+    if settings.GetOption("websocket_ip") != "0" and settings.GetOption("websocket_ip") != "" and not settings.GetOption("realtime") and final_audio:
         threading.Thread(
             target=websocket.BroadcastMessage,
             args=(json.dumps({"type": "processing_start", "data": False}),)
@@ -541,7 +548,7 @@ def whisper_result_thread(result, audio_timestamp, final_audio, settings):
 
 
 def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_model_realtime, last_whisper_result,
-                      final_audio, settings):
+                      final_audio, settings, plugins):
     whisper_task = settings.GetOption("whisper_task")
     whisper_language = settings.GetOption("current_language")
     stt_target_language = settings.GetOption("target_language")
@@ -833,7 +840,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
             print("skipping... result: ", result)
             return
 
-        whisper_result_thread(result, current_audio_timestamp, final_audio, settings)
+        whisper_result_thread(result, current_audio_timestamp, final_audio, settings, plugins)
 
     except Exception as e:
         print("Error while processing audio: " + str(e))
@@ -868,6 +875,7 @@ def whisper_worker():
         queue_data = None
         audio = None
         audio_timestamp = None
+        plugins = None
         realtime_mode = main_settings.GetOption("realtime")
         try:
             queue_data = q.get(timeout=queue_timeout)
@@ -875,6 +883,7 @@ def whisper_worker():
             final_audio = queue_data["final"]
             audio_timestamp = queue_data["time"]
             settings = queue_data["settings"]
+            plugins = queue_data["plugins"]
             realtime_mode = settings.GetOption("realtime")
         except queue.Empty:
             # print("Queue processing timed out. Skipping...")
@@ -902,11 +911,11 @@ def whisper_worker():
         if audio_model is not None:
             if main_settings.GetOption("thread_per_transcription"):
                 threading.Thread(target=whisper_ai_thread, args=(
-                    audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio, settings),
+                    audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio, settings, plugins),
                                  daemon=True).start()
             else:
                 whisper_ai_thread(audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result,
-                                  final_audio, settings)
+                                  final_audio, settings, plugins)
 
 
 def start_whisper_thread():

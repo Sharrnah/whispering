@@ -6,7 +6,9 @@ import numpy
 import pyloudnorm
 # import resampy
 import numpy as np
+import pyaudiowpatch
 import pyaudio
+import sounddevice as sd
 import torch
 from librosa.core.audio import resampy
 from pydub import AudioSegment
@@ -14,6 +16,8 @@ from threading import Lock
 import time
 from scipy.io.wavfile import write as write_wav
 from io import BytesIO
+
+import Utilities
 
 
 class PyAudioPool:
@@ -55,6 +59,72 @@ class PyAudioPool:
 
 
 pyaudio_pool = PyAudioPool()
+
+
+def get_host_audio_api_names():
+    audio = pyaudiowpatch.PyAudio()
+    host_api_count = audio.get_host_api_count()
+    host_api_names = {}
+    for i in range(host_api_count):
+        host_api_info = audio.get_host_api_info_by_index(i)
+        host_api_names[i] = host_api_info["name"]
+    return host_api_names
+
+
+def get_default_audio_device_index_by_api(api, is_input=True):
+    devices = sd.query_devices()
+    api_info = sd.query_hostapis()
+    host_api_index = None
+
+    for i, host_api in enumerate(api_info):
+        if api.lower() in host_api['name'].lower():
+            host_api_index = i
+            break
+
+    if host_api_index is None:
+        return None
+
+    api_pyaudio_index, _ = get_audio_api_index_by_name(api)
+
+    default_device_index = api_info[host_api_index]['default_input_device' if is_input else 'default_output_device']
+    default_device_name = devices[default_device_index]['name']
+    return get_audio_device_index_by_name_and_api(default_device_name, api_pyaudio_index, is_input)
+
+
+def get_audio_device_index_by_name_and_api(name, api, is_input=True, default=None):
+    audio = pyaudiowpatch.PyAudio()
+    device_count = audio.get_device_count()
+    for i in range(device_count):
+        device_info = audio.get_device_info_by_index(i)
+        device_name = device_info["name"]
+        if isinstance(device_name, bytes):
+            device_name = Utilities.safe_decode(device_name)
+        if isinstance(name, bytes):
+            name = Utilities.safe_decode(name)
+
+        if device_info["hostApi"] == api and device_info[
+            "maxInputChannels" if is_input else "maxOutputChannels"] > 0 and name in device_name:
+            return i
+    return default
+
+
+def get_audio_api_index_by_name(name):
+    audio = pyaudiowpatch.PyAudio()
+    host_api_count = audio.get_host_api_count()
+    # replace simple names to correct names
+    if name.lower() == "winmm":
+        name = "MME"
+    if name.lower() == "directsound" or name.lower() == "dsound":
+        name = "Windows DirectSound"
+    if name.lower() == "wasapi":
+        name = "Windows WASAPI"
+
+    for i in range(host_api_count):
+        host_api_info = audio.get_host_api_info_by_index(i)
+        print(host_api_info)
+        if name.lower() in host_api_info["name"].lower():
+            return i, host_api_info["name"]
+    return 0, ""
 
 
 # resampy_audio function using the resampy library to resample audio data to a different sample rate and convert it to mono. (slower than resample, but less error prone to strange data)
@@ -267,6 +337,7 @@ def convert_tensor_to_wav_buffer(audio, sample_rate=24000, channels=1, sample_wi
     buff = io.BytesIO()
     wav_file.export(buff, format="wav")
 
+    del audio
     return buff
 
 
