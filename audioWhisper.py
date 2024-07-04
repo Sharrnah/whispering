@@ -87,7 +87,6 @@ if __name__ == '__main__':
 
 
     #torchaudio.set_audio_backend("soundfile")
-    py_audio = pyaudio.PyAudio()
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     SAMPLE_RATE = whisper_audio.SAMPLE_RATE
@@ -619,6 +618,10 @@ if __name__ == '__main__':
                 audio_queue=audioprocessor.q,
                 settings=settings,
                 typing_indicator_function=typing_indicator_function,
+                before_callback_called_func=audio_processing_recording.main_app_before_callback_called,
+                before_recording_send_to_queue_callback_func=audio_processing_recording.main_app_before_recording_send_to_queue_callback,
+                before_recording_starts_callback_func=audio_processing_recording.main_app_before_recording_starts_callback,
+                before_recording_running_callback_func=audio_processing_recording.main_app_before_recording_running_callback,
                 verbose=verbose,
             )
 
@@ -629,7 +632,7 @@ if __name__ == '__main__':
                 sample_rate=SAMPLE_RATE,
                 channels=CHANNELS,
                 chunk=vad_frames_per_buffer,
-                py_audio=py_audio,
+                py_audio=audio_tools.main_app_py_audio,
                 audio_processor=processor,
             )
 

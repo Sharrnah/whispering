@@ -172,6 +172,23 @@ def download_thread(url, extract_dir, checksum, num_retries=3, timeout=60):
     dl_thread.join()
 
 
+# =====================================================
+# Functions to check filehashes from a list of hashes.
+# =====================================================
+def save_hashes(model_path, file_checksums):
+    hash_checked_path = model_path / "hash_checked"
+    with open(hash_checked_path, 'w') as f:
+        json.dump(file_checksums, f)
+
+
+def load_hashes(model_path):
+    hash_checked_path = model_path / "hash_checked"
+    if not hash_checked_path.is_file():
+        return None
+    with open(hash_checked_path, 'r') as f:
+        return json.load(f)
+
+
 def check_file_hashes(path, hash_list) -> bool:
     """
     Go over the list of hashes in hash_list and check if the file exists and if the hash matches.

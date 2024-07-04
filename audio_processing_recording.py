@@ -17,6 +17,33 @@ CHUNK = int(SAMPLE_RATE / 10)
 CHANNELS = 1
 
 
+MAIN_APP_BEFORE_CALLBACK_FUNC_LISTS = {
+    'before_callback_called_func': [],  # called on every audio frame
+    'before_recording_send_to_queue_callback_func': [],  # called before final audio frame is sent to queue for AI to process
+    'before_recording_starts_callback_func': [],  # called when recording starts
+    'before_recording_running_callback_func': [],  # called when recording is running
+}
+
+
+def _main_app_before_callback_called_for_list(func_call_name: str, callback_obj=None):
+    if func_call_name not in MAIN_APP_BEFORE_CALLBACK_FUNC_LISTS:
+        return
+    for func in MAIN_APP_BEFORE_CALLBACK_FUNC_LISTS[func_call_name]:
+        if func is not None and callable(func):
+            func(callback_obj)
+    return
+
+
+def main_app_before_callback_called(callback_obj):
+    _main_app_before_callback_called_for_list('before_callback_called_func', callback_obj)
+def main_app_before_recording_send_to_queue_callback(callback_obj):
+    _main_app_before_callback_called_for_list('before_recording_send_to_queue_callback_func', callback_obj)
+def main_app_before_recording_starts_callback(callback_obj):
+    _main_app_before_callback_called_for_list('before_recording_starts_callback_func', callback_obj)
+def main_app_before_recording_running_callback(callback_obj):
+    _main_app_before_callback_called_for_list('before_recording_running_callback_func', callback_obj)
+
+
 # Provided by Alexander Veysov
 def int2float(sound):
     abs_max = np.abs(sound).max()
@@ -88,6 +115,12 @@ class AudioProcessor:
                  settings=None,
                  typing_indicator_function=None,
 
+                 before_callback_called_func=None,
+                 before_recording_send_to_queue_callback_func=None,
+                 before_recording_starts_callback_func=None,
+                 before_recording_running_callback_func=None,
+                 before_recording_stopped_callback_func=None,
+
                  verbose=False
                  ):
         self.frames = []
@@ -131,6 +164,10 @@ class AudioProcessor:
         self._new_speaker = False
         self.new_speaker_audio = None
 
+        self.before_callback_called_func = before_callback_called_func
+        self.before_recording_send_to_queue_callback_func = before_recording_send_to_queue_callback_func
+        self.before_recording_starts_callback_func = before_recording_starts_callback_func
+        self.before_recording_running_callback_func = before_recording_running_callback_func
 
         self.audio_filter_buffer = None
         # run callback after timeout even if no audio was detected (and such callback not called by pyAudio)
@@ -172,6 +209,8 @@ class AudioProcessor:
         # Reset the timer each time the callback is triggered
         # self.last_callback_time = time.time()
         # self.timer_reset_event.set()
+        if self.before_callback_called_func is not None and callable(self.before_callback_called_func):
+            self.before_callback_called_func(self)
 
         if not self.settings.GetOption("stt_enabled"):
             return None, pyaudio.paContinue
@@ -279,6 +318,8 @@ class AudioProcessor:
                 self.push_to_talk_key) and len(self.frames) > 0) or (
                     use_speaker_diarization and self._new_speaker and self.diarization_model is not None and len(
                 self.frames) > 0):
+                if self.before_recording_send_to_queue_callback_func is not None and callable(self.before_recording_send_to_queue_callback_func):
+                    self.before_recording_send_to_queue_callback_func(self)
 
                 #clip = []
                 # merge all frames to one audio clip
@@ -401,6 +442,8 @@ class AudioProcessor:
             # set start recording variable to true if the volume and voice confidence is above the threshold
             if self.should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold,
                                            keyboard_key=self.push_to_talk_key):
+                if self.before_recording_starts_callback_func is not None and callable(self.before_recording_starts_callback_func):
+                    self.before_recording_starts_callback_func(self)
                 if self.verbose:
                     print("start recording - new_confidence: " + str(new_confidence) + " peak_amplitude: " + str(
                         peak_amplitude))
@@ -417,6 +460,8 @@ class AudioProcessor:
 
             # append audio frame to the list if the recording var is set and voice confidence is above the threshold (So it only adds the audio parts with speech)
             if self.start_rec_on_volume_threshold and new_confidence >= confidence_threshold:
+                if self.before_recording_running_callback_func is not None and callable(self.before_recording_running_callback_func):
+                    self.before_recording_running_callback_func(self)
                 if self.verbose:
                     print("add chunk - new_confidence: " + str(new_confidence) + " peak_amplitude: " + str(
                         peak_amplitude))
@@ -574,6 +619,5 @@ class AudioProcessor:
                 self.previous_audio_chunk = audio_chunk
             else:
                 self.previous_audio_chunk = None
-
         # self.last_callback_time = time.time()
         return in_data, pyaudio.paContinue

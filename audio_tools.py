@@ -20,6 +20,9 @@ from io import BytesIO
 import Utilities
 
 
+main_app_py_audio = pyaudiowpatch.PyAudio()
+
+
 class PyAudioPool:
     def __init__(self, min_instances=2, max_unused_time=20):
         # max_unused_time in seconds
@@ -121,7 +124,6 @@ def get_audio_api_index_by_name(name):
 
     for i in range(host_api_count):
         host_api_info = audio.get_host_api_info_by_index(i)
-        print(host_api_info)
         if name.lower() in host_api_info["name"].lower():
             return i, host_api_info["name"]
     return 0, ""
@@ -502,7 +504,7 @@ def is_audio_playing(tag=None):
 def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt16, sample_rate=16000, channels=1,
                                  chunk=int(16000 / 10), py_audio=None, audio_processor=None):
     if py_audio is None:
-        py_audio = pyaudio.PyAudio()
+        py_audio = pyaudiowpatch.PyAudio()
 
     needs_sample_rate_conversion = False
     num_of_channels = 2
