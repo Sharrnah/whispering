@@ -5,11 +5,18 @@ import torch
 import downloader
 from Models.Singleton import SingletonMeta
 
-cache_vad_path = Path(Path.cwd() / ".cache" / "silero-vad")
+cache_vad_path = Path(Path.cwd() / ".cache" / "silero-vad-v5")
 os.makedirs(cache_vad_path, exist_ok=True)
 
-torch.hub.set_dir(str(Path(cache_vad_path).resolve()))
-
+zip_file_name = "silero-vad-v5.zip"
+vad_fallback_server = {
+    "urls": [
+        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/silero/silero-vad-v5.zip",
+        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/silero/silero-vad-v5.zip",
+        "https://s3.libs.space:9000/ai-models/silero/silero-vad-v5.zip"
+    ],
+    "sha256": "3a24b1e4a2d3075c6ff467d05cda35705e490ee7e0088acbeb436fb456c4f7df",
+}
 
 class VAD(metaclass=SingletonMeta):
     _vad_model = None
@@ -18,6 +25,7 @@ class VAD(metaclass=SingletonMeta):
 
     def __init__(self, vad_thread_num=1):
         torch.set_num_threads(vad_thread_num)
+        torch.hub.set_dir(str(Path(cache_vad_path).resolve()))
 
         try:
             self._vad_model, self._vad_utils = torch.hub.load(trust_repo=True, skip_validation=True,
@@ -34,15 +42,6 @@ class VAD(metaclass=SingletonMeta):
                 print("Error loading vad model trying to load from fallback server...")
                 print(e)
 
-                vad_fallback_server = {
-                    "urls": [
-                        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/silero/silero-vad.zip",
-                        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/silero/silero-vad.zip",
-                        "https://s3.libs.space:9000/ai-models/silero/silero-vad.zip"
-                    ],
-                    "sha256": "097cfacdc2b2f5b09e0da1273b3e30b0e96c3588445958171a7e339cc5805683",
-                }
-
                 try:
                     downloader.download_extract(vad_fallback_server["urls"],
                                                 str(Path(cache_vad_path).resolve()),
@@ -50,7 +49,7 @@ class VAD(metaclass=SingletonMeta):
                                                 alt_fallback=True,
                                                 fallback_extract_func=downloader.extract_zip,
                                                 fallback_extract_func_args=(
-                                                    str(Path(cache_vad_path / "silero-vad.zip")),
+                                                    str(Path(cache_vad_path / zip_file_name)),
                                                     str(Path(cache_vad_path).resolve()),
                                                 ),
                                                 title="Silero VAD", extract_format="zip")
