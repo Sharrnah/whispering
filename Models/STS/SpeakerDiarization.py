@@ -14,7 +14,21 @@ import audio_tools
 
 import downloader
 
-cache_model_path = Path(Path.cwd() / ".cache" / "pyannote")
+model_cache_path = Path(Path.cwd() / ".cache" / "pyannote")
+
+MODEL_LINKS = {
+    "urls": [
+        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/pyannote/pyannote-speakerdiarization.zip",
+        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/pyannote/pyannote-speakerdiarization.zip",
+        "https://s3.libs.space:9000/ai-models/pyannote/pyannote-speakerdiarization.zip"
+    ],
+    "checksum": "3491d2025492f1519990fa01be4e6cde444a50b4cc681815431033e432848ba1",
+    "file_checksums": {
+        "diarization_config.yaml": "25ce75f7c26f6ca5232602afb9b95bf1c4f4b1764970566b3edcce448dd25c99",
+        "models\\pyannote_model_segmentation-3.0.bin": "da85c29829d4002daedd676e012936488234d9255e65e86dfab9bec6b1729298",
+        "models\\pyannote_model_wespeaker-voxceleb-resnet34-LM.bin": "366edf44f4c80889a3eb7a9d7bdf02c4aede3127f7dd15e274dcdb826b143c56"
+    }
+}
 
 
 class SpeakerDiarization(metaclass=SingletonMeta):
@@ -23,13 +37,60 @@ class SpeakerDiarization(metaclass=SingletonMeta):
     def __init__(self):
         if self.pipeline is None:
             print("loading pyannote pipeline...")
-            pipeline_path = str(Path(cache_model_path / "diarization_config.yaml").resolve())
+            if self._needs_download():
+                self.download_model()
+            pipeline_path = str(Path(model_cache_path / "diarization_config.yaml").resolve())
 
             self.pipeline = Pipeline.from_pretrained(pipeline_path)
             self.pipeline.to(torch.device("cuda"))
             print("pyannote pipeline loaded")
             # initialize audio reader
             self._io = Audio()
+
+    def _needs_download(self):
+        if not model_cache_path.exists():
+            return True
+
+        expected_hashes = MODEL_LINKS["file_checksums"]
+        actual_hashes = downloader.load_hashes(model_cache_path)
+
+        if not actual_hashes:
+            if downloader.check_file_hashes(model_cache_path, expected_hashes):
+                return False
+            else:
+                return True
+
+        for file_name, expected_hash in expected_hashes.items():
+            actual_hash = actual_hashes.get(file_name)
+            if actual_hash.lower() != expected_hash.lower():
+                if downloader.sha256_checksum(model_cache_path / file_name).lower() == expected_hash.lower():
+                    actual_hashes[file_name] = expected_hash.lower()
+                else:
+                    return True
+        return False
+
+    def download_model(self):
+        os.makedirs(model_cache_path, exist_ok=True)
+
+        file_checksums_check_need_dl = False
+        hash_checked_file = model_cache_path / "hash_checked"
+
+        if "file_checksums" in MODEL_LINKS:
+            if not hash_checked_file.is_file():
+                file_checksums_check_need_dl = True
+
+        if not model_cache_path.exists() or file_checksums_check_need_dl:
+            print("downloading Speaker Diarization...")
+            if not downloader.download_extract(
+                    MODEL_LINKS["urls"],
+                    str(model_cache_path.resolve()),
+                    MODEL_LINKS["checksum"],
+                    title="Speaker Diarization"
+            ):
+                print("Model download failed")
+            if file_checksums_check_need_dl:
+                downloader.save_hashes(model_cache_path, MODEL_LINKS["file_checksums"])
+
 
     def load_pipeline_from_pretrained(self, path_to_config: str | Path) -> Pipeline:
         path_to_config = Path(path_to_config)

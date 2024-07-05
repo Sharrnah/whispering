@@ -1,4 +1,4 @@
-pip install -U pyinstaller
+pip install -U pyinstaller==6.7.0
 
 rem install plugin dependencies (also added in pyinstaller)
 pip install winsdk
