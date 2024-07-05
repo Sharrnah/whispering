@@ -299,8 +299,7 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
             for plugin_name, is_enabled in list(msg_obj["value"].items()):
                 for plugin_inst in Plugins.plugins:
                     if plugin_name == type(plugin_inst).__name__:
-                        if plugin_name in settings.GetOption("plugins") and is_enabled != settings.GetOption("plugins")[
-                            plugin_name]:
+                        if plugin_name in settings.GetOption("plugins") and is_enabled != settings.GetOption("plugins")[plugin_name]:
                             settings.SetOption(msg_obj["name"], msg_obj["value"])
                             if is_enabled:
                                 if hasattr(plugin_inst, 'on_enable'):
@@ -398,14 +397,16 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
         sys.exit(0)
 
 
-async def on_connect_handler(server_instance, websocket):
+async def main_on_connect_handler(server_instance, websocket):
     # send all available text translation languages
     available_languages = texttranslate.GetInstalledLanguageNames()
-    await server_instance.send(websocket, json.dumps({"type": "installed_languages", "data": available_languages}))
+    if available_languages is not None:
+        await server_instance.send(websocket, json.dumps({"type": "installed_languages", "data": available_languages}))
 
     # send all available image recognition languages
     available_languages = easyocr.get_installed_language_names()
-    await server_instance.send(websocket, json.dumps({"type": "available_img_languages", "data": available_languages}))
+    if available_languages is not None:
+        await server_instance.send(websocket, json.dumps({"type": "available_img_languages", "data": available_languages}))
 
     # send all available TTS models + voices
     if silero.init():
@@ -429,7 +430,7 @@ async def on_connect_handler(server_instance, websocket):
         await server_instance.send(websocket, json.dumps({"type": "loading_state", "data": LOADING_QUEUE}))
 
 
-async def on_disconnect_handler(server_instance, websocket):
+async def main_on_disconnect_handler(server_instance, websocket):
     if UI_CONNECTED["websocket"] == websocket:
         UI_CONNECTED["value"] = False
         UI_CONNECTED["websocket"] = None
@@ -439,7 +440,7 @@ main_server = None
 
 
 def StartWebsocketServer(ip, port):
-    return WebSocketServer(ip, int(port), custom_message_handler, on_connect_handler, on_disconnect_handler,
+    return WebSocketServer(ip, int(port), custom_message_handler, main_on_connect_handler, main_on_disconnect_handler,
                            debug=False)
 
 
@@ -448,6 +449,7 @@ def get_connected_clients():
         return main_server.get_connected_clients()
     else:
         return set()
+
 
 # Legacy functions
 def AnswerMessage(websocket, message):
