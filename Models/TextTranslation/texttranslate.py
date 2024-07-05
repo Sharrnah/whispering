@@ -51,7 +51,6 @@ def InstallLanguages():
 
 
 def GetInstalledLanguageNames():
-    global txt_translator_instance
     match get_current_translator():
         case "M2M100":
             return texttranslateM2M100_CTranslate2.get_installed_language_names()
