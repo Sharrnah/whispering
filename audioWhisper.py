@@ -92,9 +92,6 @@ if __name__ == '__main__':
     SAMPLE_RATE = whisper_audio.SAMPLE_RATE
     CHUNK = int(SAMPLE_RATE / 10)
 
-    cache_vad_path = Path(Path.cwd() / ".cache" / "silero-vad")
-    os.makedirs(cache_vad_path, exist_ok=True)
-
     def sigterm_handler(_signo, _stack_frame):
         processmanager.cleanup_subprocesses()
 
@@ -516,21 +513,15 @@ if __name__ == '__main__':
             realtime_whisper_precision = settings.SETTINGS.GetOption("realtime_whisper_precision")
             # download the model here since its only possible in the main thread
             if faster_whisper.needs_download(whisper_model, whisper_precision):
-                websocket.set_loading_state("downloading_whisper_model", True)
                 faster_whisper.download_model(whisper_model, whisper_precision)
-                websocket.set_loading_state("downloading_whisper_model", False)
             # download possibly needed realtime model
             if realtime_whisper_model != "" and faster_whisper.needs_download(realtime_whisper_model,
                                                                               realtime_whisper_precision):
-                websocket.set_loading_state("downloading_whisper_model", True)
                 faster_whisper.download_model(realtime_whisper_model, realtime_whisper_precision)
-                websocket.set_loading_state("downloading_whisper_model", False)
         if settings.SETTINGS.GetOption("stt_type") == "seamless_m4t":
             stt_model_size = settings.SETTINGS.GetOption("model")
             if seamless_m4t.SeamlessM4T.needs_download(stt_model_size):
-                websocket.set_loading_state("downloading_whisper_model", True)
                 seamless_m4t.SeamlessM4T.download_model(stt_model_size)
-                websocket.set_loading_state("downloading_whisper_model", False)
 
         # load audio filter model
         audio_enhancer = None

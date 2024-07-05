@@ -15,6 +15,7 @@ hiddenimports = ['torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.sign
 datas += collect_data_files('torch')
 datas += collect_data_files('whisper')
 datas += collect_data_files('pykakasi')
+datas += collect_data_files('lightning_fabric')
 datas += copy_metadata('rich')
 datas += copy_metadata('torch')
 datas += copy_metadata('tqdm')
@@ -88,6 +89,12 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('Cython')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('nemo_toolkit')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('nemo-toolkit')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('lightning_fabric')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('lightning')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('nemo')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]

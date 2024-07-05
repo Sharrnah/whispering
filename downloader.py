@@ -69,6 +69,7 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
 
         # remove the zip file after extraction, or just rename if not a compressed file
         if success:
+            time.sleep(1)
             os.remove(local_dl_file + ".finished")
             if extract_format != "none":
                 os.remove(local_dl_file)
@@ -78,7 +79,7 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
             try:
                 download(urls[0], filename=file_name, folder=extract_dir, sha256=checksum, retry_max=5)
                 if extract_format != "none":
-                    with zipfile.ZipFile(local_dl_file, "r") as f:
+                    with zipfile.ZipFile(str(local_dl_file), "r") as f:
                         f.extractall(extract_dir)
                     # remove the zip file after extraction
                     os.remove(local_dl_file)
