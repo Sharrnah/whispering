@@ -61,6 +61,14 @@ def GetInstalledLanguageNames():
             return texttranslateNLLB200_CTranslate2.get_installed_language_names()
         case "Seamless_M4T":
             return SeamlessM4T.get_languages()
+        case _:
+            try:
+                # call custom plugin event method
+                plugin_translation = Plugins.plugin_custom_event_call('plugin_get_languages', {})
+                if plugin_translation is not None and 'languages' in plugin_translation and plugin_translation['languages'] is not None:
+                    return plugin_translation['languages']
+            except Exception as e:
+                print("Error: " + str(e))
 
 
 def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
@@ -88,12 +96,12 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
             except Exception as e:
                 print("Error: " + str(e))
         case _:
-            try:
-                for plugin_inst in Plugins.plugins:
-                    if hasattr(plugin_inst, 'text_translate'):
+            for plugin_inst in Plugins.plugins:
+                try:
+                    if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'text_translate'):
                         translation_text, from_code, to_code = plugin_inst.text_translate(text, from_code, to_code)
-            except Exception as e:
-                print("Error: " + str(e))
+                except Exception as e:
+                    print(f"Error in Plugin {plugin_inst.__class__.__name__}: " + str(e))
 
     if to_romaji:
         translation_text = convert_to_romaji(translation_text)

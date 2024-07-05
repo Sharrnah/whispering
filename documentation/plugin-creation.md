@@ -62,12 +62,14 @@ The following structs are available:
 - `{"type": "button", "label": "Batch Generate", "style": "primary"}` - A button (style can be "primary" or "default")
 - `{"type": "select", "label": "Label", "value": "default value", "options": ["default value", "option2", "option3"]}` - A select box 
 - `{"type": "textarea", "rows": 5, "value": ""}` - A textarea
+- `{"type": "textfield", "password": false, "value": ""}` - A textfield (password field if "password" is true)
 - `{"type": "hyperlink", "label": "hyperlink", "value": "https://github.com/Sharrnah/whispering-ui"}`
 - `{"type": "label", "label": "Some infotext in a label.", "style": "center"}` - A label (style can be "left", "right" or "center")
 - `{"type": "file_open", "accept": ".wav,.mp3", "value": "bark_clone_voice/clone_voice.wav"}` - A file open dialog (accept can be any file extension or a comma separated list of file extensions)
 - `{"type": "file_save", "accept": ".npz", "value": "last_prompt.npz"}` - A file save dialog (accept can be any file extension or a comma separated list of file extensions)
 - `{"type": "folder_open", "accept": "", "value": ""}` - A folder open dialog
 - `{"type": "dir_open", "accept": "", "value": ""}` - Alias for a folder open dialog
+- `{"type": "select_audio", "device_api": "|wasapi|mme|directsound", "device_type": "input|output", "value": ""}` - List of audio devices. Only listing input / output devices if device_type = "input" / device_type = "output", "device_api" can be empty (using main app api), 'wasapi', 'mme' or 'directsound' for a specific audio api.
 
 ## Custom Plugin events
 You can use event calls in plugins using `Plugins.plugin_custom_call(event_name, data_obj)`.

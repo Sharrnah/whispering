@@ -7,7 +7,8 @@ import whisper
 
 import Utilities
 import audio_tools
-import settings
+#import settings
+from settings import SETTINGS as main_settings
 import VRC_OSCLib
 from Models import sentence_split
 from Models.TextTranslation import texttranslate
@@ -24,12 +25,15 @@ from Models.TTS import silero
 import Models.STT.faster_whisper as faster_whisper
 import Models.STT.whisper_audio_markers as whisper_audio_markers
 import Models.STT.speecht5 as speech_t5
+#import Models.STT.whisper_cpp as whisper_cpp
 import Models.STT.tansformer_whisper as transformer_whisper
+#import Models.STT.tensorrt_whisper as tensorrt_whisper
 import Models.STT.wav2vec_bert as wav2vec_bert
 import Models.STT.nemo_canary as nemo_canary
 import Models.Multi.seamless_m4t as seamless_m4t
+import Models.Multi.mms as mms
+# import Models.STT.whisperx as whisperx
 import csv
-from datetime import datetime
 
 # Plugins
 import Plugins
@@ -137,6 +141,14 @@ def seamless_m4t_get_languages():
     return tuple([{"code": code, "name": language} for code, language in languages.items()])
 
 
+def mms_get_languages():
+    languages = {
+        "": "Auto",
+        **mms.LANGUAGES
+    }
+    return tuple([{"code": code, "name": language} for code, language in languages.items()])
+
+
 def wav2vec_bert_get_languages():
     wav2vec_bert_model = wav2vec_bert.Wav2VecBert()
     return wav2vec_bert_model.get_languages()
@@ -146,7 +158,7 @@ def nemo_canary_get_languages():
     return nemo_canary.NemoCanary.get_languages()
 
 
-def remove_repetitions(text, language='english'):
+def remove_repetitions(text, language='english', settings=main_settings):
     do_txt_translate = settings.GetOption("txt_translate")
     src_lang = settings.GetOption("src_lang")
     if src_lang is not None:
@@ -166,7 +178,7 @@ def remove_repetitions(text, language='english'):
     return text
 
 
-def whisper_result_handling(result, audio_timestamp, final_audio):
+def whisper_result_handling(result, audio_timestamp, final_audio, settings, plugins):
     global last_audio_timestamp
     verbose = settings.GetOption("verbose")
     osc_ip = settings.GetOption("osc_ip")
@@ -181,7 +193,7 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
     sentence_split_language = "english"
     if "language" in result:
         sentence_split_language = result["language"]
-    predicted_text = remove_repetitions(predicted_text, language=sentence_split_language)
+    predicted_text = remove_repetitions(predicted_text, language=sentence_split_language, settings=settings)
     if "text" in result:
         result["text"] = predicted_text
 
@@ -227,7 +239,7 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
                               )
 
         # send realtime processing data to websocket
-        if not final_audio and predicted_text.strip() != "":
+        if not final_audio and predicted_text.strip() != "" and settings.GetOption("websocket_ip") != "0" and settings.GetOption("websocket_ip") != "":
             websocket.BroadcastMessage(json.dumps({"type": "processing_data", "data": predicted_text}))
             # threading.Thread(
             #    target=websocket.BroadcastMessage,
@@ -235,32 +247,46 @@ def whisper_result_handling(result, audio_timestamp, final_audio):
             # ).start()
 
         # send regular message
-        send_message(predicted_text, result, final_audio)
+        send_message(predicted_text, result, final_audio, settings, plugins)
 
         last_audio_timestamp = audio_timestamp
 
 
-def plugin_process(predicted_text, result_obj, final_audio):
-    for plugin_inst in Plugins.plugins:
+def plugin_process(plugins, predicted_text, result_obj, final_audio, settings):
+    for plugin_inst in plugins:
         if final_audio:
             if hasattr(plugin_inst, 'stt'):
-                plugin_inst.stt(predicted_text, result_obj)
+                try:
+                    plugin_inst.stt(predicted_text, result_obj)
+                except Exception as e:
+                    print(f"Error while processing plugin stt in Plugin {plugin_inst.__class__.__name__}: " + str(e))
         else:
             if hasattr(plugin_inst, 'stt_intermediate'):
-                plugin_inst.stt_intermediate(predicted_text, result_obj)
+                try:
+                    plugin_inst.stt_intermediate(predicted_text, result_obj)
+                except Exception as e:
+                    print(f"Error while processing plugin stt_intermediate in Plugin {plugin_inst.__class__.__name__}: " + str(e))
+    audio_processor_call_name = settings.GetOption("audio_processor_caller")
+    if audio_processor_call_name is not None and audio_processor_call_name != "":
+        Plugins.internal_plugin_custom_event_call(plugins, "audio_processor_stt_"+audio_processor_call_name, {
+            "text": predicted_text,
+            "result_obj": result_obj,
+            "final_audio": final_audio
+        })
 
 
-# replace {src} and {trg} with source and target language in osc prefix
-def build_whisper_translation_osc_prefix(result_obj):
-    prefix = settings.GetOption("osc_chat_prefix")
+def replace_osc_placeholders(text, result_obj, settings):
     txt_translate_enabled = settings.GetOption("txt_translate")
     whisper_task = settings.GetOption("whisper_task")
 
+    # replace \n with new line
+    text = text.replace("\\n", "\n")
+
     # replace {src} with source language
     if "language" in result_obj and result_obj["language"] is not None:
-        prefix = prefix.replace("{src}", result_obj["language"])
+        text = text.replace("{src}", result_obj["language"])
     elif "language" in result_obj and result_obj["language"] is None:
-        prefix = prefix.replace("{src}", "?")
+        text = text.replace("{src}", "?")
 
     if txt_translate_enabled and "txt_translation" in result_obj and "txt_translation_target" in result_obj:
         # replace {trg} with target language
@@ -268,24 +294,31 @@ def build_whisper_translation_osc_prefix(result_obj):
         if target_language is None:
             target_language = result_obj["txt_translation_target"]
         if target_language is not None:
-            prefix = prefix.replace("{trg}", target_language)
+            text = text.replace("{trg}", target_language)
     else:
         if "target_lang" in result_obj and result_obj["target_lang"] is not None:
             # replace {trg} with target language of whisper
-            prefix = prefix.replace("{trg}", result_obj["target_lang"])
+            text = text.replace("{trg}", result_obj["target_lang"])
         elif whisper_task == "transcribe":
             # replace {trg} with target language of whisper
             if "language" in result_obj and result_obj["language"] is not None:
-                prefix = prefix.replace("{trg}", result_obj["language"])
+                text = text.replace("{trg}", result_obj["language"])
         elif whisper_task == "translate":
             # replace {trg} with target language of whisper
-            prefix = prefix.replace("{trg}", "en")
+            text = text.replace("{trg}", "en")
         else:
-            prefix = prefix.replace("{trg}", "?")
-    return prefix
+            text = text.replace("{trg}", "?")
+    return text
 
 
-def send_message(predicted_text, result_obj, final_audio):
+# replace {src} and {trg} with source and target language in osc prefix
+def build_whisper_translation_osc_prefix(result_obj, settings):
+    prefix = settings.GetOption("osc_chat_prefix")
+
+    return replace_osc_placeholders(prefix, result_obj, settings)
+
+
+def send_message(predicted_text, result_obj, final_audio, settings, plugins):
     osc_ip = settings.GetOption("osc_ip")
     osc_address = settings.GetOption("osc_address")
     osc_port = settings.GetOption("osc_port")
@@ -299,8 +332,8 @@ def send_message(predicted_text, result_obj, final_audio):
         return
 
     # process plugins
-    if final_audio and not settings.GetOption("realtime") or settings.GetOption("realtime"):
-        plugin_thread = threading.Thread(target=plugin_process, args=(predicted_text, result_obj, final_audio))
+    if ((final_audio and not settings.GetOption("realtime")) or settings.GetOption("realtime")) and plugins is not None:
+        plugin_thread = threading.Thread(target=plugin_process, args=(plugins, predicted_text, result_obj, final_audio, settings,))
         plugin_thread.start()
 
     # Send over OSC
@@ -314,16 +347,18 @@ def send_message(predicted_text, result_obj, final_audio):
         osc_initial_time_limit = settings.GetOption("osc_initial_time_limit")
         osc_scroll_size = settings.GetOption("osc_scroll_size")
         osc_max_scroll_size = settings.GetOption("osc_max_scroll_size")
+        osc_type_transfer_split = settings.GetOption("osc_type_transfer_split")
+        osc_type_transfer_split = replace_osc_placeholders(osc_type_transfer_split, result_obj, settings)
 
         osc_text = predicted_text
         if settings.GetOption("osc_type_transfer") == "source":
             osc_text = result_obj["text"]
         elif settings.GetOption("osc_type_transfer") == "both":
-            osc_text = result_obj["text"] + settings.GetOption("osc_type_transfer_split") + predicted_text
+            osc_text = result_obj["text"] + osc_type_transfer_split + predicted_text
         elif settings.GetOption("osc_type_transfer") == "both_inverted":
-            osc_text = predicted_text + settings.GetOption("osc_type_transfer_split") + result_obj["text"]
+            osc_text = predicted_text + osc_type_transfer_split + result_obj["text"]
 
-        message = build_whisper_translation_osc_prefix(result_obj) + osc_text
+        message = build_whisper_translation_osc_prefix(result_obj, settings) + osc_text
 
         # delay sending message if it is the final audio and until TTS starts playing
         if final_audio and settings.GetOption("osc_delay_until_audio_playback"):
@@ -369,7 +404,7 @@ def send_message(predicted_text, result_obj, final_audio):
         settings.SetOption("plugin_timer_stopped", True)
 
     # Send to Websocket
-    if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and final_audio:
+    if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and websocket_ip != "" and final_audio:
         websocket.BroadcastMessage(json.dumps(result_obj))
         # threading.Thread(
         #    target=websocket.BroadcastMessage,
@@ -387,47 +422,67 @@ def send_message(predicted_text, result_obj, final_audio):
 
 
 def load_whisper(model, ai_device):
-    cpu_threads = settings.GetOption("whisper_cpu_threads")
-    num_workers = settings.GetOption("whisper_num_workers")
-    stt_type = settings.GetOption("stt_type")
+    cpu_threads = main_settings.GetOption("whisper_cpu_threads")
+    num_workers = main_settings.GetOption("whisper_num_workers")
+    stt_type = main_settings.GetOption("stt_type")
     if stt_type == "original_whisper":
         try:
-            return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
+            set_ai_device = ai_device
+            if ai_device == "direct-ml":
+                import torch_directml
+                set_ai_device = torch_directml.device()
+            return whisper.load_model(model, download_root=".cache/whisper", device=set_ai_device)
         except Exception as e:
             print("Failed to load whisper model. Application exits. " + str(e))
             sys.exit(1)
     elif stt_type == "faster_whisper":
-        compute_dtype = settings.GetOption("whisper_precision")
+        compute_dtype = main_settings.GetOption("whisper_precision")
 
         return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype,
                                             cpu_threads=cpu_threads, num_workers=num_workers)
         # return whisperx.WhisperX(model, device=ai_device, compute_type=compute_dtype,
         #                                    cpu_threads=cpu_threads, num_workers=num_workers)
     elif stt_type == "seamless_m4t":
-        compute_dtype = settings.GetOption("whisper_precision")
+        compute_dtype = main_settings.GetOption("whisper_precision")
         try:
             return seamless_m4t.SeamlessM4T(model=model, compute_type=compute_dtype, device=ai_device)
         except Exception as e:
             print("Failed to load Seamless M4T model. Application exits. " + str(e))
+    elif stt_type == "mms":
+        compute_dtype = main_settings.GetOption("whisper_precision")
+        try:
+            return mms.Mms(model=model, compute_type=compute_dtype, device=ai_device)
+        except Exception as e:
+            print("Failed to load MMS model. Application exits. " + str(e))
     elif stt_type == "speech_t5":
         try:
             return speech_t5.SpeechT5STT(device=ai_device)
         except Exception as e:
             print("Failed to load speech t5 model. Application exits. " + str(e))
     elif stt_type == "transformer_whisper":
-        compute_dtype = settings.GetOption("whisper_precision")
+        compute_dtype = main_settings.GetOption("whisper_precision")
         try:
             return transformer_whisper.TransformerWhisper(compute_type=compute_dtype, device=ai_device)
         except Exception as e:
             print("Failed to load transformer_whisper model. Application exits. " + str(e))
+    #elif stt_type == "tensorrt_whisper":
+    #    try:
+    #        return tensorrt_whisper.TensorRTWhisper(model=model)
+    #    except Exception as e:
+    #        print("Failed to load tensorrt_whisper model. Application exits. " + str(e))
+    #elif stt_type == "whisper_cpp":
+    #    try:
+    #        return whisper_cpp.WhisperCpp(model=model)
+    #    except Exception as e:
+    #        print("Failed to load whisper_cpp model. Application exits. " + str(e))
     elif stt_type == "wav2vec_bert":
-        compute_dtype = settings.GetOption("whisper_precision")
+        compute_dtype = main_settings.GetOption("whisper_precision")
         try:
             return wav2vec_bert.Wav2VecBert(compute_type=compute_dtype, device=ai_device)
         except Exception as e:
             print("Failed to load Wav2VecBert model. Application exits. " + str(e))
     elif stt_type == "nemo_canary":
-        compute_dtype = settings.GetOption("whisper_precision")
+        compute_dtype = main_settings.GetOption("whisper_precision")
         try:
             return nemo_canary.NemoCanary(compute_type=compute_dtype, device=ai_device)
         except Exception as e:
@@ -438,28 +493,35 @@ def load_whisper(model, ai_device):
 
 
 def load_realtime_whisper(model, ai_device):
-    cpu_threads = settings.GetOption("whisper_cpu_threads")
-    num_workers = settings.GetOption("whisper_num_workers")
-    if settings.GetOption("stt_type") == "original_whisper":
+    cpu_threads = main_settings.GetOption("whisper_cpu_threads")
+    num_workers = main_settings.GetOption("whisper_num_workers")
+    if main_settings.GetOption("stt_type") == "original_whisper":
         return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
-    elif settings.GetOption("stt_type") == "faster_whisper":
-        compute_dtype = settings.GetOption("realtime_whisper_precision")
+    elif main_settings.GetOption("stt_type") == "faster_whisper":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
 
         return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype,
                                             cpu_threads=cpu_threads, num_workers=num_workers)
-    elif settings.GetOption("stt_type") == "seamless_m4t":
-        compute_dtype = settings.GetOption("realtime_whisper_precision")
+    elif main_settings.GetOption("stt_type") == "seamless_m4t":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
         return seamless_m4t.SeamlessM4T(model=model, compute_type=compute_dtype, device=ai_device)
-    elif settings.GetOption("stt_type") == "speech_t5":
+    elif main_settings.GetOption("stt_type") == "mms":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
+        return mms.Mms(model=model, compute_type=compute_dtype, device=ai_device)
+    elif main_settings.GetOption("stt_type") == "speech_t5":
         return speech_t5.SpeechT5STT(device=ai_device)
-    elif settings.GetOption("stt_type") == "transformer_whisper":
-        compute_dtype = settings.GetOption("realtime_whisper_precision")
+    elif main_settings.GetOption("stt_type") == "transformer_whisper":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
         return transformer_whisper.TransformerWhisper(compute_type=compute_dtype, device=ai_device)
-    elif settings.GetOption("stt_type") == "wav2vec_bert":
-        compute_dtype = settings.GetOption("realtime_whisper_precision")
+    #elif settings.GetOption("stt_type") == "tensorrt_whisper":
+    #    return tensorrt_whisper.TensorRTWhisper(model=model)
+    #elif settings.GetOption("stt_type") == "whisper_cpp":
+    #    return whisper_cpp.WhisperCpp(model=model)
+    elif main_settings.GetOption("stt_type") == "wav2vec_bert":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
         return wav2vec_bert.Wav2VecBert(compute_type=compute_dtype, device=ai_device)
-    elif settings.GetOption("stt_type") == "nemo_canary":
-        compute_dtype = settings.GetOption("realtime_whisper_precision")
+    elif main_settings.GetOption("stt_type") == "nemo_canary":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
         return nemo_canary.NemoCanary(compute_type=compute_dtype, device=ai_device)
 
 
@@ -469,15 +531,16 @@ def convert_audio(audio_bytes: bytes):
 
     audio_clip = audio_clip.set_frame_rate(whisper.audio.SAMPLE_RATE)
     audio_clip = audio_clip.set_channels(1)
+    # audio_clip = audio_clip.set_sample_width(2)
 
     return np.frombuffer(audio_clip.get_array_of_samples(), np.int16).flatten().astype(np.float32) / 32768.0
 
 
-def whisper_result_thread(result, audio_timestamp, final_audio):
-    whisper_result_handling(result, audio_timestamp, final_audio)
+def whisper_result_thread(result, audio_timestamp, final_audio, settings, plugins):
+    whisper_result_handling(result, audio_timestamp, final_audio, settings, plugins)
 
     # send stop info for processing indicator in websocket client
-    if settings.GetOption("websocket_ip") != "0" and not settings.GetOption("realtime") and final_audio:
+    if settings.GetOption("websocket_ip") != "0" and settings.GetOption("websocket_ip") != "" and not settings.GetOption("realtime") and final_audio:
         threading.Thread(
             target=websocket.BroadcastMessage,
             args=(json.dumps({"type": "processing_start", "data": False}),)
@@ -485,7 +548,7 @@ def whisper_result_thread(result, audio_timestamp, final_audio):
 
 
 def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_model_realtime, last_whisper_result,
-                      final_audio):
+                      final_audio, settings, plugins):
     whisper_task = settings.GetOption("whisper_task")
     whisper_language = settings.GetOption("current_language")
     stt_target_language = settings.GetOption("target_language")
@@ -537,9 +600,6 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
     repetition_penalty = settings.GetOption("repetition_penalty")
     no_repeat_ngram_size = settings.GetOption("no_repeat_ngram_size")
 
-    # convert audio to numpy array, change channels to 1 etc.
-    audio_sample = convert_audio(audio_data)
-
     # do not process audio if it is older than the last result
     if not final_audio and current_audio_timestamp < last_audio_timestamp:
         print("Audio is older than last result. Skipping...")
@@ -547,6 +607,8 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
 
     result = None
     try:
+        audio_data = convert_audio(audio_data)
+
         if settings.GetOption("stt_type") == "original_whisper":
             # official whisper model
             whisper_fp16 = False
@@ -557,7 +619,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                 realtime_whisper_fp16 = False
                 if settings.GetOption("realtime_whisper_precision") == "float16":  # set precision
                     realtime_whisper_fp16 = True
-                result = audio_model_realtime.transcribe(audio_sample, task=whisper_task,
+                result = audio_model_realtime.transcribe(audio_data, task=whisper_task,
                                                          language=whisper_language,
                                                          condition_on_previous_text=whisper_condition_on_previous_text,
                                                          initial_prompt=whisper_initial_prompt,
@@ -568,7 +630,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                          beam_size=whisper_beam_size_realtime,
                                                          word_timestamps=whisper_word_timestamps)
             else:
-                result = audio_model.transcribe(audio_sample, task=whisper_task, language=whisper_language,
+                result = audio_model.transcribe(audio_data, task=whisper_task, language=whisper_language,
                                                 condition_on_previous_text=whisper_condition_on_previous_text,
                                                 initial_prompt=whisper_initial_prompt,
                                                 logprob_threshold=whisper_logprob_threshold,
@@ -581,7 +643,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
             # faster whisper
             if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
                 if not settings.GetOption("whisper_apply_voice_markers"):
-                    result = audio_model_realtime.transcribe(audio_sample, task=whisper_task,
+                    result = audio_model_realtime.transcribe(audio_data, task=whisper_task,
                                                              language=whisper_language,
                                                              condition_on_previous_text=whisper_condition_on_previous_text,
                                                              prompt_reset_on_temperature=prompt_reset_on_temperature,
@@ -597,7 +659,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                              repetition_penalty=repetition_penalty,
                                                              no_repeat_ngram_size=no_repeat_ngram_size)
                 else:
-                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_sample, audio_model)
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_data, audio_model)
                     result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
                                                                        task=whisper_task,
                                                                        language=whisper_language,
@@ -618,7 +680,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
 
             else:
                 if not settings.GetOption("whisper_apply_voice_markers"):
-                    result = audio_model.transcribe(audio_sample, task=whisper_task,
+                    result = audio_model.transcribe(audio_data, task=whisper_task,
                                                     language=whisper_language,
                                                     condition_on_previous_text=whisper_condition_on_previous_text,
                                                     prompt_reset_on_temperature=prompt_reset_on_temperature,
@@ -635,7 +697,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                     no_repeat_ngram_size=no_repeat_ngram_size)
                 else:
                     print("Applying voice markers.")
-                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_sample, audio_model)
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_data, audio_model)
                     result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
                                                                        task=whisper_task,
                                                                        language=whisper_language,
@@ -657,7 +719,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
             # facebook seamless M4T
             if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
                 if not settings.GetOption("whisper_apply_voice_markers"):
-                    result = audio_model_realtime.transcribe(audio_sample,
+                    result = audio_model_realtime.transcribe(audio_data,
                                                              source_lang=whisper_language,
                                                              target_lang=stt_target_language,
                                                              beam_size=whisper_beam_size_realtime,
@@ -667,7 +729,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                              )
                 else:
                     print("Applying voice markers.")
-                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_sample, audio_model)
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_data, audio_model)
                     result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
                                                                        task=whisper_task,
                                                                        language=whisper_language,
@@ -688,7 +750,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                     del marker_audio_tool
             else:
                 if not settings.GetOption("whisper_apply_voice_markers"):
-                    result = audio_model.transcribe(audio_sample,
+                    result = audio_model.transcribe(audio_data,
                                                     source_lang=whisper_language,
                                                     target_lang=stt_target_language,
                                                     beam_size=whisper_beam_size,
@@ -698,7 +760,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                     )
                 else:
                     print("Applying voice markers.")
-                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_sample, audio_model)
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_data, audio_model)
                     result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
                                                                        task=whisper_task,
                                                                        language=whisper_language,
@@ -717,29 +779,57 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                                        repetition_penalty=repetition_penalty,
                                                                        no_repeat_ngram_size=no_repeat_ngram_size)
 
+        elif settings.GetOption("stt_type") == "mms":
+            result = audio_model.transcribe(audio_data,
+                                            source_lang=whisper_language,
+                                            )
+
         elif settings.GetOption("stt_type") == "speech_t5":
             # microsoft SpeechT5
-            result = audio_model.transcribe(audio_sample)
+            result = audio_model.transcribe(audio_data)
 
         elif settings.GetOption("stt_type") == "transformer_whisper":
             # Whisper Huggingface Transformer
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
             audio_model.set_compute_device(settings.GetOption("ai_device"))
-            result = audio_model.transcribe(audio_sample, model=settings.GetOption("model"), task=whisper_task,
+            result = audio_model.transcribe(audio_data, model=settings.GetOption("model"), task=whisper_task,
                                             language=whisper_language, return_timestamps=False,
                                             beam_size=whisper_beam_size)
+
+        #elif settings.GetOption("stt_type") == "tensorrt_whisper":
+        #    result = audio_model.transcribe(audio_data, model=settings.GetOption("model"), task=whisper_task,
+        #                                    language=whisper_language)
+
+        #elif settings.GetOption("stt_type") == "whisper_cpp":
+        #    # WhisperCPP
+        #    result = audio_model.transcribe(audio_sample, task=whisper_task,
+        #                                    language=whisper_language,
+        #                                    condition_on_previous_text=whisper_condition_on_previous_text,
+        #                                    prompt_reset_on_temperature=prompt_reset_on_temperature,
+        #                                    initial_prompt=whisper_initial_prompt,
+        #                                    logprob_threshold=whisper_logprob_threshold,
+        #                                    no_speech_threshold=whisper_no_speech_threshold,
+        #                                    temperature=whisper_temperature_fallback_option,
+        #                                    beam_size=whisper_beam_size,
+        #                                    word_timestamps=whisper_word_timestamps,
+        #                                    without_timestamps=whisper_faster_without_timestamps,
+        #                                    patience=whisper_faster_beam_search_patience,
+        #                                    length_penalty=whisper_faster_length_penalty,
+        #                                    repetition_penalty=repetition_penalty,
+        #                                    no_repeat_ngram_size=no_repeat_ngram_size)
+
         elif settings.GetOption("stt_type") == "wav2vec_bert":
             # Wav2VecBert
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
             audio_model.set_compute_device(settings.GetOption("ai_device"))
-            result = audio_model.transcribe(audio_sample, task=whisper_task,
+            result = audio_model.transcribe(audio_data, task=whisper_task,
                                             language=whisper_language)
 
         elif settings.GetOption("stt_type") == "nemo_canary":
             # Nemo Canary
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
             audio_model.set_compute_device(settings.GetOption("ai_device"))
-            result = audio_model.transcribe(audio_sample, task=whisper_task,
+            result = audio_model.transcribe(audio_data, task=whisper_task,
                                             source_lang=whisper_language,
                                             target_lang=stt_target_language,
                                             beam_size=whisper_beam_size,
@@ -750,46 +840,51 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
             print("skipping... result: ", result)
             return
 
-        whisper_result_thread(result, current_audio_timestamp, final_audio)
+        whisper_result_thread(result, current_audio_timestamp, final_audio, settings, plugins)
 
     except Exception as e:
         print("Error while processing audio: " + str(e))
 
 
 def whisper_worker():
-    global final_audio
-    global queue_data
-    global audio
-    global audio_timestamp
+    #global final_audio
+    #global queue_data
+    #global audio
+    #global audio_timestamp
 
-    whisper_model = settings.GetOption("model")
+    whisper_model = main_settings.GetOption("model")
 
-    whisper_ai_device = settings.GetOption("ai_device")
+    whisper_ai_device = main_settings.GetOption("ai_device")
     websocket.set_loading_state("speech2text_loading", True)
     audio_model = load_whisper(whisper_model, whisper_ai_device)
     # load realtime whisper model
     audio_model_realtime = None
-    if settings.GetOption("realtime") and settings.GetOption("realtime_whisper_model") != "" and settings.GetOption(
+    if main_settings.GetOption("realtime") and main_settings.GetOption("realtime_whisper_model") != "" and main_settings.GetOption(
             "realtime_whisper_model") is not None:
-        audio_model_realtime = load_realtime_whisper(settings.GetOption("realtime_whisper_model"), whisper_ai_device)
+        audio_model_realtime = load_realtime_whisper(main_settings.GetOption("realtime_whisper_model"), whisper_ai_device)
     websocket.set_loading_state("speech2text_loading", False)
 
     last_audio_time = 0
 
     last_whisper_result = ""
 
-    print("Speech2Text AI Ready. You can now say something!")
+    print("Whispering Tiger is now ready!")
 
     while True:
         final_audio = False
         queue_data = None
         audio = None
         audio_timestamp = None
+        plugins = None
+        realtime_mode = main_settings.GetOption("realtime")
         try:
             queue_data = q.get(timeout=queue_timeout)
             audio = queue_data["data"]
             final_audio = queue_data["final"]
             audio_timestamp = queue_data["time"]
+            settings = queue_data["settings"]
+            plugins = queue_data["plugins"]
+            realtime_mode = settings.GetOption("realtime")
         except queue.Empty:
             # print("Queue processing timed out. Skipping...")
             continue
@@ -804,8 +899,8 @@ def whisper_worker():
             continue
 
         # skip if queue is full
-        if settings.GetOption("realtime") and q.qsize() >= max_queue_size and not final_audio or \
-                not settings.GetOption("realtime") and q.qsize() >= max_queue_size:
+        if realtime_mode and q.qsize() >= max_queue_size and not final_audio or \
+                not realtime_mode and q.qsize() >= max_queue_size:
             continue
 
         # skip if audio is too old, except if it's the final audio
@@ -814,13 +909,13 @@ def whisper_worker():
 
         # start processing audio thread if audio_model is not None
         if audio_model is not None:
-            if settings.GetOption("thread_per_transcription"):
+            if main_settings.GetOption("thread_per_transcription"):
                 threading.Thread(target=whisper_ai_thread, args=(
-                    audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio),
+                    audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result, final_audio, settings, plugins),
                                  daemon=True).start()
             else:
                 whisper_ai_thread(audio, audio_timestamp, audio_model, audio_model_realtime, last_whisper_result,
-                                  final_audio)
+                                  final_audio, settings, plugins)
 
 
 def start_whisper_thread():

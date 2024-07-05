@@ -9,10 +9,10 @@ librosa==0.10.1
 #transformers @ https://github.com/huggingface/transformers/archive/84724efd101af52ed3d6af878e41ff8fd651a9cc.zip
 #transformers==4.35.0
 #transformers @ https://github.com/huggingface/transformers/archive/235e5d4991e8a0984aa78db91087b49622c7740e.zip
-transformers==4.38.1
+transformers==4.41.2
 
 tensorboardX==2.6.2.2
-accelerate==0.26.1
+accelerate==0.30.1
 #optimum
 #flash-attn
 #bitsandbytes==0.41.1
@@ -23,7 +23,7 @@ ffmpeg-python==0.2.0
 click>=8.1.3
 PyAudio==0.2.14
 PyAudioWPatch==0.2.12.6
-resampy==0.4.2
+resampy==0.4.3
 sounddevice==0.4.6
 SpeechRecognition==3.10.1
 pydub>=0.25.1
@@ -36,7 +36,7 @@ python-osc>=1.8.0
 websockets>=10.4
 unidecode==1.3.8
 pykakasi>=2.2.1
-ctranslate2==4.1.0
+ctranslate2==4.3.1
 sentencepiece==0.2.0
 protobuf==3.20.3
 progressbar2==4.3.2
@@ -51,8 +51,8 @@ easyocr @ https://github.com/JaidedAI/EasyOCR/archive/refs/tags/v1.7.1.zip
 mss==7.0.1
 scipy==1.10.1
 num2words==0.5.13
-onnxruntime==1.17.1
-requests==2.29.0
+onnxruntime==1.18.1
+requests==2.31.0
 # downgradea of scikit-image to v1.19.3 to prevent https://github.com/scikit-image/scikit-image/issues/6784
 scikit-image==v0.22.0
 
@@ -61,7 +61,7 @@ pyloudnorm
 nltk
 
 # NVIDIA Nemo (Canary) dependency
-Cython
+Cython==3.0.10
 youtokentome @ https://github.com/gburlet/YouTokenToMe/archive/refs/heads/dependencies.zip
 git+https://github.com/NVIDIA/NeMo.git@r1.23.0#egg=nemo_toolkit[asr]
 
@@ -73,17 +73,22 @@ keyboard>=0.13.5
 grpcio==1.59.3
 annotated_types==0.6.0
 
+# speaker diarization
+pyannote.audio==3.2.0
 
 #RVC dependencies
 #fairseq @ https://github.com/Sharrnah/fairseq/archive/refs/heads/main.zip
 #fairseq @ https://github.com/Sharrnah/fairseq/releases/download/v0.12.4/fairseq-0.12.4-cp310-cp310-win_amd64.whl
-fairseq @ https://github.com/Sharrnah/fairseq/releases/download/v0.12.4/fairseq-0.12.4-cp311-cp311-win_amd64.whl
+#fairseq @ https://github.com/Sharrnah/fairseq/releases/download/v0.12.4/fairseq-0.12.4-cp311-cp311-win_amd64.whl
+fairseq @ https://github.com/Sharrnah/fairseq/archive/refs/heads/py3.11.zip
 faiss-cpu==1.7.4
 praat-parselmouth>=0.4.2
 pyworld==0.3.4
 torchcrepe==0.0.22
 
-#faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/heads/master.zip
 faster-whisper @ https://github.com/SYSTRAN/faster-whisper/archive/refs/heads/master.zip
-#faster-whisper @ https://github.com/Sharrnah/faster-whisper/archive/refs/heads/large-v3.zip
+#faster-whisper @ https://github.com/Sharrnah/faster-whisper/archive/refs/heads/master.zip
 #whisperx @ https://github.com/Sharrnah/whisperX/archive/refs/heads/main.zip
+
+
+noisereduce

@@ -1,4 +1,4 @@
-pip install -U pyinstaller
+pip install -U pyinstaller==6.7.0
 
 rem install plugin dependencies (also added in pyinstaller)
 pip install winsdk
@@ -23,6 +23,7 @@ rem             --hidden-import=annotated_types ^
 rem             --hidden-import=Cython ^
 rem             --hidden-import=nemo_toolkit ^
 rem             --hidden-import=nemo ^
+rem             --hidden-import=noisereduce ^
 rem             --copy-metadata rich ^
 rem             --copy-metadata tqdm ^
 rem             --copy-metadata regex ^
@@ -38,6 +39,7 @@ rem             --copy-metadata safetensors ^
 rem             --copy-metadata pyyaml ^
 rem             --copy-metadata pyloudnorm ^
 rem             --copy-metadata nltk ^
+rem             --copy-metadata noisereduce ^
 rem             --collect-data whisper ^
 rem             --collect-data pykakasi ^
 rem             --collect-all easyocr ^
@@ -65,6 +67,7 @@ rem             --collect-all annotated_types ^
 rem             --collect-all Cython ^
 rem             --collect-all nemo_toolkit ^
 rem             --collect-all nemo ^
+rem             --collect-all noisereduce ^
 rem             --collect-submodules fairseq ^
 rem             --add-data ".cache/nltk/tokenizers/punkt;./nltk_data/tokenizers/punkt" ^
 rem             -i app-icon.ico

@@ -1,9 +1,14 @@
+import numpy
+import requests
+
 import websocket
 from windowcapture import WindowCapture
 import easyocr
 from easyocr import config
 import os
 from pathlib import Path
+
+from PIL import Image
 
 model_path = Path(Path.cwd() / ".cache" / ".EasyOCR")
 os.makedirs(model_path, exist_ok=True)
@@ -159,7 +164,41 @@ def run_image_processing(window_name, src_languages):
             # unitialize
             win_cap.unitialize()
 
-            result_data = reader.readtext(screenshot, paragraph=True)
+            result_lines, _, bounding_boxes = run_image_processing_from_image(screenshot, src_languages)
+
+        except Exception as e:
+            print(e)
+
+    return result_lines, screenshot_png, bounding_boxes
+
+
+def run_image_processing_from_image(image_src, src_languages):
+    image_pth = image_src
+    image = None
+    if isinstance(image_src, str) and image_src.startswith("http"):
+        print("fetching image url...")
+        image_pth = requests.get(image_src, stream=True).raw
+    elif hasattr(image_src, "file"):
+        print("getting image from file...")
+        image_pth = image_src.file
+    try:
+        print("converting image...")
+        image = Image.open(image_pth).convert('RGB')
+    except Exception as e:
+        if not isinstance(image_pth, numpy.ndarray) and not isinstance(image_pth, bytes):
+            print("failed to convert image: " + str(e))
+
+    if image is None:
+        image = image_src
+
+    print("OCR Started...")
+
+    init_reader(src_languages)
+    result_lines = []
+    bounding_boxes = []
+    if reader is not None:
+        try:
+            result_data = reader.readtext(image, paragraph=True)
             if len(result_data) > 0:
                 for line in result_data:
                     # bbox to pixel value bbox
@@ -171,9 +210,9 @@ def run_image_processing(window_name, src_languages):
                     result_lines.append(text_detection)
                     bounding_boxes.append(bounding_box)
 
-                #image_with_boxes = win_cap.draw_rectangles(result_data, result_data[0][0])
-
         except Exception as e:
             print(e)
 
-    return result_lines, screenshot_png, bounding_boxes
+    print("OCR Finished.")
+
+    return result_lines, image, bounding_boxes

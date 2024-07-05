@@ -59,8 +59,8 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
                                                                                           "title": title,
                                                                                           "extract_format": extract_format}}))
         while True:
-            if os.path.isfile(local_dl_file + ".finished"):
-                if sha256_checksum(local_dl_file + ".finished") == checksum or checksum == "":
+            if os.path.isfile(local_dl_file + ".finished") and os.path.isfile(local_dl_file):
+                if sha256_checksum(local_dl_file) == checksum or checksum == "":
                     success = True
                 break
             else:
@@ -69,10 +69,9 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
 
         # remove the zip file after extraction, or just rename if not a compressed file
         if success:
+            os.remove(local_dl_file + ".finished")
             if extract_format != "none":
-                os.remove(local_dl_file + ".finished")
-            else:
-                os.rename(local_dl_file + ".finished", local_dl_file)
+                os.remove(local_dl_file)
 
     else:
         if not alt_fallback and fallback_extract_func is None:
@@ -171,3 +170,41 @@ def download_thread(url, extract_dir, checksum, num_retries=3, timeout=60):
     dl_thread = threading.Thread(target=download_file_simple, args=(url, extract_dir, checksum, num_retries, timeout))
     dl_thread.start()
     dl_thread.join()
+
+
+# =====================================================
+# Functions to check filehashes from a list of hashes.
+# =====================================================
+def save_hashes(model_path, file_checksums):
+    hash_checked_path = model_path / "hash_checked"
+    with open(hash_checked_path, 'w') as f:
+        json.dump(file_checksums, f)
+
+
+def load_hashes(model_path):
+    hash_checked_path = model_path / "hash_checked"
+    if not hash_checked_path.is_file():
+        return None
+    with open(hash_checked_path, 'r') as f:
+        return json.load(f)
+
+
+def check_file_hashes(path, hash_list) -> bool:
+    """
+    Go over the list of hashes in hash_list and check if the file exists and if the hash matches.
+    hash_list example:
+    {
+        "generation_config.json": "1149807b43a0dd788e052bfcb47c012b0b182946b66c63b3ecdf9aad2d9b5f66",
+        "config.json": "b5b4368433a25df0943929beaf6833db03b767b150990ee078fe62c5a7b31434",
+        # ...
+    }
+    Returns True if all hashes match, False otherwise.
+    """
+    for file_name, expected_hash in hash_list.items():
+        file_path = os.path.join(path, file_name)
+        if not os.path.isfile(file_path):
+            return False
+        actual_hash = sha256_checksum(file_path)
+        if actual_hash.lower() != expected_hash.lower():
+            return False
+    return True
