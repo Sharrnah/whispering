@@ -30,7 +30,12 @@ LOADING_QUEUE = {}
 
 
 def tts_request(msgObj, websocket):
-    silero_wav, sample_rate = silero.tts.tts(msgObj["value"]["text"])
+    text = msgObj["value"]["text"]
+    path = ""
+    if "path" in msgObj["value"] and msgObj["value"]["path"] != "":
+        path = msgObj["value"]["path"]
+
+    silero_wav, sample_rate = silero.tts.tts(text)
     if silero_wav is not None:
         if msgObj["value"]["to_device"]:
             if "device_index" in msgObj["value"]:
@@ -42,8 +47,15 @@ def tts_request(msgObj, websocket):
                 {"type": "tts_result", "wav_data": silero_wav.tolist(), "sample_rate": sample_rate}))
             if msgObj["value"]["download"]:
                 wav_data = silero.tts.return_wav_file_binary(silero_wav)
-                wav_data = base64.b64encode(wav_data).decode('utf-8')
-                AnswerMessage(websocket, json.dumps({"type": "tts_save", "wav_data": wav_data}))
+                if path is not None and path != '':
+                    # write wav_data to file in path
+                    with open(path, "wb") as f:
+                        f.write(wav_data)
+                        AnswerMessage(websocket, json.dumps({"type": "info",
+                                                             "data": "File saved to: " + path}))
+                else:
+                    wav_data = base64.b64encode(wav_data).decode('utf-8')
+                    AnswerMessage(websocket, json.dumps({"type": "tts_save", "wav_data": wav_data}))
     else:
         print("TTS failed")
 
@@ -158,10 +170,14 @@ def tts_plugin_process(msgObj, websocket, download=False):
         else:
             device = settings.GetOption("device_out_index")
 
+    path = ""
+    if "path" in msgObj["value"] and msgObj["value"]["path"] != "":
+        path = msgObj["value"]["path"]
+
     for plugin_inst in Plugins.plugins:
         if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'tts'):
             try:
-                plugin_inst.tts(text, device, websocket, download)
+                plugin_inst.tts(text, device, websocket, download, path)
             except Exception as e:
                 print(f"Plugin TTS failed in Plugin {plugin_inst.__class__.__name__}:", e)
 
