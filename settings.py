@@ -103,7 +103,7 @@ class SettingsManager:
             "denoise_audio": "",  # if enabled, audio will be de-noised before processing. (Can be empty, "deepfilter" or "noise_reduce")
             "denoise_audio_before_trigger": False,  # if enabled, noise cancellation will be applied on the audio chunks before recording trigger conditions are detected.
             "denoise_audio_post_filter": False,  # Enable post filter for some minor, extra noise reduction.
-            "thread_per_transcription": False,  # Use a separate thread for each transcription.
+            "thread_per_transcription": True,  # Use a separate thread for each transcription.
             "speaker_diarization": False,  # Enable speaker diarization.
             "speaker_change_split": True,  # Split audio at speaker changes. (when speaker diarization is enabled)
             "min_speaker_length": 0.5,  # minimum length a speaker should talk. (to reduce speaker change fluctuations)
