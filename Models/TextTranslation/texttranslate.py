@@ -1,3 +1,5 @@
+import traceback
+
 import settings
 import pykakasi
 # import texttranslateM2M100
@@ -101,6 +103,7 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
                         translation_text, from_code, to_code = plugin_inst.text_translate(text, from_code, to_code)
                 except Exception as e:
                     print(f"Error in Plugin {plugin_inst.__class__.__name__}: " + str(e))
+                    traceback.print_exc()
 
     if to_romaji:
         translation_text = convert_to_romaji(translation_text)

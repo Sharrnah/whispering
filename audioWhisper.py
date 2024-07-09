@@ -135,6 +135,7 @@ if __name__ == '__main__':
                         plugin_inst.timer()
                     except Exception as e:
                         print(f"Error calling plugin timer for {plugin_inst.__class__.__name__}: {e}")
+                        traceback.print_exc()
         else:
             if settings.SETTINGS.GetOption("plugin_current_timer") <= 0.0:
                 settings.SETTINGS.SetOption("plugin_current_timer", settings.SETTINGS.GetOption("plugin_timer_timeout"))
@@ -561,6 +562,7 @@ if __name__ == '__main__':
                     print(plugin_inst.__class__.__name__ + " is disabled")
             except Exception as e:
                 print(f"Error initializing plugin {plugin_inst.__class__.__name__}: {e}")
+                traceback.print_exc()
 
         # prepare the plugin timer calls
         call_plugin_timer(Plugins)

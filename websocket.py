@@ -2,6 +2,7 @@ import sys
 import threading
 import asyncio
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -180,6 +181,7 @@ def tts_plugin_process(msgObj, websocket, download=False):
                 plugin_inst.tts(text, device, websocket, download, path)
             except Exception as e:
                 print(f"Plugin TTS failed in Plugin {plugin_inst.__class__.__name__}:", e)
+                traceback.print_exc()
 
 
 def ocr_req(msgObj, websocket):
@@ -216,6 +218,7 @@ def plugin_event_handler(msgObj, websocket):
                     plugin_inst.on_event_received(msgObj, websocket)
                 except Exception as e:
                     print(f"Plugin event failed in Plugin {plugin_inst.__class__.__name__}:", e)
+                    traceback.print_exc()
                 return
 
 
@@ -323,12 +326,14 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
                                         plugin_inst.on_enable()
                                     except Exception as e:
                                         print(f"Plugin enable failed for {plugin_name}:", e)
+                                        traceback.print_exc()
                             else:
                                 if hasattr(plugin_inst, 'on_disable'):
                                     try:
                                         plugin_inst.on_disable()
                                     except Exception as e:
                                         print(f"Plugin disable failed for {plugin_name}:", e)
+                                        traceback.print_exc()
 
         settings.SetOption(msg_obj["name"], msg_obj["value"])
         server_instance.broadcast_message(
