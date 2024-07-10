@@ -74,7 +74,7 @@ def GetInstalledLanguageNames():
 
 def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
     global txt_translator_instance
-    translation_text = ""
+    translation_text = text
     match get_current_translator():
         case "M2M100":
             try:
