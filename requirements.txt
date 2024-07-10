@@ -72,6 +72,8 @@ winsdk>=1.0.0b9
 keyboard>=0.13.5
 grpcio==1.59.3
 annotated_types==0.6.0
+# for ChatTTS plugin
+frozendict==2.4.4
 
 # speaker diarization
 pyannote.audio==3.2.0
