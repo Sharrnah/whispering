@@ -372,7 +372,7 @@ def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2
 
 
 # play wav binary audio to device, converting audio sample_rate and channels if necessary
-# audio can be bytes (in wav) or tensor
+# audio can be bytes (in wav), torch.Tensor or numpy array - audio data might need to be in int16, as python does not support float32 by default. use `audio_data = np.int16(wav_numpy * 32767)` to convert. (needs more testing)
 # tensor_sample_with is the sample width of the tensor (if audio is tensor and not bytes) [default is 4 bytes]
 # tensor_channels is the number of channels of the tensor (if audio is tensor and not bytes) [default is 1 channel (mono)]
 def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channel_num=2, target_channels=2,
@@ -389,9 +389,15 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
 
     if isinstance(audio, bytes):
         buff = _generate_binary_buffer(audio)
-    else:
+    elif isinstance(audio, numpy.ndarray):
+        buff = io.BytesIO()
+        write_wav(buff, source_sample_rate, audio)
+        buff.seek(0)
+    elif isinstance(audio, torch.Tensor):
         buff = convert_tensor_to_wav_buffer(audio, sample_rate=source_sample_rate, channels=tensor_channels,
                                             sample_width=tensor_sample_with)
+    else:
+        raise ValueError("Unsupported audio format. Please provide bytes, numpy array, or torch tensor.")
 
     # Set chunk size of 1024 samples per data frame
     chunk = 1024
