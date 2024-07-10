@@ -299,7 +299,8 @@ class WebSocketServer:
         return self.ws_clients
 
     async def server_program(self):
-        server = await websockets.serve(self.handler, self.ip, self.port, max_size=1_000_000_000, timeout=120, close_timeout=120)
+        server = await websockets.serve(self.handler, self.ip, self.port, max_size=1_000_000_000, timeout=120,
+                                        close_timeout=120)
         print('Websocket: Server started.')
         await server.wait_closed()
 
@@ -318,7 +319,8 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
             for plugin_name, is_enabled in list(msg_obj["value"].items()):
                 for plugin_inst in Plugins.plugins:
                     if plugin_name == type(plugin_inst).__name__:
-                        if plugin_name in settings.GetOption("plugins") and is_enabled != settings.GetOption("plugins")[plugin_name]:
+                        if plugin_name in settings.GetOption("plugins") and is_enabled != settings.GetOption("plugins")[
+                            plugin_name]:
                             settings.SetOption(msg_obj["name"], msg_obj["value"])
                             if is_enabled:
                                 if hasattr(plugin_inst, 'on_enable'):
@@ -427,7 +429,8 @@ async def main_on_connect_handler(server_instance, websocket):
     # send all available image recognition languages
     available_languages = easyocr.get_installed_language_names()
     if available_languages is not None:
-        await server_instance.send(websocket, json.dumps({"type": "available_img_languages", "data": available_languages}))
+        await server_instance.send(websocket,
+                                   json.dumps({"type": "available_img_languages", "data": available_languages}))
 
     # send all available TTS models + voices
     if silero.init():
