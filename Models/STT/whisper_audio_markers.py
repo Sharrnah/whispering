@@ -26,14 +26,14 @@ def iso3_to_iso_1(iso3):
 
 
 class WhisperVoiceMarker(metaclass=SingletonMeta):
-    audio_sample = None
+    #audio_sample = None
     audio_model = None
     try_count = 0
     last_result = ""
     verbose = False
 
-    def __init__(self, audio_sample, audio_model):
-        self.audio_sample = audio_sample
+    def __init__(self, audio_model):
+        #self.audio_sample = audio_sample
         self.audio_model = audio_model
         self.try_count = 0
         self.last_result = ""
@@ -103,9 +103,9 @@ class WhisperVoiceMarker(metaclass=SingletonMeta):
 
         return voice_marker_prompt
 
-    def apply_voice_markers(self, lng: str):
+    def apply_voice_markers(self, audio_sample, lng: str):
         if self.try_count == -1:
-            return self.audio_sample
+            return audio_sample
 
         lngInput = lng
 
@@ -141,7 +141,7 @@ class WhisperVoiceMarker(metaclass=SingletonMeta):
         marker2_audio = np.frombuffer(marker2_audio, np.int16).flatten().astype(np.float32) / 32768.0
 
         # prepend and append markers
-        audio_sample = np.concatenate([marker1_audio, self.audio_sample, marker2_audio])
+        audio_sample = np.concatenate([marker1_audio, audio_sample, marker2_audio])
 
         mark = None
         del mark
@@ -153,6 +153,8 @@ class WhisperVoiceMarker(metaclass=SingletonMeta):
         return audio_sample
 
     def transcribe(self, **kwargs):
+        audio_sample = kwargs["audio"]
+
         result = None
 
         if kwargs["stt_model"] is not None and kwargs["stt_model"] != "":
@@ -192,7 +194,7 @@ class WhisperVoiceMarker(metaclass=SingletonMeta):
         if kwargs["initial_prompt"] is not None and kwargs["initial_prompt"] != "":
             whisper_initial_prompt += " " + kwargs["initial_prompt"]
 
-        audio_sample = self.apply_voice_markers(marker_language)
+        audio_sample = self.apply_voice_markers(audio_sample, marker_language)
 
         if stt_model.lower() == "whisper":
             result = self.audio_model.transcribe(audio_sample, task=whisper_task,

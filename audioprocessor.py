@@ -659,8 +659,9 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                              repetition_penalty=repetition_penalty,
                                                              no_repeat_ngram_size=no_repeat_ngram_size)
                 else:
-                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_data, audio_model)
-                    result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_model)
+                    result = marker_audio_tool.voice_marker_transcribe(audio=audio_data,
+                                                                       stt_model=settings.GetOption("stt_type"),
                                                                        task=whisper_task,
                                                                        language=whisper_language,
                                                                        condition_on_previous_text=whisper_condition_on_previous_text,
@@ -697,8 +698,9 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                     no_repeat_ngram_size=no_repeat_ngram_size)
                 else:
                     print("Applying voice markers.")
-                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_data, audio_model)
-                    result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_model)
+                    result = marker_audio_tool.voice_marker_transcribe(audio=audio_data,
+                                                                       stt_model=settings.GetOption("stt_type"),
                                                                        task=whisper_task,
                                                                        language=whisper_language,
                                                                        condition_on_previous_text=whisper_condition_on_previous_text,
@@ -729,8 +731,9 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                              )
                 else:
                     print("Applying voice markers.")
-                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_data, audio_model)
-                    result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_model)
+                    result = marker_audio_tool.voice_marker_transcribe(audio=audio_data,
+                                                                       stt_model=settings.GetOption("stt_type"),
                                                                        task=whisper_task,
                                                                        language=whisper_language,
                                                                        target_lang=stt_target_language,
@@ -760,8 +763,9 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                     )
                 else:
                     print("Applying voice markers.")
-                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_data, audio_model)
-                    result = marker_audio_tool.voice_marker_transcribe(stt_model=settings.GetOption("stt_type"),
+                    marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_model)
+                    result = marker_audio_tool.voice_marker_transcribe(audio=audio_data,
+                                                                       stt_model=settings.GetOption("stt_type"),
                                                                        task=whisper_task,
                                                                        language=whisper_language,
                                                                        target_lang=stt_target_language,
