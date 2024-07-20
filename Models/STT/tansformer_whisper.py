@@ -17,6 +17,7 @@ class TransformerWhisper(metaclass=SingletonMeta):
     processor = None
     compute_type = "float32"
     compute_device = "cpu"
+    compute_device_str = "cpu"
 
     text_correction_model = None
 
@@ -33,7 +34,7 @@ class TransformerWhisper(metaclass=SingletonMeta):
     def __init__(self, compute_type="float32", device="cpu"):
         os.makedirs(self.model_cache_path, exist_ok=True)
         self.compute_type = compute_type
-        self.compute_device = device
+        self.set_compute_device(device)
         self.load_model_list()
 
         #if self._debug_skip_dl:
@@ -56,6 +57,19 @@ class TransformerWhisper(metaclass=SingletonMeta):
         self.compute_type = compute_type
 
     def set_compute_device(self, device):
+        self.compute_device_str = device
+        if device is None or device == "cuda" or device == "auto" or device == "":
+            self.compute_device_str = "cuda" if torch.cuda.is_available() else "cpu"
+            device = torch.device(self.compute_device_str)
+        elif device == "cpu":
+            device = torch.device("cpu")
+        elif device.startswith("direct-ml"):
+            device_id = 0
+            device_id_split = device.split(":")
+            if len(device_id_split) > 1:
+                device_id = int(device_id_split[1])
+            import torch_directml
+            device = torch_directml.device(device_id)
         self.compute_device = device
 
     def load_model_list(self):
@@ -108,7 +122,7 @@ class TransformerWhisper(metaclass=SingletonMeta):
             compute_8bit = self._str_to_dtype_dict(self.compute_type).get('8bit', False)
             self.compute_type = compute_type
 
-            self.compute_device = device
+            self.set_compute_device(device)
 
             if not self._debug_skip_dl:
                 self.download_model(model)
@@ -120,7 +134,7 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 self.previous_model = model
                 self.release_model()
                 print(f"Loading Whisper-Transformer model: {model} on {device} with {compute_type} precision...")
-                self.model = WhisperForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit)
+                self.model = WhisperForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit, device_map=self.compute_device)
                 if not compute_8bit and not compute_4bit:
                     self.model = self.model.to(self.compute_device)
                 self.processor = WhisperProcessor.from_pretrained(str(Path(self.model_cache_path / model).resolve()))
@@ -129,7 +143,7 @@ class TransformerWhisper(metaclass=SingletonMeta):
 
     def transcribe(self, audio_sample, model, task, language,
                    return_timestamps=False, beam_size=4) -> dict:
-        self.load_model(model, self.compute_type, self.compute_device)
+        self.load_model(model, self.compute_type, self.compute_device_str)
 
         compute_dtype = self._str_to_dtype_dict(self.compute_type).get('dtype', torch.float32)
 

@@ -178,14 +178,29 @@ class SeamlessM4T(metaclass=SingletonMeta):
 
         if self.device is None:
             self.device = device
-        if device == "cuda":
+        if device == "cuda" or device == "auto":
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        elif device.startswith("direct-ml"):
+            device_id = 0
+            device_id_split = device.split(":")
+            if len(device_id_split) > 1:
+                device_id = int(device_id_split[1])
+            import torch_directml
+            self.device = torch_directml.device(device_id)
         if self.model is None or self.processor is None:
             self.load_model(model_size=model)
 
     def set_device(self, device: str):
+        self.device_str = device
         if device == "cuda" or device == "auto":
             device = "cuda" if torch.cuda.is_available() else "cpu"
+        elif device.startswith("direct-ml"):
+            device_id = 0
+            device_id_split = device.split(":")
+            if len(device_id_split) > 1:
+                device_id = int(device_id_split[1])
+            import torch_directml
+            device = torch_directml.device(device_id)
         self.device = device
 
     @staticmethod

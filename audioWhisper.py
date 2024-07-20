@@ -547,6 +547,7 @@ if __name__ == '__main__':
             print(e)
             vad_thread_num = int(1)
 
+        vad_model = None
         if vad_enabled:
             vad_model = VAD.VAD(vad_thread_num)
 
@@ -567,7 +568,7 @@ if __name__ == '__main__':
         # prepare the plugin timer calls
         call_plugin_timer(Plugins)
 
-        if vad_enabled:
+        if vad_enabled and vad_model is not None:
             # num_samples = 1536
             vad_frames_per_buffer = int(settings.SETTINGS.SetOption("vad_frames_per_buffer",
                                                  settings.SETTINGS.get_argument_setting_fallback(ctx, "vad_frames_per_buffer",

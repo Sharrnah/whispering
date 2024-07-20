@@ -194,7 +194,7 @@ class Silero:
     sample_rate = 48000
     speaker = 'random'
     models = []
-    device = "cpu"  # cpu or cuda
+    device = "cpu"  # cpu, cuda or direct-ml
     rate = ""
     pitch = ""
 
@@ -339,7 +339,15 @@ class Silero:
             self.set_language(settings.GetOption('tts_model')[0])
             self.set_model(settings.GetOption('tts_model')[1])
 
-        device = torch.device(self.device)
+        if self.device.startswith("direct-ml"):
+            device_id = 0
+            device_id_split = self.device.split(":")
+            if len(device_id_split) > 1:
+                device_id = int(device_id_split[1])
+            import torch_directml
+            device = torch_directml.device(device_id)
+        else:
+            device = torch.device(self.device)
 
         # set cache path
         torch.hub.set_dir(str(Path(cache_path).resolve()))

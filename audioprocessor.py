@@ -428,9 +428,14 @@ def load_whisper(model, ai_device):
     if stt_type == "original_whisper":
         try:
             set_ai_device = ai_device
-            if ai_device == "direct-ml":
+
+            if ai_device.startswith("direct-ml"):
+                device_id = 0
+                device_id_split = ai_device.split(":")
+                if len(device_id_split) > 1:
+                    device_id = int(device_id_split[1])
                 import torch_directml
-                set_ai_device = torch_directml.device()
+                set_ai_device = torch_directml.device(device_id)
             return whisper.load_model(model, download_root=".cache/whisper", device=set_ai_device)
         except Exception as e:
             print("Failed to load whisper model. Application exits. " + str(e))

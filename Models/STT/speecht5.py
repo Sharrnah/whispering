@@ -15,6 +15,13 @@ class SpeechT5STT:
         self.device = device
         if device == "cuda":
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        elif device.startswith("direct-ml"):
+            device_id = 0
+            device_id_split = device.split(":")
+            if len(device_id_split) > 1:
+                device_id = int(device_id_split[1])
+            import torch_directml
+            self.device = torch_directml.device(device_id)
         if self.model is None:
             self.load_model()
 

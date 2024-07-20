@@ -267,7 +267,7 @@ class SettingsManager:
 
     def get_available_setting_values(self):
         possible_settings = {
-            "ai_device": ["None", "cuda", "cpu"],
+            "ai_device": ["None", "cuda", "cpu", "direct-ml:0", "direct-ml:1"],
             "model": self.get_available_models(),
             "whisper_task": ["transcribe", "translate"],
             "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", ""],

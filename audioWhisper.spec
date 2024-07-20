@@ -11,7 +11,7 @@ binaries = []
 # Collect dynamic libraries from onnxruntime
 binaries= collect_dynamic_libs('onnxruntime', destdir='onnxruntime/capi')
 
-hiddenimports = ['torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers.models.nllb', 'sentencepiece', 'df.deepfilternet3', 'bitsandbytes', 'faiss', 'faiss-cpu', 'praat-parselmouth', 'parselmouth', 'pyworld', 'torchcrepe', 'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio', 'pyannote.pipeline', 'noisereduce', 'frozendict']
+hiddenimports = ['torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers.models.nllb', 'sentencepiece', 'df.deepfilternet3', 'bitsandbytes', 'faiss', 'faiss-cpu', 'praat-parselmouth', 'parselmouth', 'pyworld', 'torchcrepe', 'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio', 'pyannote.pipeline', 'noisereduce', 'frozendict', 'torch_directml']
 datas += collect_data_files('torch')
 datas += collect_data_files('whisper')
 datas += collect_data_files('pykakasi')
@@ -109,6 +109,8 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('noisereduce')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('frozendict')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('torch_directml')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 workdir = os.environ.get('WORKDIR_WIN', r'\drone\src')

@@ -7,4 +7,3 @@
 torch==2.2.0.dev20231211+cpu
 torchaudio==2.2.0.dev20231211+cpu
 torchvision==0.17.0.dev20231211+cpu
-torch-directml

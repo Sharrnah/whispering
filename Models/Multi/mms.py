@@ -1135,6 +1135,7 @@ class Mms(metaclass=SingletonMeta):
     device = None
     compute_type = "float32"
     compute_device = "cpu"
+    compute_device_str = "cpu"
     precision = None
     load_in_8bit = False
 
@@ -1146,9 +1147,6 @@ class Mms(metaclass=SingletonMeta):
     language_identification = None
 
     def __init__(self, model='mms-1b-fl102', compute_type="float32", device="cpu"):
-        self.compute_type = compute_type
-        self.compute_device = device
-
         self.load_model(model_size=model, compute_type=compute_type, device=device)
 
     @staticmethod
@@ -1167,13 +1165,21 @@ class Mms(metaclass=SingletonMeta):
         else:
             return {'dtype': torch.float32, '4bit': False, '8bit': False}
 
-    def set_device(self, device: str):
-        if device == "cuda" or device == "auto":
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-        elif device == "direct-ml":
+    def set_device(self, device: str | None):
+        self.compute_device_str = device
+        if device is None or device == "cuda" or device == "auto" or device == "":
+            self.compute_device_str = "cuda" if torch.cuda.is_available() else "cpu"
+            device = torch.device(self.compute_device_str)
+        elif device == "cpu":
+            device = torch.device("cpu")
+        elif device.startswith("direct-ml"):
+            device_id = 0
+            device_id_split = device.split(":")
+            if len(device_id_split) > 1:
+                device_id = int(device_id_split[1])
             import torch_directml
-            device = torch_directml.device()
-        self.device = device
+            device = torch_directml.device(device_id)
+        self.compute_device = device
 
     def load_model(self, model_size='mms-1b-fl102', compute_type="float32", device="cpu"):
         model_path = Path(model_cache_path / model_size)
@@ -1183,7 +1189,7 @@ class Mms(metaclass=SingletonMeta):
             compute_4bit = self._str_to_dtype_dict(self.compute_type).get('4bit', False)
             compute_8bit = self._str_to_dtype_dict(self.compute_type).get('8bit', False)
             self.compute_type = compute_type
-            self.compute_device = device
+            self.set_device(device)
 
             if self.model is None or model_size != self.previous_model:
                 if self.model is not None:
