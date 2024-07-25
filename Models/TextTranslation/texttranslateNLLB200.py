@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, models
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 import os
 import downloader
 from pathlib import Path
@@ -410,6 +410,8 @@ LANGUAGES_ISO1_TO_ISO3 = {
     "zu": ["zul_Latn"]
 }
 
+language_codes = list(LANGUAGES.values())
+
 # MODEL_LINKS = {
 #     "small": "facebook/nllb-200-distilled-600M",
 #     "medium": "facebook/nllb-200-distilled-1.3B",
@@ -500,10 +502,10 @@ def translate_language(text, from_code, to_code, as_iso1=False):
         from_code = languageClassification.classify(text)
 
     language_unsupported = False
-    if from_code not in tokenizer.lang_code_to_id:
+    if from_code not in language_codes:
         print(f"error translating. {from_code} not supported.")
         language_unsupported = True
-    if to_code not in tokenizer.lang_code_to_id:
+    if to_code not in language_codes:
         print(f"error translating. {to_code} not supported.")
         language_unsupported = True
     if language_unsupported:
@@ -514,7 +516,7 @@ def translate_language(text, from_code, to_code, as_iso1=False):
 
     tokenizer.src_lang = from_code
     inputs = tokenizer(text, return_tensors="pt").to(torch_device)
-    translated_tokens = model.generate(** inputs, forced_bos_token_id=tokenizer.lang_code_to_id[to_code], max_length=200)
+    translated_tokens = model.generate(** inputs, forced_bos_token_id=tokenizer.convert_tokens_to_ids(to_code), max_length=200)
 
     translation_text = tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
     translation_text = translation_text.removeprefix("- ")
