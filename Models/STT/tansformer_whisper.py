@@ -4,8 +4,7 @@ import torch
 import gc
 
 import yaml
-#from transformers import WhisperForConditionalGeneration, WhisperProcessor, pipeline
-from transformers import WhisperForConditionalGeneration, WhisperProcessor
+from transformers import WhisperForConditionalGeneration, WhisperProcessor, pipeline
 from Models.Singleton import SingletonMeta
 
 from pathlib import Path
@@ -16,7 +15,7 @@ class TransformerWhisper(metaclass=SingletonMeta):
     model = None
     previous_model = None
     processor = None
-    #pipe = None
+    pipe = None
     compute_type = "float32"
     compute_device = "cpu"
     compute_device_str = "cpu"
@@ -147,13 +146,16 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 if not compute_8bit and not compute_4bit:
                     self.model = self.model.to(self.compute_device)
                 self.processor = WhisperProcessor.from_pretrained(str(Path(self.model_cache_path / model).resolve()))
-                #self.pipe = pipeline(
-                #           "automatic-speech-recognition",
-                #  model=self.model,
-                #  tokenizer=self.processor,
-                #  feature_extractor=self.processor,
-                #  chunk_length_s=30,
-                #)
+
+                # self.pipe = pipeline(
+                #     "automatic-speech-recognition",
+                #     model=self.model,
+                #     tokenizer=self.processor.tokenizer,
+                #     feature_extractor=self.processor.feature_extractor,
+                #     chunk_length_s=30,
+                #     return_language=True,
+                #     torch_dtype=compute_dtype,
+                # )
 
                 self.model.config.forced_decoder_ids = None
 
@@ -170,6 +172,11 @@ class TransformerWhisper(metaclass=SingletonMeta):
 
             transcriptions = [""]
             with torch.no_grad():
+
+                # result = self.pipe(audio_sample, return_timestamps="word", generate_kwargs={"task": task, "language": language, "num_beams": beam_size})
+                # print("result")
+                # print(result)
+
                 predicted_ids = self.model.generate(input_features,
                                                     task=task, language=language, num_beams=beam_size,
                                                     return_timestamps=True,
