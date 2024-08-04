@@ -2,6 +2,7 @@ import sys
 import threading
 import queue
 import time
+import traceback
 
 import whisper
 
@@ -27,6 +28,7 @@ import Models.STT.whisper_audio_markers as whisper_audio_markers
 import Models.STT.speecht5 as speech_t5
 #import Models.STT.whisper_cpp as whisper_cpp
 import Models.STT.tansformer_whisper as transformer_whisper
+import Models.STT.medusa_whisper as medusa_whisper
 #import Models.STT.tensorrt_whisper as tensorrt_whisper
 import Models.STT.wav2vec_bert as wav2vec_bert
 import Models.STT.nemo_canary as nemo_canary
@@ -470,6 +472,12 @@ def load_whisper(model, ai_device):
             return transformer_whisper.TransformerWhisper(compute_type=compute_dtype, device=ai_device)
         except Exception as e:
             print("Failed to load transformer_whisper model. Application exits. " + str(e))
+    elif stt_type == "medusa_whisper":
+        compute_dtype = main_settings.GetOption("whisper_precision")
+        try:
+            return medusa_whisper.MedusaWhisper(compute_type=compute_dtype, device=ai_device)
+        except Exception as e:
+            print("Failed to load medusa_whisper model. Application exits. " + str(e))
     #elif stt_type == "tensorrt_whisper":
     #    try:
     #        return tensorrt_whisper.TensorRTWhisper(model=model)
@@ -518,6 +526,9 @@ def load_realtime_whisper(model, ai_device):
     elif main_settings.GetOption("stt_type") == "transformer_whisper":
         compute_dtype = main_settings.GetOption("realtime_whisper_precision")
         return transformer_whisper.TransformerWhisper(compute_type=compute_dtype, device=ai_device)
+    elif main_settings.GetOption("stt_type") == "medusa_whisper":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
+        return medusa_whisper.MedusaWhisper(compute_type=compute_dtype, device=ai_device)
     #elif settings.GetOption("stt_type") == "tensorrt_whisper":
     #    return tensorrt_whisper.TensorRTWhisper(model=model)
     #elif settings.GetOption("stt_type") == "whisper_cpp":
@@ -805,6 +816,15 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                             language=whisper_language, return_timestamps=False,
                                             beam_size=whisper_beam_size)
 
+        elif settings.GetOption("stt_type") == "medusa_whisper":
+            # Whisper Huggingface Transformer
+            audio_model.set_compute_type(settings.GetOption("whisper_precision"))
+            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            whisper_num_workers = int(settings.GetOption("whisper_num_workers"))
+            result = audio_model.transcribe(audio_data, model=settings.GetOption("model"), task=whisper_task,
+                                            language=whisper_language, return_timestamps=False,
+                                            beam_size=whisper_beam_size)
+
         #elif settings.GetOption("stt_type") == "tensorrt_whisper":
         #    result = audio_model.transcribe(audio_data, model=settings.GetOption("model"), task=whisper_task,
         #                                    language=whisper_language)
@@ -853,6 +873,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
 
     except Exception as e:
         print("Error while processing audio: " + str(e))
+        traceback.print_exc()
 
 
 def whisper_worker():

@@ -4,6 +4,7 @@ import torch
 import gc
 
 import yaml
+#from transformers import WhisperForConditionalGeneration, WhisperProcessor, pipeline
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
 from Models.Singleton import SingletonMeta
 
@@ -15,6 +16,7 @@ class TransformerWhisper(metaclass=SingletonMeta):
     model = None
     previous_model = None
     processor = None
+    #pipe = None
     compute_type = "float32"
     compute_device = "cpu"
     compute_device_str = "cpu"
@@ -134,10 +136,24 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 self.previous_model = model
                 self.release_model()
                 print(f"Loading Whisper-Transformer model: {model} on {device} with {compute_type} precision...")
-                self.model = WhisperForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit, device_map=self.compute_device)
+                self.model = WhisperForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit, device_map=self.compute_device, attn_implementation="sdpa")
+                #try:
+                #    # Enable static cache and compile the forward pass
+                #    self.model.generation_config.cache_implementation = "static"
+                #    self.model.forward = torch.compile(self.model.forward, mode="reduce-overhead", fullgraph=True)
+                #except Exception as e:
+                #    print(f"Warning: Failed to enable static cache and compile the forward pass: {e}")
+
                 if not compute_8bit and not compute_4bit:
                     self.model = self.model.to(self.compute_device)
                 self.processor = WhisperProcessor.from_pretrained(str(Path(self.model_cache_path / model).resolve()))
+                #self.pipe = pipeline(
+                #           "automatic-speech-recognition",
+                #  model=self.model,
+                #  tokenizer=self.processor,
+                #  feature_extractor=self.processor,
+                #  chunk_length_s=30,
+                #)
 
                 self.model.config.forced_decoder_ids = None
 
@@ -147,32 +163,37 @@ class TransformerWhisper(metaclass=SingletonMeta):
 
         compute_dtype = self._str_to_dtype_dict(self.compute_type).get('dtype', torch.float32)
 
+        return_language = language
+
         if self.model is not None and self.processor is not None:
             input_features = self.processor(audio_sample, sampling_rate=16000, return_tensors="pt").to(self.compute_device).to(compute_dtype).input_features
 
             transcriptions = [""]
-
             with torch.no_grad():
                 predicted_ids = self.model.generate(input_features,
                                                     task=task, language=language, num_beams=beam_size,
-                                                    return_timestamps=return_timestamps,
+                                                    return_timestamps=True,
                                                     )
                 transcriptions = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)
+                pred_language = self.processor.batch_decode(predicted_ids[:, 1:2], skip_special_tokens=False)
 
-            #result_text = self.processor.tokenizer._normalize(transcription)
+                # remove "<|" and "|>" from pred_language
+                if len(pred_language) > 0:
+                    pred_language = [lang.strip("<|>") for lang in pred_language]
+                    return_language = pred_language[0]
 
             result_text = ''.join(transcriptions).strip()
 
             return {
                 'text': result_text,
                 'type': task,
-                'language': language
+                'language': return_language
             }
         else:
             return {
                 'text': "",
                 'type': task,
-                'language': language
+                'language': return_language
             }
 
     def release_model(self):

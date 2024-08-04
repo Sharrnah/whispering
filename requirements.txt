@@ -9,11 +9,12 @@ librosa==0.10.2.post1
 #transformers @ https://github.com/huggingface/transformers/archive/84724efd101af52ed3d6af878e41ff8fd651a9cc.zip
 #transformers==4.35.0
 #transformers @ https://github.com/huggingface/transformers/archive/235e5d4991e8a0984aa78db91087b49622c7740e.zip
-transformers==4.42.4
+#transformers==4.43.3
+transformers==4.39.0
 
 torch-directml
 tensorboardX==2.6.2.2
-accelerate==0.32.1
+accelerate==0.33.0
 #optimum
 #flash-attn
 #bitsandbytes==0.41.1
@@ -95,3 +96,14 @@ faster-whisper @ https://github.com/SYSTRAN/faster-whisper/archive/refs/heads/ma
 
 
 noisereduce
+
+
+# Whisper Medusa dependencies (https://github.com/aiola-lab/whisper-medusa, https://huggingface.co/aiola/whisper-medusa-v1)
+boto3==1.34.82
+#jiwer==3.0.3
+peft==0.6.2
+wandb==0.16.6
+#transformers==4.39.0
+# not windows compatible?
+#pynini==2.1.6
+#WeTextProcessing
