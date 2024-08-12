@@ -1,5 +1,7 @@
 # -*- encoding: utf-8 -*-
 import time
+import traceback
+
 import pyaudiowpatch as pyaudio
 import numpy as np
 import torch
@@ -308,8 +310,12 @@ class AudioProcessor:
                         if peak_amplitude_denoised < peak_amplitude:
                             peak_amplitude = peak_amplitude_denoised
                 else:
-                    new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.default_sample_rate,
+                    try:
+                        new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.default_sample_rate,
                                                                      self.vad_model)
+                    except Exception as e:
+                        print(f"Error processing audio_chunk: {e}")
+                        traceback.print_exc()
 
             # put frames with recognized speech into a list and send to whisper
             if (clip_duration is not None and len(self.frames) > fps) or (

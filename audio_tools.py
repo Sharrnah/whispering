@@ -506,9 +506,15 @@ def is_audio_playing(tag=None):
         else:
             return any(t == tag for _, t in audio_threads)
 
+def calculate_chunk_size(recorded_sample_rate, target_sample_rate, chunk):
+    # Calculate the resampling ratio
+    resampling_ratio = recorded_sample_rate / target_sample_rate
+
+    # Calculate the initial chunk size needed to achieve the target chunk size after resampling
+    return int(chunk * resampling_ratio)
 
 def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt16, sample_rate=16000, channels=1,
-                                 chunk=int(16000 / 10), py_audio=None, audio_processor=None):
+                                 chunk=512, py_audio=None, audio_processor=None):
     if py_audio is None:
         py_audio = pyaudiowpatch.PyAudio()
 
@@ -520,6 +526,8 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
     if audio_processor is not None and hasattr(audio_processor, "callback"):
         callback = audio_processor.callback
 
+    initial_chunk_size = calculate_chunk_size(recorded_sample_rate, sample_rate, chunk)
+
     try:
         # First attempt with user-specified settings
         stream = py_audio.open(format=sample_format,
@@ -527,7 +535,7 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
                                rate=recorded_sample_rate,
                                input=True,
                                input_device_index=device_index,
-                               frames_per_buffer=chunk,
+                               frames_per_buffer=initial_chunk_size,
                                stream_callback=callback)
     except Exception as e:
         print(f"Failed to open stream with channels={channels} and rate={sample_rate}: {e}")
@@ -537,7 +545,10 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
         recorded_sample_rate = int(dev_info['defaultSampleRate'])
         needs_sample_rate_conversion = (sample_rate != recorded_sample_rate)
 
+        initial_chunk_size = calculate_chunk_size(recorded_sample_rate, sample_rate, chunk)
+
         print(f"Max channels supported by the device: {int(dev_info['maxInputChannels'])}")
+        print(f"default SampleRate supported by the device: {int(dev_info['defaultSampleRate'])}")
 
         try:
             # First fallback with 2 channels
@@ -546,10 +557,11 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
                                    rate=recorded_sample_rate,
                                    input=True,
                                    input_device_index=device_index,
-                                   frames_per_buffer=chunk,
+                                   frames_per_buffer=initial_chunk_size,
                                    stream_callback=callback)
         except Exception as e:
             print(f"Failed with 2 channels at default rate {recorded_sample_rate}: {e}")
+            initial_chunk_size = calculate_chunk_size(recorded_sample_rate, sample_rate, chunk)
             try:
                 # Second fallback with 1 channel (mono)
                 stream = py_audio.open(format=sample_format,
@@ -557,20 +569,21 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
                                        rate=recorded_sample_rate,
                                        input=True,
                                        input_device_index=device_index,
-                                       frames_per_buffer=chunk,
+                                       frames_per_buffer=initial_chunk_size,
                                        stream_callback=callback)
                 num_of_channels = 1
             except Exception as e:
                 print(f"Failed with 1 channel at default rate {recorded_sample_rate}: {e}")
                 # Third fallback with max channels supported by the device
                 max_channels = int(dev_info['maxInputChannels'])
+                initial_chunk_size = calculate_chunk_size(recorded_sample_rate, sample_rate, chunk)
                 try:
                     stream = py_audio.open(format=sample_format,
                                            channels=max_channels,
                                            rate=recorded_sample_rate,
                                            input=True,
                                            input_device_index=device_index,
-                                           frames_per_buffer=chunk,
+                                           frames_per_buffer=initial_chunk_size,
                                            stream_callback=callback)
                     num_of_channels = max_channels
                 except Exception as e:

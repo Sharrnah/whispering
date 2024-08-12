@@ -573,6 +573,12 @@ if __name__ == '__main__':
             vad_frames_per_buffer = int(settings.SETTINGS.SetOption("vad_frames_per_buffer",
                                                  settings.SETTINGS.get_argument_setting_fallback(ctx, "vad_frames_per_buffer",
                                                                                      "vad_frames_per_buffer")))
+
+            if vad_frames_per_buffer != 512 or vad_frames_per_buffer != 256:
+                print("Warning: vad_frames_per_buffer should be 512 or 256. Using 512.")
+                vad_frames_per_buffer = 512
+                settings.SETTINGS.SetOption("vad_frames_per_buffer", vad_frames_per_buffer)
+
             vad_model.set_vad_frames_per_buffer(vad_frames_per_buffer)
 
             # set default devices if not set

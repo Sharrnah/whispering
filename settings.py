@@ -80,7 +80,7 @@ class SettingsManager:
             "vad_enabled": True,  # Enable Voice activity detection (VAD)
             "vad_on_full_clip": False,  # Make an additional VAD check on the full clip (Not only on each frame).
             "vad_confidence_threshold": 0.4,  # Voice activity detection (VAD) confidence threshold. Can be 0-1
-            "vad_frames_per_buffer": 1536,  # Voice activity detection (VAD) sample size (how many audio samples should be tested). Values other than 512, 1024, 1536 may affect model perfomance!!! (default: 1536)
+            "vad_frames_per_buffer": 512,  # Voice activity detection (VAD) sample size (how many audio samples should be tested). Values other than 512, 256 are not supported. (default: 512)
             "vad_thread_num": 1,  # number of threads to use for VAD.
             "push_to_talk_key": "",  # Push to talk key. (empty or None to disable)
             "word_timestamps": False,  # if enabled, Whisper will add timestamps to the transcribed text.
