@@ -806,11 +806,11 @@ def numpy_array_to_wav_bytes(audio: np.ndarray, sample_rate: int = 22050) -> Byt
     return buff
 
 
-def audio_bytes_to_wav(audio_bytes, channels=1, sample_rate=16000):
+def audio_bytes_to_wav(audio_bytes, channels=1, sample_rate=16000, sample_width=2):
     final_wavfile = io.BytesIO()
     wavefile = wave.open(final_wavfile, 'wb')
     wavefile.setnchannels(channels)
-    wavefile.setsampwidth(2)
+    wavefile.setsampwidth(sample_width)
     wavefile.setframerate(sample_rate)
     wavefile.writeframes(audio_bytes)
 
