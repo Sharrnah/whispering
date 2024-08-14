@@ -10,7 +10,7 @@ librosa==0.10.2.post1
 #transformers==4.35.0
 #transformers @ https://github.com/huggingface/transformers/archive/235e5d4991e8a0984aa78db91087b49622c7740e.zip
 #transformers==4.43.3
-transformers==4.39.0
+transformers==4.44.0
 
 torch-directml
 tensorboardX==2.6.2.2
