@@ -332,7 +332,6 @@ class SeamlessM4T(metaclass=SingletonMeta):
                                             text_num_beams=beam_size, speech_do_sample=True,
                                             return_intermediate_token_ids=True,
                                             generate_speech=generate_speech,
-                                            spkr_id=0
                                             )
         translation = self.processor.decode(output_tokens.sequences.tolist()[0], skip_special_tokens=True)
         translation = self.text_cleanup(translation)

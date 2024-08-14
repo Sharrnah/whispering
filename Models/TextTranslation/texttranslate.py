@@ -70,6 +70,7 @@ def GetInstalledLanguageNames():
                     return plugin_translation['languages']
             except Exception as e:
                 print("Error: " + str(e))
+                traceback.print_exc()
 
 
 def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
@@ -81,21 +82,25 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
                 translation_text = texttranslateM2M100_CTranslate2.translate_language(text, from_code, to_code)
             except Exception as e:
                 print("Error: " + str(e))
+                traceback.print_exc()
         case "NLLB200":
             try:
                 translation_text, from_code, to_code = texttranslateNLLB200.translate_language(text, from_code, to_code, as_iso1)
             except Exception as e:
                 print("Error: " + str(e))
+                traceback.print_exc()
         case "NLLB200_CT2":
             try:
                 translation_text, from_code, to_code = texttranslateNLLB200_CTranslate2.translate_language(text, from_code, to_code, as_iso1)
             except Exception as e:
                 print("Error: " + str(e))
+                traceback.print_exc()
         case "Seamless_M4T":
             try:
                 translation_text, from_code, to_code = txt_translator_instance.text_translate(text, from_code, to_code)
             except Exception as e:
                 print("Error: " + str(e))
+                traceback.print_exc()
         case _:
             for plugin_inst in Plugins.plugins:
                 try:
