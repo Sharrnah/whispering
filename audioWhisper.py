@@ -727,7 +727,7 @@ if __name__ == '__main__':
 
                     # add audio data to the queue
                     wav_audio_bytes = audio_tools.audio_bytes_to_wav(audio_data, channels=CHANNELS, sample_rate=SAMPLE_RATE)
-                    audioprocessor.q.put({'time': time.time_ns(), 'data': wav_audio_bytes, 'final': True, 'settings': settings.SETTINGS})
+                    audioprocessor.q.put({'time': time.time_ns(), 'data': wav_audio_bytes, 'final': True, 'settings': settings.SETTINGS, 'plugins': Plugins.plugins})
 
                     # set typing indicator for VRChat and websocket clients
                     typing_indicator_thread = threading.Thread(target=typing_indicator_function,
