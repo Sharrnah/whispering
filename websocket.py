@@ -483,7 +483,7 @@ def AnswerMessage(websocket, message):
 
 def BroadcastMessage(message, exclude_client=None):
     if main_server is not None and isinstance(main_server, WebSocketServer):
-        main_server.broadcast_message(message, exclude_client=None)
+        main_server.broadcast_message(message, exclude_client=exclude_client)
 
 
 def set_loading_state(key, value):
