@@ -2,7 +2,11 @@
 import time
 import traceback
 
-import pyaudiowpatch as pyaudio
+import platform
+if platform.system() == 'Windows':
+    import pyaudiowpatch as pyaudio
+else:
+    import pyaudio
 import numpy as np
 import torch
 import audio_tools
