@@ -40,8 +40,6 @@ x-build_builder_image: &build_builder_image
 
 x-upload-build-s3: &upload-build-s3
   image: minio/mc
-  environment:
-    <<: *default_environment_win
   commands:
     - WT_VERSION="$${DRONE_TAG#v}"
     - mc alias set s3_alias $${MINIO_HOST} $${MINIO_ACCESS_KEY} $${MINIO_SECRET_KEY}
@@ -253,6 +251,7 @@ steps:
   - <<: *upload-build-s3
     name: upload-s3
     environment:
+      <<: *default_environment_win
       MINIO_HOST:
         from_secret: s3-endpoint-s3
       MINIO_ACCESS_KEY:
@@ -262,6 +261,7 @@ steps:
   - <<: *upload-build-s3
     name: upload-eu
     environment:
+      <<: *default_environment_win
       MINIO_HOST:
         from_secret: s3-endpoint-eu
       MINIO_ACCESS_KEY:
@@ -271,6 +271,7 @@ steps:
   - <<: *upload-build-s3
     name: upload-us
     environment:
+      <<: *default_environment_win
       MINIO_HOST:
         from_secret: s3-endpoint-us
       MINIO_ACCESS_KEY:
@@ -345,6 +346,7 @@ steps:
   - <<: *upload-build-s3
     name: upload-s3
     environment:
+      <<: *default_environment_linux
       MINIO_HOST:
         from_secret: s3-endpoint-s3
       MINIO_ACCESS_KEY:
