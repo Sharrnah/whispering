@@ -158,126 +158,126 @@ x-build-distribution-linux-package: &build-distribution-linux-package
 
 
 steps:
-  - <<: *build_builder_image
-    name: build-publish-main-image_win
-    settings:
-      dockerfile: ./builder/Dockerfile-windows
-      tags: win64
-    when:
-      branch:
-        - master
-        - main
-
-  # prepare build files and dependencies (NVIDIA)
-  - <<: *distribution-windows-prepare
-    name: build-distribution-windows-prepare_nvidia
-    environment:
-      GPU_TYPE: NVIDIA
-      DIST_DIR: ./dist/windows/nvidia
-  # actual build process (NVIDIA)
-  - name: build-distribution-windows_nvidia
-    image: ${DRONE_REPO_LINK##https://}:win64
-    environment:
-      <<: *default_environment_win
-      GPU_TYPE: NVIDIA
-      DIST_DIR: ./dist/windows/nvidia
-    when:
-      ref:
-        - refs/tags/*
-    depends_on:
-      - build-distribution-windows-prepare_nvidia
-  # package release (NVIDIA)
-  - <<: *build-distribution-windows-package
-    name: build-distribution-windows-package_nvidia
-    environment:
-      GPU_TYPE: NVIDIA
-      DIST_DIR: ./dist/windows/nvidia
-    depends_on:
-      - build-distribution-windows_nvidia
-
-
-  # prepare build files and dependencies (AMD)
-  #- <<: *distribution-windows-prepare
-  #  name: build-distribution-windows-prepare_amd
-  #  environment:
-  #    GPU_TYPE: AMD
-  #    DIST_DIR: ./dist/windows/amd
-  # actual build process (AMD)
-  #- name: build-distribution-windows_amd
-  #  image: ${DRONE_REPO_LINK##https://}:win64
-  #  environment:
-  #    <<: *default_environment_win
-  #    GPU_TYPE: AMD
-  #    DIST_DIR: ./dist/windows/amd
-  #  when:
-  #    ref:
-  #      - refs/tags/*
-  #  depends_on:
-  #    - build-distribution-windows-prepare_amd
-  # package release (AMD)
-  #- <<: *build-distribution-windows-package
-  #  name: build-distribution-windows-package_amd
-  #  environment:
-  #    GPU_TYPE: AMD
-  #    DIST_DIR: ./dist/windows/amd
-  #  depends_on:
-  #    - build-distribution-windows_amd
-
-
-
-  - name: build-distribution-windows-package-hash
-    image: ${DRONE_REPO_LINK##https://}:win64
-    environment:
-      <<: *default_environment_win
-    commands:
-      - cd $${SRCDIR}
-      - WT_VERSION="$${DRONE_TAG#v}"
-      # --- nvidia
-      - GPU_TYPE=NVIDIA
-      - cd $${DIST_DIR}/nvidia
-      - hash=$$(sha256sum whispering-tiger$${WT_VERSION}_CPU-$${GPU_TYPE}_$${OS}.zip | awk '{ print $$1 }')
-      - echo "SHA256 (WIN/$$GPU_TYPE) = $$hash"
-      # --- amd
-      #- GPU_TYPE=AMD
-      #- cd $${DIST_DIR}/amd
-      #- hash=$$(sha256sum whispering-tiger$${WT_VERSION}_CPU-$${GPU_TYPE}_$${OS}.zip | awk '{ print $$1 }')
-      #- echo "SHA256 (WIN$$GPU_TYPE) = $$hash"
-    when:
-      ref:
-        - refs/tags/*
-    depends_on:
-      - build-distribution-windows-package_nvidia
-      #- build-distribution-windows-package_amd
-  - <<: *upload-build-s3
-    name: upload-s3-windows
-    environment:
-      <<: *default_environment_win
-      MINIO_HOST:
-        from_secret: s3-endpoint-s3
-      MINIO_ACCESS_KEY:
-        from_secret: s3-access-key-s3
-      MINIO_SECRET_KEY:
-        from_secret: s3-secret-key-s3
-  - <<: *upload-build-s3
-    name: upload-eu-windows
-    environment:
-      <<: *default_environment_win
-      MINIO_HOST:
-        from_secret: s3-endpoint-eu
-      MINIO_ACCESS_KEY:
-        from_secret: s3-access-key-eu
-      MINIO_SECRET_KEY:
-        from_secret: s3-secret-key-eu
-  - <<: *upload-build-s3
-    name: upload-us-windows
-    environment:
-      <<: *default_environment_win
-      MINIO_HOST:
-        from_secret: s3-endpoint-us
-      MINIO_ACCESS_KEY:
-        from_secret: s3-access-key-us
-      MINIO_SECRET_KEY:
-        from_secret: s3-secret-key-us
+#  - <<: *build_builder_image
+#    name: build-publish-main-image_win
+#    settings:
+#      dockerfile: ./builder/Dockerfile-windows
+#      tags: win64
+#    when:
+#      branch:
+#        - master
+#        - main
+#
+#  # prepare build files and dependencies (NVIDIA)
+#  - <<: *distribution-windows-prepare
+#    name: build-distribution-windows-prepare_nvidia
+#    environment:
+#      GPU_TYPE: NVIDIA
+#      DIST_DIR: ./dist/windows/nvidia
+#  # actual build process (NVIDIA)
+#  - name: build-distribution-windows_nvidia
+#    image: ${DRONE_REPO_LINK##https://}:win64
+#    environment:
+#      <<: *default_environment_win
+#      GPU_TYPE: NVIDIA
+#      DIST_DIR: ./dist/windows/nvidia
+#    when:
+#      ref:
+#        - refs/tags/*
+#    depends_on:
+#      - build-distribution-windows-prepare_nvidia
+#  # package release (NVIDIA)
+#  - <<: *build-distribution-windows-package
+#    name: build-distribution-windows-package_nvidia
+#    environment:
+#      GPU_TYPE: NVIDIA
+#      DIST_DIR: ./dist/windows/nvidia
+#    depends_on:
+#      - build-distribution-windows_nvidia
+#
+#
+#  # prepare build files and dependencies (AMD)
+#  #- <<: *distribution-windows-prepare
+#  #  name: build-distribution-windows-prepare_amd
+#  #  environment:
+#  #    GPU_TYPE: AMD
+#  #    DIST_DIR: ./dist/windows/amd
+#  # actual build process (AMD)
+#  #- name: build-distribution-windows_amd
+#  #  image: ${DRONE_REPO_LINK##https://}:win64
+#  #  environment:
+#  #    <<: *default_environment_win
+#  #    GPU_TYPE: AMD
+#  #    DIST_DIR: ./dist/windows/amd
+#  #  when:
+#  #    ref:
+#  #      - refs/tags/*
+#  #  depends_on:
+#  #    - build-distribution-windows-prepare_amd
+#  # package release (AMD)
+#  #- <<: *build-distribution-windows-package
+#  #  name: build-distribution-windows-package_amd
+#  #  environment:
+#  #    GPU_TYPE: AMD
+#  #    DIST_DIR: ./dist/windows/amd
+#  #  depends_on:
+#  #    - build-distribution-windows_amd
+#
+#
+#
+#  - name: build-distribution-windows-package-hash
+#    image: ${DRONE_REPO_LINK##https://}:win64
+#    environment:
+#      <<: *default_environment_win
+#    commands:
+#      - cd $${SRCDIR}
+#      - WT_VERSION="$${DRONE_TAG#v}"
+#      # --- nvidia
+#      - GPU_TYPE=NVIDIA
+#      - cd $${DIST_DIR}/nvidia
+#      - hash=$$(sha256sum whispering-tiger$${WT_VERSION}_CPU-$${GPU_TYPE}_$${OS}.zip | awk '{ print $$1 }')
+#      - echo "SHA256 (WIN/$$GPU_TYPE) = $$hash"
+#      # --- amd
+#      #- GPU_TYPE=AMD
+#      #- cd $${DIST_DIR}/amd
+#      #- hash=$$(sha256sum whispering-tiger$${WT_VERSION}_CPU-$${GPU_TYPE}_$${OS}.zip | awk '{ print $$1 }')
+#      #- echo "SHA256 (WIN$$GPU_TYPE) = $$hash"
+#    when:
+#      ref:
+#        - refs/tags/*
+#    depends_on:
+#      - build-distribution-windows-package_nvidia
+#      #- build-distribution-windows-package_amd
+#  - <<: *upload-build-s3
+#    name: upload-s3-windows
+#    environment:
+#      <<: *default_environment_win
+#      MINIO_HOST:
+#        from_secret: s3-endpoint-s3
+#      MINIO_ACCESS_KEY:
+#        from_secret: s3-access-key-s3
+#      MINIO_SECRET_KEY:
+#        from_secret: s3-secret-key-s3
+#  - <<: *upload-build-s3
+#    name: upload-eu-windows
+#    environment:
+#      <<: *default_environment_win
+#      MINIO_HOST:
+#        from_secret: s3-endpoint-eu
+#      MINIO_ACCESS_KEY:
+#        from_secret: s3-access-key-eu
+#      MINIO_SECRET_KEY:
+#        from_secret: s3-secret-key-eu
+#  - <<: *upload-build-s3
+#    name: upload-us-windows
+#    environment:
+#      <<: *default_environment_win
+#      MINIO_HOST:
+#        from_secret: s3-endpoint-us
+#      MINIO_ACCESS_KEY:
+#        from_secret: s3-access-key-us
+#      MINIO_SECRET_KEY:
+#        from_secret: s3-secret-key-us
 
 # ###########
 # LINUX
