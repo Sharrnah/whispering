@@ -55,7 +55,7 @@ x-upload-build-s3: &upload-build-s3
     ref:
       - refs/tags/*
   depends_on:
-    - build-distribution-windows-package_nvidia
+    #- build-distribution-windows-package_nvidia
     #- build-distribution-windows-package_amd
 
 
@@ -258,6 +258,9 @@ steps:
 #        from_secret: s3-access-key-s3
 #      MINIO_SECRET_KEY:
 #        from_secret: s3-secret-key-s3
+#    depends_on:
+#      - build-distribution-windows-package_nvidia
+#      #- build-distribution-windows-package_amd
 #  - <<: *upload-build-s3
 #    name: upload-eu-windows
 #    environment:
@@ -268,6 +271,9 @@ steps:
 #        from_secret: s3-access-key-eu
 #      MINIO_SECRET_KEY:
 #        from_secret: s3-secret-key-eu
+#    depends_on:
+#      - build-distribution-windows-package_nvidia
+#      #- build-distribution-windows-package_amd
 #  - <<: *upload-build-s3
 #    name: upload-us-windows
 #    environment:
@@ -278,6 +284,9 @@ steps:
 #        from_secret: s3-access-key-us
 #      MINIO_SECRET_KEY:
 #        from_secret: s3-secret-key-us
+#    depends_on:
+#      - build-distribution-windows-package_nvidia
+#      #- build-distribution-windows-package_amd
 
 # ###########
 # LINUX
@@ -353,6 +362,8 @@ steps:
         from_secret: s3-access-key-s3
       MINIO_SECRET_KEY:
         from_secret: s3-secret-key-s3
+    depends_on:
+      - build-distribution-linux-package_nvidia
 
 trigger:
   #event:
