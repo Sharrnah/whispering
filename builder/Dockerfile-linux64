@@ -10,6 +10,9 @@ ENV PYENV_VERSION=${PYTHON_VERSION}
 
 COPY entrypoint-linux.sh /entrypoint.sh
 
+ENV SRCDIR=${SRCDIR:-/src}
+ENV DIST_DIR=${DIST_DIR:-./dist/linux}
+
 RUN \
     set -x \
     # update system
