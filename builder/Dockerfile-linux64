@@ -32,7 +32,7 @@ RUN \
         libffi-dev \
         #optional libraries
         libgdbm-dev \
-        libgdbm3 \
+        libgdbm5 \
         uuid-dev \
         #upx
         upx \
