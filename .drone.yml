@@ -249,7 +249,7 @@ steps:
       - build-distribution-windows-package_nvidia
       #- build-distribution-windows-package_amd
   - <<: *upload-build-s3
-    name: upload-s3
+    name: upload-s3-windows
     environment:
       <<: *default_environment_win
       MINIO_HOST:
@@ -259,7 +259,7 @@ steps:
       MINIO_SECRET_KEY:
         from_secret: s3-secret-key-s3
   - <<: *upload-build-s3
-    name: upload-eu
+    name: upload-eu-windows
     environment:
       <<: *default_environment_win
       MINIO_HOST:
@@ -269,7 +269,7 @@ steps:
       MINIO_SECRET_KEY:
         from_secret: s3-secret-key-eu
   - <<: *upload-build-s3
-    name: upload-us
+    name: upload-us-windows
     environment:
       <<: *default_environment_win
       MINIO_HOST:
@@ -344,7 +344,7 @@ steps:
       - build-distribution-linux-package_nvidia
       #- build-distribution-linux-package_amd
   - <<: *upload-build-s3
-    name: upload-s3
+    name: upload-s3-linux
     environment:
       <<: *default_environment_linux
       MINIO_HOST:
