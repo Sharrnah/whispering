@@ -61,7 +61,11 @@ if __name__ == '__main__':
     from Models.TextTranslation import texttranslate
     from Models import languageClassification
     from Models import sentence_split
-    import pyaudiowpatch as pyaudio
+    import platform
+    if platform.system() == 'Windows':
+        import pyaudiowpatch as pyaudio
+    else:
+        import pyaudio
     from whisper import available_models, audio as whisper_audio
 
     import numpy as np
@@ -192,6 +196,14 @@ if __name__ == '__main__':
         return highest_peak_amplitude
 
 
+    def get_device_info_generator():
+        audio = pyaudio.PyAudio()
+        if hasattr(audio, "get_device_info_generator"):
+            return audio.get_device_info_generator()
+        else:
+            return (audio.get_device_info_by_index(i) for i in range(audio.get_device_count()))
+
+
 
     @click.command()
     @click.option('--detect_energy', default=False, is_flag=True,
@@ -273,7 +285,7 @@ if __name__ == '__main__':
             print("                           Input Devices                           ")
             print(" In form of: DEVICE_NAME [Sample Rate=?] [Loopback?] (Index=INDEX) ")
             print("-------------------------------------------------------------------")
-            for device in audio.get_device_info_generator():
+            for device in get_device_info_generator():
                 device_list_index = device["index"]
                 device_list_api = host_audio_api_names[device["hostApi"]]
                 device_list_name = device["name"]
@@ -286,7 +298,7 @@ if __name__ == '__main__':
             print("-------------------------------------------------------------------")
             print("                          Output Devices                           ")
             print("-------------------------------------------------------------------")
-            for device in audio.get_device_info_generator():
+            for device in get_device_info_generator():
                 device_list_index = device["index"]
                 device_list_api = host_audio_api_names[device["hostApi"]]
                 device_list_name = device["name"]

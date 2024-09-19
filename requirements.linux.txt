@@ -1,0 +1,80 @@
+# numpy v1.23.4 required for whisper
+numpy==1.24.2
+tqdm==4.66.4
+rich==12.6.0
+more-itertools==10.3.0
+librosa==0.10.2.post1
+transformers==4.44.0
+
+torch-directml
+tensorboardX==2.6.2.2
+accelerate==0.33.0
+bitsandbytes
+ffmpeg-python==0.2.0
+click>=8.1.3
+PyAudio==0.2.14
+# PyAudioWPatch==0.2.12.6
+resampy==0.4.3
+sounddevice==0.4.7
+SpeechRecognition==3.10.4
+pydub>=0.25.1
+git+https://github.com/openai/whisper.git
+triton
+soundfile==0.12.1
+python-osc>=1.8.0
+websockets>=10.4
+unidecode==1.3.8
+pykakasi>=2.2.1
+ctranslate2==4.3.1
+sentencepiece==0.2.0
+protobuf==3.20.3
+progressbar2==4.3.2
+fasttext-wheel
+robust-downloader
+# pywin32
+easyocr==1.7.1
+mss==7.0.1
+scipy==1.10.1
+num2words==0.5.13
+onnxruntime==1.18.1
+requests==2.31.0
+# downgradea of scikit-image to v1.19.3 to prevent https://github.com/scikit-image/scikit-image/issues/6784
+scikit-image==v0.22.0
+
+deepfilternet==0.5.6
+pyloudnorm
+nltk
+
+# NVIDIA Nemo (Canary) dependency
+Cython==3.0.10
+huggingface-hub==0.23.2
+youtokentome
+git+https://github.com/NVIDIA/NeMo.git@r1.23.0#egg=nemo_toolkit[asr]
+
+# plugin dependencies
+omegaconf==2.2.3
+PyYAML>=6.0
+# winsdk>=1.0.0b9
+keyboard>=0.13.5
+grpcio==1.59.3
+annotated_types==0.6.0
+# for ChatTTS plugin
+frozendict==2.4.4
+
+# speaker diarization
+pyannote.audio==3.2.0
+
+#RVC dependencies
+fairseq @ https://github.com/Sharrnah/fairseq/archive/refs/heads/py3.11.zip
+faiss-cpu==1.7.4
+praat-parselmouth>=0.4.2
+pyworld==0.3.4
+torchcrepe==0.0.22
+
+faster-whisper
+noisereduce
+
+# Whisper Medusa dependencies (https://github.com/aiola-lab/whisper-medusa, https://huggingface.co/aiola/whisper-medusa-v1)
+boto3==1.34.82
+peft==0.6.2
+wandb==0.16.6

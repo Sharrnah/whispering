@@ -6,8 +6,11 @@ import numpy
 import pyloudnorm
 # import resampy
 import numpy as np
-import pyaudiowpatch
-import pyaudio
+import platform
+if platform.system() == 'Windows':
+    import pyaudiowpatch as pyaudio
+else:
+    import pyaudio
 import sounddevice as sd
 import torch
 from librosa.core.audio import resampy
@@ -20,7 +23,7 @@ from io import BytesIO
 import Utilities
 
 
-main_app_py_audio = pyaudiowpatch.PyAudio()
+main_app_py_audio = pyaudio.PyAudio()
 
 
 class PyAudioPool:
@@ -65,7 +68,7 @@ pyaudio_pool = PyAudioPool()
 
 
 def get_host_audio_api_names():
-    audio = pyaudiowpatch.PyAudio()
+    audio = pyaudio.PyAudio()
     host_api_count = audio.get_host_api_count()
     host_api_names = {}
     for i in range(host_api_count):
@@ -95,7 +98,7 @@ def get_default_audio_device_index_by_api(api, is_input=True):
 
 
 def get_audio_device_index_by_name_and_api(name, api, is_input=True, default=None):
-    audio = pyaudiowpatch.PyAudio()
+    audio = pyaudio.PyAudio()
     device_count = audio.get_device_count()
     for i in range(device_count):
         device_info = audio.get_device_info_by_index(i)
@@ -112,7 +115,7 @@ def get_audio_device_index_by_name_and_api(name, api, is_input=True, default=Non
 
 
 def get_audio_api_index_by_name(name):
-    audio = pyaudiowpatch.PyAudio()
+    audio = pyaudio.PyAudio()
     host_api_count = audio.get_host_api_count()
     # replace simple names to correct names
     if name.lower() == "winmm":
@@ -516,7 +519,7 @@ def calculate_chunk_size(recorded_sample_rate, target_sample_rate, chunk):
 def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt16, sample_rate=16000, channels=1,
                                  chunk=512, py_audio=None, audio_processor=None):
     if py_audio is None:
-        py_audio = pyaudiowpatch.PyAudio()
+        py_audio = pyaudio.PyAudio()
 
     needs_sample_rate_conversion = False
     num_of_channels = 2
