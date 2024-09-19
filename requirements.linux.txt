@@ -6,7 +6,6 @@ more-itertools==10.3.0
 librosa==0.10.2.post1
 transformers==4.44.0
 
-torch-directml
 tensorboardX==2.6.2.2
 accelerate==0.33.0
 bitsandbytes
