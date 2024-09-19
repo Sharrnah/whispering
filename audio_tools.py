@@ -1,5 +1,6 @@
 import io
 import threading
+import traceback
 import wave
 
 import numpy
@@ -353,7 +354,7 @@ audio_list_lock = threading.Lock()  # Lock to protect the audio_threads list
 
 
 def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2, channels=2, sample_rate=44100,
-                tag=""):
+                tag="", dtype="int16"):
     try:
         # frames_per_buffer = chunk * channels  # experiment with this value
 
@@ -362,7 +363,6 @@ def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2
                         rate=int(sample_rate),
                         output_device_index=device,
                         output=True)
-        # frames_per_buffer=frames_per_buffer)
 
         for i in range(0, len(audio_data), chunk * channels):
             if stop_flags[tag].is_set():
@@ -372,6 +372,29 @@ def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2
         stream.close()
     except Exception as e:
         print("Error playing audio: {}".format(e))
+        dev_info = p.get_device_info_by_index(device)
+        max_channels = int(dev_info['maxOutputChannels'])
+        print("retrying with channels: {}".format(max_channels))
+
+        try:
+            audio_data = resample_audio(audio_data, sample_rate, sample_rate, target_channels=max_channels,
+                                        input_channels=channels, dtype=dtype)
+
+            stream = p.open(format=audio_format,
+                            channels=max_channels,
+                            rate=int(sample_rate),
+                            output_device_index=device,
+                            output=True)
+
+            for i in range(0, len(audio_data), chunk * max_channels):
+                if stop_flags[tag].is_set():
+                    break
+                stream.write(audio_data[i:i + chunk * max_channels].tobytes())
+
+            stream.close()
+        except Exception as e:
+            print("Error playing audio: {}".format(e))
+            traceback.print_exc()
 
 
 # play wav binary audio to device, converting audio sample_rate and channels if necessary
@@ -418,7 +441,7 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
     # Read all audio data and resample if necessary
     frame_data = wf.readframes(wf.getnframes())
 
-    channels = wf.getnchannels()
+    sound_file_channels = wf.getnchannels()
 
     # get audio sample width
     audio_sample_width = wf.getsampwidth()
@@ -437,7 +460,8 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
             p.get_format_from_width(audio_sample_width),
             audio_device_channel_num,
             closest_sample_rate,
-            tag
+            tag,
+            dtype
         ))
         secondary_audio_thread.start()
         current_threads.append((secondary_audio_thread, tag))
@@ -449,7 +473,8 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
         p.get_format_from_width(audio_sample_width),
         audio_device_channel_num,
         closest_sample_rate,
-        tag
+        tag,
+        dtype
     ))
     main_audio_thread.start()
     current_threads.append((main_audio_thread, tag))
