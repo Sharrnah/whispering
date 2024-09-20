@@ -1,0 +1,3 @@
+# NVIDIA Nemo (Canary) dependency
+# Cython must be installed before youtokentome can be build
+Cython==3.0.10
