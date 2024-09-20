@@ -60,6 +60,7 @@ RUN \
     && pyenv global $PYTHON_VERSION \
     && pip install --upgrade pip \
     # install pyinstaller
+    && pip install wheel \
     && pip install pyinstaller==$PYINSTALLER_VERSION \
     && mkdir /src/ \
     && chmod +x /entrypoint.sh
