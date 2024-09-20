@@ -99,7 +99,6 @@ x-distribution-linux-prepare: &distribution-linux-prepare
     - unzip -o ./.cache/nltk/tokenizers/punkt.zip -d ./.cache/nltk/tokenizers
     - mkdir -p $${DIST_DIR}/
     - wget -P "$${DIST_DIR}" https://johnvansickle.com/ffmpeg/builds/ffmpeg-git-amd64-static.tar.xz
-    - 7za x $${DIST_DIR}/ffmpeg-release-full.7z -o$${DIST_DIR}
     - tar -xf $${DIST_DIR}/ffmpeg-git-amd64-static.tar.xz -strip-components=1 -C $${DIST_DIR}/ffmpeg
     - rm $${DIST_DIR}/ffmpeg-git-amd64-static.tar.xz
   when:
