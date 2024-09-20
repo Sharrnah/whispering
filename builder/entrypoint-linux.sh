@@ -38,7 +38,8 @@ echo "$@"
 if [[ "$@" == "" ]]; then
     if [ -f requirements.linux.txt ]; then
         # use --no-cache-dir to try to reduce memory usage. (see https://github.com/pypa/pip/issues/2984)
-        pip install --no-cache-dir -r requirements.linux.txt -r requirements.nvidia.txt --no-build-isolation
+        pip install --no-cache-dir -r requirements.nvidia.txt --no-build-isolation
+        pip install --no-cache-dir -r requirements.linux.txt --no-build-isolation
     fi # [ -f requirements.linux.txt ]
 
     pyinstaller --clean -y --dist ${BUILD_DIST_DIR} --workpath /tmp *.spec
