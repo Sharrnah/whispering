@@ -97,10 +97,12 @@ x-distribution-linux-prepare: &distribution-linux-prepare
     - mkdir -p ./.cache/nltk/tokenizers
     - wget -P "./.cache/nltk/tokenizers" https://s3.libs.space:9000/ai-models/nltk/tokenizers/punkt.zip
     - unzip -o ./.cache/nltk/tokenizers/punkt.zip -d ./.cache/nltk/tokenizers
-    - mkdir -p $${DIST_DIR}/ffmpeg
+    - mkdir -p $${DIST_DIR}/
     - wget -P "$${DIST_DIR}" https://johnvansickle.com/ffmpeg/builds/ffmpeg-git-amd64-static.tar.xz
-    - tar --strip-components=1 --directory=$${DIST_DIR}/ffmpeg -xf $${DIST_DIR}/ffmpeg-git-amd64-static.tar.xz
+    - ls -lah $${DIST_DIR}
+    - tar --strip-components=1 --directory=$${DIST_DIR} -xf $${DIST_DIR}/ffmpeg-git-amd64-static.tar.xz
     - rm $${DIST_DIR}/ffmpeg-git-amd64-static.tar.xz
+    - mv $${DIST_DIR}/ffmpeg-git-amd64-static $${DIST_DIR}/ffmpeg
   when:
     ref:
       - refs/tags/*
