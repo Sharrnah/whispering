@@ -62,7 +62,7 @@ x-upload-build-s3: &upload-build-s3
 x-distribution-windows-prepare: &distribution-windows-prepare
   #name: build-distribution-windows-prepare
   image: ${DRONE_REPO_LINK##https://}:win64
-  #pull: always  # make sure to update the image
+  pull: always  # make sure to update the image
   environment:
     <<: *default_environment_win
   commands:
@@ -85,7 +85,8 @@ x-distribution-windows-prepare: &distribution-windows-prepare
       - refs/tags/*
 
 x-distribution-linux-prepare: &distribution-linux-prepare
-  image: ${DRONE_REPO_LINK##https://}:win64
+  image: ${DRONE_REPO_LINK##https://}:linux
+  pull: always
   environment:
     <<: *default_environment_win
   commands:
@@ -112,6 +113,7 @@ x-distribution-linux-prepare: &distribution-linux-prepare
 x-build-distribution-windows-package: &build-distribution-windows-package
 # name: build-distribution-windows-package
   image: ${DRONE_REPO_LINK##https://}:win64
+  pull: always
   environment:
     <<: *default_environment_win
   commands:
@@ -137,6 +139,7 @@ x-build-distribution-windows-package: &build-distribution-windows-package
 
 x-build-distribution-linux-package: &build-distribution-linux-package
   image: ${DRONE_REPO_LINK##https://}:linux
+  pull: always
   environment:
     <<: *default_environment_win
   commands:
@@ -179,6 +182,7 @@ steps:
 #  # actual build process (NVIDIA)
 #  - name: build-distribution-windows_nvidia
 #    image: ${DRONE_REPO_LINK##https://}:win64
+#    pull: always
 #    environment:
 #      <<: *default_environment_win
 #      GPU_TYPE: NVIDIA
@@ -207,6 +211,7 @@ steps:
 #  # actual build process (AMD)
 #  #- name: build-distribution-windows_amd
 #  #  image: ${DRONE_REPO_LINK##https://}:win64
+#  #  pull: always
 #  #  environment:
 #  #    <<: *default_environment_win
 #  #    GPU_TYPE: AMD
@@ -229,6 +234,7 @@ steps:
 #
 #  - name: build-distribution-windows-package-hash
 #    image: ${DRONE_REPO_LINK##https://}:win64
+#    pull: always
 #    environment:
 #      <<: *default_environment_win
 #    commands:
@@ -312,6 +318,7 @@ steps:
   # actual build process (NVIDIA)
   - name: build-distribution-linux_nvidia
     image: ${DRONE_REPO_LINK##https://}:linux
+    pull: always
     environment:
       <<: *default_environment_linux
       GPU_TYPE: NVIDIA
@@ -333,6 +340,7 @@ steps:
 
   - name: build-distribution-linux-package-hash
     image: ${DRONE_REPO_LINK##https://}:linux
+    pull: always
     environment:
       <<: *default_environment_linux
     commands:
