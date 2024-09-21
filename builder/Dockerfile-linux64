@@ -38,6 +38,7 @@ RUN \
         #upx
         upx \
         zip unzip rename gpg-agent \
+        p7zip-full \
         portaudio19-dev \
     # required because openSSL on Ubuntu 12.04 and 14.04 run out of support versions of OpenSSL
     && mkdir openssl \
