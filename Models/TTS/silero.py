@@ -476,18 +476,3 @@ class Silero:
         write(buff, self.sample_rate, np_arr)
 
         return buff.read()
-
-
-def init():
-    global tts, failed
-    if settings.GetOption("tts_enabled") and tts is None:
-        tts = Silero()
-        if not failed:
-            return True
-        else:
-            return False
-    else:
-        if tts is not None and not failed:
-            return True
-        else:
-            return False

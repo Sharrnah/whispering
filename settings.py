@@ -146,7 +146,8 @@ class SettingsManager:
             "websocket_final_messages": True,  # if enabled, websocket will send final messages. (internal use)
 
             # TTS settings
-            "tts_enabled": True,  # enable TTS
+            #"tts_enabled": True,  # enable TTS
+            "tts_type": "silero",  # enable TTS
             "tts_ai_device": "cpu",  # can be "auto", "cuda" or "cpu".
             "tts_answer": False,  # send whisper results to TTS engine
             "tts_model": ["en", "v3_en"],  # TTS language and model to use
@@ -243,6 +244,7 @@ class SettingsManager:
 
         # add custom models to list
         if self.get_option("stt_type") == "faster_whisper":
+            available_models_list.insert(0, "large-v3-turbo")
             available_models_list.insert(0, "medium-distilled.en")
             available_models_list.insert(0, "large-distilled-v2.en")
             available_models_list.insert(0, "large-distilled-v3.en")
@@ -271,6 +273,7 @@ class SettingsManager:
             "model": self.get_available_models(),
             "whisper_task": ["transcribe", "translate"],
             "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "medusa_whisper", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", ""],
+            "tts_type": ["silero", "f5_e2", ""],
             "tts_ai_device": ["cuda", "cpu"],
             "txt_translator_device": ["cuda", "cpu"],
             "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "Seamless_M4T"],

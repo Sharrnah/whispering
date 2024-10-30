@@ -14,7 +14,7 @@ if __name__ == '__main__':
     import processmanager
     import atexit
 
-    from Models.TTS import silero
+    from Models.TTS import tts
 
     # set environment variable CT2_CUDA_ALLOW_FP16 to 1 (before ctranslate2 is imported)
     # to allow using FP16 computation on GPU even if the device does not have efficient FP16 support.
@@ -480,9 +480,9 @@ if __name__ == '__main__':
         if websocket_ip == "0" and open_browser:
             print("--open_browser flag requres --websocket_ip to be set.")
 
-        # initialize Silero TTS
+        # initialize Integrated TTS
         try:
-            silero.init()
+            tts.init()
         except Exception as e:
             print(e)
 

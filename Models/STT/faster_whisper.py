@@ -348,6 +348,23 @@ MODEL_LINKS = {
             }
         }
     },
+    "large-v3-turbo": {
+        "float16": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/large-v3-turbo-ct2-fp16.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/large-v3-turbo-ct2-fp16.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/large-v3-turbo-ct2-fp16.zip",
+            ],
+            "checksum": "d16072c18d63c7b070d9f44f1a5c0d6a6fd36f13faa0c3bf41ce34fdc90cf9b8",
+            "file_checksums": {
+                "config.json": "a0feddc18de0c285ed147e5483c8d1bc911bd45e23104ae0726d79594e7a6b1d",
+                "model.bin": "e76620f83d5f5b69efd3d87e3dc180c1bd21df9fbebacfd4335e5e1efcc018da",
+                "preprocessor_config.json": "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711",
+                "tokenizer.json": "b3c8202bbf06d8ee4232c5984baa563784ac4737e2e7fdc42fa180200d3cfcdb",
+                "vocabulary.json": "c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1",
+            }
+        }
+    },
     # already hashed zips below here ---------- (tmp)
     "medium-distilled.en": {
         "float16": {

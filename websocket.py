@@ -20,7 +20,7 @@ from Models.OCR import easyocr
 from windowcapture import WindowCapture
 import settings
 import VRC_OSCLib
-from Models.TTS import silero
+from Models.TTS import tts
 
 # Plugins
 import Plugins
@@ -36,18 +36,18 @@ def tts_request(msgObj, websocket):
     if "path" in msgObj["value"] and msgObj["value"]["path"] != "":
         path = msgObj["value"]["path"]
 
-    silero_wav, sample_rate = silero.tts.tts(text)
-    if silero_wav is not None:
+    tts_wav, sample_rate = tts.tts.tts(text)
+    if tts_wav is not None:
         if msgObj["value"]["to_device"]:
             if "device_index" in msgObj["value"]:
-                silero.tts.play_audio(silero_wav, msgObj["value"]["device_index"])
+                tts.tts.play_audio(tts_wav, msgObj["value"]["device_index"])
             else:
-                silero.tts.play_audio(silero_wav, settings.GetOption("device_out_index"))
+                tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
         else:
             AnswerMessage(websocket, json.dumps(
-                {"type": "tts_result", "wav_data": silero_wav.tolist(), "sample_rate": sample_rate}))
+                {"type": "tts_result", "wav_data": tts_wav.tolist(), "sample_rate": sample_rate}))
             if msgObj["value"]["download"]:
-                wav_data = silero.tts.return_wav_file_binary(silero_wav)
+                wav_data = tts.tts.return_wav_file_binary(tts_wav)
                 if path is not None and path != '':
                     # write wav_data to file in path
                     with open(path, "wb") as f:
@@ -106,7 +106,7 @@ def translate_request(msgObj, websocket):
             msgObj["value"]["text"] = text
             msgObj["value"]["to_device"] = True
             msgObj["value"]["download"] = False
-            if silero.init():
+            if tts.init():
                 tts_request(msgObj, websocket)
             else:
                 tts_plugin_process(msgObj, websocket)
@@ -343,9 +343,9 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
             exclude_client=websocket)  # broadcast updated settings to all clients
         # reload tts voices if tts model changed
         if msg_obj["name"] == "tts_model":
-            silero.tts.load()
+            tts.tts.load()
             server_instance.broadcast_message(
-                json.dumps({"type": "available_tts_voices", "data": silero.tts.list_voices()}))
+                json.dumps({"type": "available_tts_voices", "data": tts.tts.list_voices()}))
         if msg_obj["name"] == "osc_min_time_between_messages":
             VRC_OSCLib.set_min_time_between_messages(msg_obj["value"])
 
@@ -362,7 +362,7 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
         ocr_thread.start()
 
     if msg_obj["type"] == "tts_req":
-        if silero.init():
+        if tts.init():
             tts_thread = threading.Thread(target=tts_request, args=(msg_obj, websocket))
             tts_thread.start()
         else:
@@ -379,8 +379,29 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
         audio_tools.stop_audio(tag=tag)
 
     if msg_obj["type"] == "tts_voice_save_req":
-        if silero.init():
-            silero.tts.save_voice()
+        if hasattr(tts, 'init') and tts.init():
+            try:
+                if hasattr(tts.tts, 'save_voice'):
+                    tts.tts.save_voice()
+                else:
+                    print("Save voice method not found.")
+            except Exception as e:
+                print(f"Failed to save voice: {e}")
+                traceback.print_exc()
+        else:
+            tts_thread = threading.Thread(target=tts_plugin_process, args=(msg_obj, websocket, True))
+            tts_thread.start()
+    if msg_obj["type"] == "tts_voice_reload_req":
+        if hasattr(tts, 'init') and tts.init():
+            try:
+                if hasattr(tts.tts, 'list_voices'):
+                    server_instance.broadcast_message(
+                        json.dumps({"type": "available_tts_voices", "data": tts.tts.list_voices()}))
+                else:
+                    print("List voices method not found.")
+            except Exception as e:
+                print(f"Failed to save voice: {e}")
+                traceback.print_exc()
         else:
             tts_thread = threading.Thread(target=tts_plugin_process, args=(msg_obj, websocket, True))
             tts_thread.start()
@@ -433,13 +454,13 @@ async def main_on_connect_handler(server_instance, websocket):
                                    json.dumps({"type": "available_img_languages", "data": available_languages}))
 
     # send all available TTS models + voices
-    if silero.init():
-        available_tts_models = silero.tts.list_models_indexed()
+    if tts.init():
+        available_tts_models = tts.tts.list_models_indexed()
         await server_instance.send(websocket,
                                    json.dumps({"type": "available_tts_models", "data": available_tts_models}))
-        silero.tts.load()
+        tts.tts.load()
         await server_instance.send(websocket,
-                                   json.dumps({"type": "available_tts_voices", "data": silero.tts.list_voices()}))
+                                   json.dumps({"type": "available_tts_voices", "data": tts.tts.list_voices()}))
 
     # send all available setting values
     await server_instance.send(websocket, json.dumps(

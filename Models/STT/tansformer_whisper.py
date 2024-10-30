@@ -204,8 +204,8 @@ class TransformerWhisper(metaclass=SingletonMeta):
             }
 
     def release_model(self):
-        print("Releasing Whisper-Transformer model...")
         if self.model is not None:
+            print("Releasing Whisper-Transformer model...")
             if hasattr(self.model, 'model'):
                 del self.model.model
             if hasattr(self.model, 'feature_extractor'):

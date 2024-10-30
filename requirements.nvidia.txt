@@ -1,4 +1,8 @@
 --extra-index-url https://download.pytorch.org/whl/cu121
-torch==2.3.1
-torchvision==0.18.1
-torchaudio==2.3.1
+torch==2.4.1
+torchvision==0.19.1
+torchaudio==2.4.1
+
+#tensorRT-LLM (currently overwrites torch with 2.2.0)
+#--extra-index-url https://pypi.nvidia.com
+#tensorrt_llm
