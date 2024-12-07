@@ -480,12 +480,6 @@ if __name__ == '__main__':
         if websocket_ip == "0" and open_browser:
             print("--open_browser flag requres --websocket_ip to be set.")
 
-        # initialize Integrated TTS
-        try:
-            tts.init()
-        except Exception as e:
-            print(e)
-
         if ui_download:
             # wait until ui is connected
             print("waiting for ui to connect...")
@@ -501,6 +495,12 @@ if __name__ == '__main__':
             if ui_download:  # still true? then ui did connect
                 print("ui connected.")
                 time.sleep(0.5)
+
+        # initialize Integrated TTS
+        try:
+            tts.init()
+        except Exception as e:
+            print(e)
 
         # Load textual translation dependencies
         if txt_translator.lower() != "none" and txt_translator != "":
