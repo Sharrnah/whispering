@@ -39,6 +39,10 @@ class SettingsManager:
             "txt_translator_precision": "float32",  # for ctranwslate based: can be "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
             "txt_translate_realtime": False,  # use text translator in realtime mode
 
+            "txt_second_translation_enabled": False,  # translate to more languages
+            "txt_second_translation_languages": "eng_Latn",  # comma separated list of languages for further translations
+            "txt_second_translation_wrap": " | ",  # wrap other translations in result with this string
+
             # ocr settings
             "ocr_lang": "en",  # language for OCR image to text recognition.
             "ocr_window_name": "VRChat",  # window name for OCR image to text recognition.

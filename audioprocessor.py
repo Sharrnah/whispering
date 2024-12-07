@@ -224,11 +224,28 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
             from_lang = settings.GetOption("src_lang")
             to_lang = settings.GetOption("trg_lang")
             to_romaji = settings.GetOption("txt_romaji")
+            second_translation_enabled = settings.GetOption("txt_second_translation_enabled")
+            second_translation_languages = settings.GetOption("txt_second_translation_languages")
+
+            # split second_translation language codes at comma with trim if enabled
+            second_translation_texts = {}
+            if second_translation_enabled and second_translation_languages!= "":
+                second_translation_split_codes = [st.strip() for st in second_translation_languages.split(",")]
+                for split_code in second_translation_split_codes:
+                    second_translation_text, second_txt_from_lang, second_txt_to_lang = texttranslate.TranslateLanguage(
+                        predicted_text, from_lang, split_code, False)
+                    second_translation_texts[second_txt_to_lang] = second_translation_text
+
             predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, from_lang,
                                                                                          to_lang, to_romaji)
+
             result["txt_translation"] = predicted_text
             result["txt_translation_source"] = txt_from_lang
             result["txt_translation_target"] = to_lang
+
+            # combine all translations second_translation_texts to result with wrap
+            if second_translation_enabled and second_translation_texts:
+                result["txt_second_translation"] = second_translation_texts
 
         if final_audio:
             if "txt_translation" in result:
@@ -338,6 +355,13 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
     osc_port = settings.GetOption("osc_port")
     websocket_ip = settings.GetOption("websocket_ip")
 
+    second_translation_enabled = settings.GetOption("txt_second_translation_enabled")
+    second_translation_wrap = settings.GetOption("txt_second_translation_wrap")
+    second_translation_wrap = second_translation_wrap.replace("\\n", "\n")
+    second_translations = None
+    if "txt_second_translation" in result_obj:
+        second_translations = result_obj["txt_second_translation"]
+
     # Update osc_min_time_between_messages option
     VRC_OSCLib.set_min_time_between_messages(settings.GetOption("osc_min_time_between_messages"))
 
@@ -373,6 +397,12 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
             osc_text = predicted_text + osc_type_transfer_split + result_obj["text"]
 
         message = build_whisper_translation_osc_prefix(result_obj, settings) + osc_text
+
+        if second_translation_enabled and second_translations:
+            for lang, text in second_translations.items():
+                message += second_translation_wrap + text
+                result_obj["txt_translation"] += second_translation_wrap + text
+                result_obj["txt_translation_target"] += "|"+lang
 
         # delay sending message if it is the final audio and until TTS starts playing
         if final_audio and settings.GetOption("osc_delay_until_audio_playback"):
