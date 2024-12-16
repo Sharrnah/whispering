@@ -389,12 +389,15 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
         osc_type_transfer_split = replace_osc_placeholders(osc_type_transfer_split, result_obj, settings)
 
         osc_text = predicted_text
-        if settings.GetOption("osc_type_transfer") == "source":
-            osc_text = result_obj["text"]
-        elif settings.GetOption("osc_type_transfer") == "both":
-            osc_text = result_obj["text"] + osc_type_transfer_split + predicted_text
-        elif settings.GetOption("osc_type_transfer") == "both_inverted":
-            osc_text = predicted_text + osc_type_transfer_split + result_obj["text"]
+        if "text" in result_obj and result_obj["text"] is not None and result_obj["text"] != "":
+            if settings.GetOption("osc_type_transfer") == "source":
+                osc_text = result_obj["text"]
+            elif settings.GetOption("osc_type_transfer") == "both":
+                if predicted_text != result_obj["text"]:
+                    osc_text = result_obj["text"] + osc_type_transfer_split + predicted_text
+            elif settings.GetOption("osc_type_transfer") == "both_inverted":
+                if predicted_text != result_obj["text"]:
+                    osc_text = predicted_text + osc_type_transfer_split + result_obj["text"]
 
         message = build_whisper_translation_osc_prefix(result_obj, settings) + osc_text
 
