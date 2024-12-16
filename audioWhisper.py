@@ -76,6 +76,8 @@ if __name__ == '__main__':
     import audio_tools
     import audio_processing_recording
 
+    import VRC_OSCServer
+
     import wave
 
     from Models.STS import DeepFilterNet
@@ -579,6 +581,14 @@ if __name__ == '__main__':
 
         # prepare the plugin timer calls
         call_plugin_timer(Plugins)
+
+        # start OSC Server
+        #if settings.GetOption("osc_sync_mute") or settings.GetOption("osc_sync_afk"):
+        if settings.GetOption("osc_server_ip") != "" and settings.GetOption("osc_server_ip") != "0":
+            try:
+                VRC_OSCServer.start_osc_server()
+            except:
+                print("Error starting OSC Server. Skipping...")
 
         if vad_enabled and vad_model is not None:
             # num_samples = 1536

@@ -144,6 +144,11 @@ class SettingsManager:
             "osc_delay_until_audio_playback_tag": "tts",  # defines the tag used for detecting audio playback. (only used when osc_delay_until_audio_playback is enabled. Set empty to detect any audio playback)
             "osc_delay_timeout": 10,  # defines the timeout for delayed OSC messages. (only used when osc_delay_until_audio_playback is enabled)
 
+            "osc_server_ip": "127.0.0.1",  # OSC server IP address. set to "0" to disable.
+            "osc_server_port": 9001,
+            "osc_sync_mute": False,  # defines if STT is only active if VRChat mic is not muted
+            "osc_sync_afk": False,  # defines if STT is only active if VRChat is not AFK
+
             # websocket settings
             "websocket_ip": "127.0.0.1",
             "websocket_port": 5000,
