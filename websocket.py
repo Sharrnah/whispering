@@ -83,10 +83,26 @@ def translate_request(msgObj, websocket):
         to_romaji = False
         if "to_romaji" in msgObj["value"]:
             to_romaji = msgObj["value"]["to_romaji"]
+        # main translation
         text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(orig_text,
                                                                            msgObj["value"]["from_lang"],
                                                                            msgObj["value"]["to_lang"],
                                                                            to_romaji)
+
+        # do secondary translations if enabled
+        second_translation_enabled = settings.GetOption("txt_second_translation_enabled")
+        second_translation_languages = settings.GetOption("txt_second_translation_languages")
+        second_translation_wrap = settings.GetOption("txt_second_translation_wrap")
+        second_translation_wrap = second_translation_wrap.replace("\\n", "\n")
+        if second_translation_enabled and second_translation_languages!= "":
+            second_translation_split_codes = [st.strip() for st in second_translation_languages.split(",")]
+            for split_code in second_translation_split_codes:
+                if split_code != "":
+                    second_translation_text, second_txt_from_lang, second_txt_to_lang = texttranslate.TranslateLanguage(
+                        orig_text, msgObj["value"]["from_lang"], split_code, False)
+                    text += second_translation_wrap + second_translation_text
+                    txt_to_lang += "|"+second_txt_to_lang
+
         AnswerMessage(websocket, json.dumps(
             {"type": "translate_result", "translate_result": text, "txt_from_lang": txt_from_lang,
              "txt_to_lang": txt_to_lang}))

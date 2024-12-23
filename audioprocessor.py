@@ -199,6 +199,8 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
     if "text" in result:
         result["text"] = predicted_text
 
+    original_text = predicted_text
+
     if not predicted_text.lower() in ignore_list and \
             (final_audio or (not final_audio and audio_timestamp > last_audio_timestamp)):
 
@@ -227,17 +229,19 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
             second_translation_enabled = settings.GetOption("txt_second_translation_enabled")
             second_translation_languages = settings.GetOption("txt_second_translation_languages")
 
+            # main translation
+            predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(original_text, from_lang,
+                                                                                         to_lang, to_romaji)
+
             # split second_translation language codes at comma with trim if enabled
             second_translation_texts = {}
             if second_translation_enabled and second_translation_languages!= "":
                 second_translation_split_codes = [st.strip() for st in second_translation_languages.split(",")]
                 for split_code in second_translation_split_codes:
-                    second_translation_text, second_txt_from_lang, second_txt_to_lang = texttranslate.TranslateLanguage(
-                        predicted_text, from_lang, split_code, False)
-                    second_translation_texts[second_txt_to_lang] = second_translation_text
-
-            predicted_text, txt_from_lang, txt_to_lang = texttranslate.TranslateLanguage(predicted_text, from_lang,
-                                                                                         to_lang, to_romaji)
+                    if split_code != "":
+                        second_translation_text, second_txt_from_lang, second_txt_to_lang = texttranslate.TranslateLanguage(
+                            original_text, from_lang, split_code, False)
+                        second_translation_texts[second_txt_to_lang] = second_translation_text
 
             result["txt_translation"] = predicted_text
             result["txt_translation_source"] = txt_from_lang

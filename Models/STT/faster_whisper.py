@@ -365,7 +365,6 @@ MODEL_LINKS = {
             }
         }
     },
-    # already hashed zips below here ---------- (tmp)
     "medium-distilled.en": {
         "float16": {
             "urls": [
@@ -1013,6 +1012,8 @@ class FasterWhisper(metaclass=SingletonMeta):
     loaded_model_size = ""
     loaded_settings = {}
 
+    sample_rate = 16000
+
     transcription_count = 0
     reload_after_transcriptions = 0
 
@@ -1117,17 +1118,24 @@ class FasterWhisper(metaclass=SingletonMeta):
                                                             )
 
         transcription = ""
+        segment_list = []
         for segment in result_segments:
             # large-v3 hallucination improvement by only checking no_speech_threshold
             if segment.no_speech_prob > no_speech_threshold and "-v3" in self.loaded_model_size:
                 continue
+
+            #audio_data_numpy_split = audio_sample[int(segment.start * self.sample_rate):
+            #                                          int(segment.end * self.sample_rate)]
+            segment_list.append({'text': segment.text, 'start': segment.start, 'end': segment.end})
             transcription += segment.text + " "
+
 
         transcription = transcription.strip()
         result = {
             'text': transcription,
             'type': task,
-            'language': audio_info.language
+            'language': audio_info.language,
+            'segments': segment_list,
         }
 
         #self.transcription_count += 1
