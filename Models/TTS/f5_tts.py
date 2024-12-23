@@ -149,15 +149,24 @@ TTS_MODEL_LINKS = {
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/voices.zip",
             "https://s3.libs.space:9000/ai-models/f5-tts/voices.zip",
         ],
-        "checksum": "90adae8b33cf2f396846a9a83b8bf2d11f85e94b0224df6b521995a050638ce5",
+        "checksum": "3997e6e1c7a7c0255bac3fd6ad9493098cfda410091755399e873e848459ac96",
         "file_checksums": {
             #"Info.txt": "19455228a1ef69f6abe1dfa7f8477a1da600ed371ca237032263786d8a7a51ec",
+            "Announcer_Ahri.txt": "65cdbe885b89037dc651bea9bb7c41077471a2d7168e25c905c7034da7de285d",
+            "Announcer_Ahri.wav": "2a3fd17d45b3c5633dd64e2d80a6e3fc924fa829da405e3b591a5bacdc88f9fc",
+            "Attenborough.txt": "4c617f7adc60b992de93abd18bd447da5c882db7d04d9d51b241cdf79cbda6a1",
+            "Attenborough.wav": "358540c89932baf1103960d99949b78ea7466f95b2225fdcd8f8bb8b976f09ee",
+            "Jane.txt": "58e939100b6422f76e631d445a957047fa915ba6727f984ebdcecfa3418f5d08",
+            "Jane.wav": "d1d2235af1a4408c641a765427978486f5cca9b369fc6456d8086449f1f92fe3",
+            "Justin.txt": "6ce2802c88bd83ef12ecb3338f1bf6f8bc5bc12212b3cd1d2863d0d3ab93632b",
+            "Justin.wav": "a83c37f408b53efaeb9189f166c6669d1a0dc6cf779e85913fa9cbbbbe0d5aaf",
+            "Xiaochen.txt": "1316b1e27871565b1d7cd4f64b0521a37632cc15d1ea0944d18394bdaf76d8e2",
+            "Xiaochen.wav": "7f0b735e188a06dc9f104eeb3fd71a3ef580d1f2133c95630c92a244dd253732",
             "en_0.txt": "3bb999d455ca88b8eca589bd16d3b99db8b324b5f8c57e3283e4bb4db8593243",
             "en_0.wav": "f006e2e9c76523bde4f5bbe67a7be9a600786d7432cbcc9486bc9501053298b7",
             "en_1.txt": "79cccada817b316fa855dc8ca04823f59a11c956b5780fbb3267ddf684c8e145",
             "en_1.wav": "b0e22048e72414fcc1e6b6342e47a774d748a195ed34e4a5b3fcf416707f2b71",
-            "Attenborough.txt": "4c617f7adc60b992de93abd18bd447da5c882db7d04d9d51b241cdf79cbda6a1",
-            "Attenborough.wav": "358540c89932baf1103960d99949b78ea7466f95b2225fdcd8f8bb8b976f09ee",
+            "test_zh_1_ref_short.wav": "96724a113240d1f82c6ded1334122f0176b96c9226ccd3c919e625bcfd2a3ede"
         },
         "path": "voices",
     },
@@ -404,8 +413,6 @@ class F5TTS:
             #     print(f.name)
 
     def play_audio(self, audio, device=None):
-        source_sample_rate = int(self.target_sample_rate / 2)
-        #source_sample_rate = int(self.target_sample_rate)
         source_channels = 1
 
         if device is None:
@@ -423,12 +430,12 @@ class F5TTS:
         #audio = np.int16(audio * 32767)  # Convert to 16-bit PCM
         audio = audio_tools.convert_audio_datatype_to_integer(audio)
 
-        audio_bytes = self.return_wav_file_binary(audio, source_sample_rate)
+        audio_bytes = self.return_wav_file_binary(audio, int(self.target_sample_rate))
 
         # play audio tensor
         audio_tools.play_audio(audio_bytes, device,
-                               source_sample_rate=source_sample_rate,
-                               audio_device_channel_num=2,
+                               source_sample_rate=int(self.target_sample_rate),
+                               audio_device_channel_num=1,
                                target_channels=1,
                                input_channels=source_channels,
                                dtype="int16",
