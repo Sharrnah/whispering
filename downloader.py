@@ -83,6 +83,7 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
                         f.extractall(extract_dir)
                     # remove the zip file after extraction
                     os.remove(local_dl_file)
+                success = True
             except Exception as e:
                 print(e)
                 success = False
@@ -97,15 +98,18 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
                         try:
                             download_file_simple(url, extract_dir, checksum)
                             download_successful = True
+                            success = True
                             break  # Exit the loop if download is successful
                         except Exception as e:
                             last_exception = e
                             continue  # Try the next URL if this one fails
                     if not download_successful:
+                        success = False
                         print("All download attempts failed.")
                         if last_exception:
                             print(f"Last encountered exception: {last_exception}")
                 else:
+                    success = False
                     print(first_exception)
             if fallback_extract_func is not None:
                 fallback_extract_func(*fallback_extract_func_args)
