@@ -11,11 +11,12 @@ binaries = []
 # Collect dynamic libraries from onnxruntime
 binaries= collect_dynamic_libs('onnxruntime', destdir='onnxruntime/capi')
 
-hiddenimports = ['torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers.models.nllb', 'sentencepiece', 'df.deepfilternet3', 'bitsandbytes', 'faiss', 'faiss-cpu', 'praat-parselmouth', 'parselmouth', 'pyworld', 'torchcrepe', 'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio', 'pyannote.pipeline', 'noisereduce', 'frozendict', 'torch_directml']
-datas += collect_data_files('torch')
+hiddenimports = ['torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers.models.nllb', 'sentencepiece', 'df.deepfilternet3', 'bitsandbytes', 'faiss', 'faiss-cpu', 'praat-parselmouth', 'parselmouth', 'pyworld', 'torchcrepe', 'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio', 'pyannote.pipeline', 'noisereduce', 'frozendict', 'torch_directml', 'x_transformers', 'wandb', 'wandb_gql']
+datas += collect_data_files('torch', include_py_files=True)
 datas += collect_data_files('whisper')
 datas += collect_data_files('pykakasi')
 datas += collect_data_files('lightning_fabric')
+datas += collect_data_files('x_transformers', include_py_files=True)
 datas += copy_metadata('rich')
 datas += copy_metadata('torch')
 datas += copy_metadata('tqdm')
@@ -112,6 +113,10 @@ tmp_ret = collect_all('frozendict')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('torch_directml')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('wandb')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('wandb_gql')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 workdir = os.environ.get('WORKDIR_WIN', r'\drone\src')
 workdir = "C:" + workdir  # Now workdir = "C:\drone\src"
@@ -126,6 +131,9 @@ for path_option in punkt_path_options:
     if os.path.exists(path_option):
         datas.append((path_option, r'./nltk_data/tokenizers/punkt'))
         break  # Exit the loop once we find the existing path
+
+# add local module
+#datas.append((r'./Models/TTS/F5TTS', r'Models.TTS.F5TTS'))
 
 block_cipher = None
 
@@ -147,10 +155,15 @@ a = Analysis(
 )
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+options = [
+    ('u', None, 'OPTION'),
+    ('X utf8', None, 'OPTION'),
+]
+
 exe = EXE(
     pyz,
     a.scripts,
-    [('u', None, 'OPTION')],
+    options,
     exclude_binaries=True,
     name='audioWhisper',
     debug=False,
