@@ -258,7 +258,7 @@ class F5TTS:
             # remove language part from string example: " (en & zh)"
             model = re.sub(r'\(.*?\)', '', model).strip()
 
-        if model == "":
+        if model == "" or model not in TTS_MODEL_LINKS:
             model = "F5-TTS"
 
         self.download_model("vocab")
