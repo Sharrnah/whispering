@@ -257,6 +257,7 @@ class SettingsManager:
             available_models_list.insert(0, "medium-distilled.en")
             available_models_list.insert(0, "large-distilled-v2.en")
             available_models_list.insert(0, "large-distilled-v3.en")
+            available_models_list.insert(0, "crisper") # https://huggingface.co/nyrahealth/faster_CrisperWhisper/
             available_models_list.insert(0, "small.eu")
             available_models_list.insert(0, "medium.eu")
             available_models_list.insert(0, "small.de")
@@ -274,6 +275,9 @@ class SettingsManager:
             available_models_list.insert(0, "small.zh")
             available_models_list.insert(0, "medium.zh")
             available_models_list.insert(0, "large-v2.zh")
+
+        if '_whisper' in self.get_option("stt_type"):
+            available_models_list.insert(0, "custom")
         return available_models_list
 
     def get_available_setting_values(self):

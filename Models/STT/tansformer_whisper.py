@@ -125,7 +125,7 @@ class TransformerWhisper(metaclass=SingletonMeta):
 
             self.set_compute_device(device)
 
-            if not self._debug_skip_dl:
+            if not self._debug_skip_dl and not model == "custom":
                 self.download_model(model)
 
             if self.model is None or model != self.previous_model:
@@ -143,8 +143,8 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 #except Exception as e:
                 #    print(f"Warning: Failed to enable static cache and compile the forward pass: {e}")
 
-                if not compute_8bit and not compute_4bit:
-                    self.model = self.model.to(self.compute_device)
+                #if not compute_8bit and not compute_4bit:
+                #self.model = self.model.to(self.compute_device)
                 self.processor = WhisperProcessor.from_pretrained(str(Path(self.model_cache_path / model).resolve()))
 
                 # self.pipe = pipeline(
@@ -157,7 +157,7 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 #     torch_dtype=compute_dtype,
                 # )
 
-                self.model.config.forced_decoder_ids = None
+                #self.model.config.forced_decoder_ids = None
 
     def transcribe(self, audio_sample, model, task, language,
                    return_timestamps=False, beam_size=4) -> dict:
@@ -168,7 +168,11 @@ class TransformerWhisper(metaclass=SingletonMeta):
         return_language = language
 
         if self.model is not None and self.processor is not None:
+            #input_features = self.processor(audio_sample, sampling_rate=16000, return_attention_mask=True, return_tensors="pt").to(self.compute_device).to(compute_dtype).input_features
             input_features = self.processor(audio_sample, sampling_rate=16000, return_tensors="pt").to(self.compute_device).to(compute_dtype).input_features
+            #inputs = self.processor(audio_sample, sampling_rate=16000, return_attention_mask=True, return_tensors="pt").to(self.compute_device).to(compute_dtype)
+            #input_features = processor_result.input_features
+            #attention_mask = processor_result.attention_mask
 
             transcriptions = [""]
             with torch.no_grad():
@@ -177,9 +181,10 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 # print("result")
                 # print(result)
 
-                predicted_ids = self.model.generate(input_features,
+                predicted_ids = self.model.generate(inputs=input_features,
                                                     task=task, language=language, num_beams=beam_size,
                                                     return_timestamps=True,
+                                                    #attention_mask=attention_mask,
                                                     )
                 transcriptions = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)
                 pred_language = self.processor.batch_decode(predicted_ids[:, 1:2], skip_special_tokens=False)

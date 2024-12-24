@@ -419,6 +419,24 @@ MODEL_LINKS = {
             }
         },
     },
+    # Crisper Whisper https://github.com/nyrahealth/CrisperWhisper
+    "crisper": {
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/crisper-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/crisper-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/crisper-ct2.zip",
+            ],
+            "checksum": "b6fa1d80e0ca1d6879dc5eda713892e177b1f89c2585b63b4b04e1c82b01d746",
+            "file_checksums": {
+                "config.json": "a7e36fb7fdf5c1f773903bedfe09f0eb330a7668cec92a2fa6369b40c25af847",
+                "model.bin": "151eaa61fad9906491d6a7e0c2f152907276e5e318526ef7ffe6b55120213628",
+                "preprocessor_config.json": "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711",
+                "tokenizer.json": "86826f8033cf57f2b9f5643191b0aba1bba4cdc8307d2c5199e7e3d889bd6c9e",
+                "vocabulary.json": "6286f6c910c88609702f41ab640dc8e274319d6868992de33d7957d44e95ef0a"
+            }
+        },
+    },
     # Finetune Models
     "small.eu": {
         "float16": {
@@ -912,6 +930,10 @@ TOKENIZER_LINKS = {
 
 
 def needs_download(model: str, compute_type: str = "float32"):
+    # return True since custom models don't need downloading
+    if model == "custom":
+        return True
+
     model_cache_path = Path(".cache/whisper")
     model_path = model_cache_path / f"{model}-ct2"
     if compute_type in ["float16", "int8_float16", "int16", "int8"]:
@@ -1069,6 +1091,11 @@ class FasterWhisper(metaclass=SingletonMeta):
                 model_folder_name = model + "-ct2-fp16"
             elif compute_type == "float16":
                 model_folder_name = model + "-ct2"
+
+        # load user custom model
+        if model == "custom":
+            model_folder_name = "custom-ct2"
+
         model_path = Path(model_cache_path / model_folder_name)
 
         self.loaded_model_size = model
