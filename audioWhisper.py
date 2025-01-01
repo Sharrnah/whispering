@@ -501,6 +501,16 @@ if __name__ == '__main__':
         # initialize Integrated TTS
         try:
             tts.init()
+            available_tts_models = tts.tts.list_models_indexed()
+            threading.Thread(
+               target=websocket.BroadcastMessage,
+               args=(json.dumps({"type": "available_tts_models", "data": available_tts_models}),)
+            ).start()
+            tts.tts.load()
+            threading.Thread(
+               target=websocket.BroadcastMessage,
+               args=(json.dumps({"type": "available_tts_voices", "data": tts.tts.list_voices()}),)
+            ).start()
         except Exception as e:
             print(e)
 

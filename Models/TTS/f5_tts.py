@@ -18,12 +18,12 @@ import settings
 from Models.TTS.F5TTS.model.backbones.unett import UNetT
 from Models.TTS.F5TTS.model.backbones.dit import DiT
 
-from Models.TTS.F5TTS.model.utils_infer import (
+from Models.TTS.F5TTS.infer.utils_infer import (
     load_vocoder,
     load_model,
-    preprocess_ref_audio_text,
+    #preprocess_ref_audio_text,
     infer_process,
-    remove_silence_for_generated_wav,
+    #remove_silence_for_generated_wav,
 )
 
 
@@ -83,7 +83,10 @@ os.makedirs(cache_path, exist_ok=True)
 voices_path = Path(cache_path / "voices")
 os.makedirs(voices_path, exist_ok=True)
 
-vocos_local_path = Path(cache_path / "vocos")
+vocoder_paths = {
+    "vocos": Path(cache_path / "vocos"),
+    "bigvgan": Path(cache_path / "bigvgan"),
+}
 
 tts_proc = None
 failed = False
@@ -92,42 +95,164 @@ TTS_MODEL_LINKS = {
     # Models
     "F5-TTS": {
         "urls": [
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5TTS_Base.zip",
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5TTS_Base.zip",
-            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5TTS_Base.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5-TTS_Base.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5-TTS_Base.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5-TTS_Base.zip",
         ],
-        "checksum": "bc1a704885caf25d0d6878c21ea8e525697f2e380d81bc7630744dbac17fe728",
+        "checksum": "06fa9afce84910a1b6ec6126a001b9f4e716a1122ad8cd5c8914ab9da5351494",
         "file_checksums": {
-            "model.safetensors": "4180310f91d592cee4bc14998cd37c781f779cf105e8ca8744d9bd48ca7046ae"
+            "model.safetensors": "4180310f91d592cee4bc14998cd37c781f779cf105e8ca8744d9bd48ca7046ae",
+            "vocab.txt": "4e173934be56219eb38759fa8d4c48132d5a34454f0c44abce409bcf6a07ec46",
         },
-        "path": "F5TTS_Base",
+        "path": "F5-TTS_Base",
     },
     "E2-TTS": {
         "urls": [
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/E2TTS_Base.zip",
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/E2TTS_Base.zip",
-            "https://s3.libs.space:9000/ai-models/f5-tts/models/E2TTS_Base.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/E2-TTS_Base.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/E2-TTS_Base.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/E2-TTS_Base.zip",
         ],
-        "checksum": "dd5c01d9801274d94ed5d2a74d6f5a9e550325ec6addc56ff8e1c2259ac25d6c",
+        "checksum": "175cde51b2496498a09d9eae52ecb00a1ac5abcf2109f1f61b17c48504607997",
         "file_checksums": {
-            "model.safetensors": "8a813cd26fd21b298734eece9474bfea842a585adff98d2bb89fd384b1c00ac7"
+            "model.safetensors": "8a813cd26fd21b298734eece9474bfea842a585adff98d2bb89fd384b1c00ac7",
+            "vocab.txt": "4e173934be56219eb38759fa8d4c48132d5a34454f0c44abce409bcf6a07ec46",
         },
-        "path": "E2TTS_Base",
+        "path": "E2-TTS_Base",
     },
-    # Others
-    "vocab": {
+    "F5-TTS-bigvgan": {
         "urls": [
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/vocab.zip",
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/vocab.zip",
-            "https://s3.libs.space:9000/ai-models/f5-tts/vocab.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5-TTS_Base-bigvgan.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5-TTS_Base-bigvgan.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5-TTS_Base-bigvgan.zip",
         ],
-        "checksum": "d7f6e519de25c45235d46a040465966c7904c560a26341d399e0754f485d08cd",
+        "checksum": "109c7fd25af309d2e87b622c0af2a26e02aa2e923ede35cfaaf6e5cb7478536a",
         "file_checksums": {
-            "Emilia_ZH_EN_pinyin\\vocab.txt": "4e173934be56219eb38759fa8d4c48132d5a34454f0c44abce409bcf6a07ec46",
-            "librispeech_pc_test_clean_cross_sentence.lst": "a232b6fe539fb3bbde5714a13c3f2333900997be274c19ca7558f31615679b21",
+            "model.pt": "bdab3e92fc2b77447aa8c46aac77531d970822b191ca198e5ab94aef99265df9",
+            "vocab.txt": "4e173934be56219eb38759fa8d4c48132d5a34454f0c44abce409bcf6a07ec46"
         },
-        "path": "vocab",
+        "mel_spec_type": "bigvgan",
+        "path": "F5-TTS_Base-bigvgan",
     },
+    "F5-TTS_French": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5-TTS_French.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5-TTS_French.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5-TTS_French.zip",
+        ],
+        "checksum": "29b5196e17e49aa79303389a3e73fff5b2f6112a0f4be637a636f91105669b96",
+        "file_checksums": {
+            "model.pt": "812347d5dcd375e5d84fd3cb156468ca4ee99bd6fbe29d86f487a3c964b69e34",
+            "vocab.txt": "2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c"
+        },
+        "path": "F5-TTS_French",
+    },
+    "F5-TTS_German": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5-TTS_German.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5-TTS_German.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5-TTS_German.zip",
+        ],
+        "checksum": "d5a37a8a1cf803723e6a887a966b8ae3b0cbf90ed345eeb853a2472ec61256a7",
+        "file_checksums": {
+            "model.safetensors": "3f01d5e49e63a6811a22600ddfba8a5229fc73e8441371d184a5e05029da6ae7",
+            "vocab.txt": "2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c"
+        },
+        "path": "F5-TTS_German",
+    },
+    "F5-TTS_German-bigvgan": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5-TTS_German-bigvgan.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5-TTS_German-bigvgan.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5-TTS_German-bigvgan.zip",
+        ],
+        "checksum": "97c02cce5b460a0531a8cad66c641869040c4b7214b6501543f3d67ed6d57fdd",
+        "file_checksums": {
+            "model.safetensors": "fb4740a09a2c2513cb337437724fd8a1213ddaf9d60fb18d29812d6b5d161be7",
+            "vocab.txt": "2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c"
+        },
+        "mel_spec_type": "bigvgan",
+        "path": "F5-TTS_German-bigvgan",
+    },
+    "F5-TTS_Italian": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5-TTS_Italian.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5-TTS_Italian.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5-TTS_Italian.zip",
+        ],
+        "checksum": "047d44af4d67358c6d7866bb93f362bbd1fb9f53dde97628b248d83a4fe3095a",
+        "file_checksums": {
+            "model.safetensors": "c92b19a07843bda8bf55c8b525e67051ef4f95d3bd28cec2d330a45a48a1ac91",
+            "vocab.txt": "2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c"
+        },
+        "path": "F5-TTS_Italian",
+    },
+    "F5-TTS_Japanese": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5-TTS_Japanese.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5-TTS_Japanese.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5-TTS_Japanese.zip",
+        ],
+        "checksum": "09e778610e9061204c8168eeb6c1dd6348628e123545ae6edd250faf89c9ac4b",
+        "file_checksums": {
+            "model.pt": "6e7fec0716a09401b92c39c6869325e331b20bcf6cc16a414e7e3ac87ff6c854",
+            "vocab.txt": "f405cceeeaf2461b8ee2247118f93140db617ddc25d1447790d7e93a761f89e3"
+        },
+        "mel_spec_type": "bigvgan",
+        "path": "F5-TTS_Japanese",
+    },
+    "F5-TTS_Spanish": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5-TTS_Spanish.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5-TTS_Spanish.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5-TTS_Spanish.zip",
+        ],
+        "checksum": "a47edb335aa82ec9aa0737ddd8d6b7d8a1795a2a1216f4d8253a24d24d193dc6",
+        "file_checksums": {
+            "model.safetensors": "9cd5757a92c0b979e9769558fea922243c4916090ad93dd2c595b73e6f05a3b2",
+            "vocab.txt": "2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c"
+        },
+        "path": "F5-TTS_Spanish",
+    },
+    "F5-TTS_Russian": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5-TTS_Russian.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5-TTS_Russian.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5-TTS_Russian.zip",
+        ],
+        "checksum": "ddd63d60f12e1ab62df67294f5105528157a9cc9fbc7db7e1b2785057003187a",
+        "file_checksums": {
+            "model.safetensors": "2f1b8f2c4df0f3d79569e1a3df7dcb5ea55e535198e30deff030a62d96c5e463",
+            "vocab.txt": "2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c"
+        },
+        "path": "F5-TTS_Russian",
+    },
+    "F5-TTS_Vietnamese": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5-TTS_Vietnamese.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5-TTS_Vietnamese.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5-TTS_Vietnamese.zip",
+        ],
+        "checksum": "06d7b24e9c419142d3ea1e1e09e9b26e61d7951bfb072373fe3b8582a1dd2649",
+        "file_checksums": {
+            "model.safetensors": "482032c87417d421afdc821e866f0b9eea0300ecf22062d6adef4cb24e9f5488",
+            "vocab.txt": "cf30aa5d265aeddbb4804cccb3f46c45dae945d40ecd5838e66f69a94a9090c8"
+        },
+        "path": "F5-TTS_Vietnamese",
+    },
+    "F5-TTS_Malaysian": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5-TTS_Malaysian.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5-TTS_Malaysian.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5-TTS_Malaysian.zip",
+        ],
+        "checksum": "ab465605eabb9713a83374d223b3cf7f0ece984cbb081bc36780b1fdb001387f",
+        "file_checksums": {
+            "model.pt": "d2f61c8ad573e9b95f9da3bcf49dddebb9dbc3d0549682fb774d2c041d6af034",
+            "vocab.txt": "2a05f992e00af9b0bd3800a8d23e78d520dbd705284ed2eedb5f4bd29398fa3c"
+        },
+        "path": "F5-TTS_Malaysian",
+    },
+    # Vocoders
     "vocos": {
         "urls": [
             "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/vocos.zip",
@@ -141,6 +266,46 @@ TTS_MODEL_LINKS = {
             "pytorch_model.bin": "97ec976ad1fd67a33ab2682d29c0ac7df85234fae875aefcc5fb215681a91b2a",
         },
         "path": "vocos",
+    },
+    "bigvgan": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/bigvgan.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/bigvgan.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/bigvgan.zip",
+        ],
+        "checksum": "16a9be4fcff4cbfdc3dd644a3374a66069b08123eb6556e2af893f06475d63c8",
+        "file_checksums": {
+            "LICENSE": "90459cd52fc41bd723df7c0c76fac1e4dd60e6bfd644a7e2a93f325bed4f6d95",
+            "README.md": "1ab4fe827dc65913b6745cb0fa7a96fb0a4a89ff32ec143a0eecfac079e03d1e",
+            "activations.py": "3ba94028aebabfc994bcd746bf9cbe92ecace528434c922c480be6ada182cad6",
+            "alias_free_activation\\cuda\\__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "alias_free_activation\\cuda\\activation1d.py": "54778a4308d359cac8348bc28f5407652982b22732c3c768a6721183c26f5b0e",
+            "alias_free_activation\\cuda\\anti_alias_activation.cpp": "222ce6cd687fdc1d541a4bedbf5f3578f321bc2649996b2747ebc60ddd2e1d8e",
+            "alias_free_activation\\cuda\\anti_alias_activation_cuda.cu": "e3fa60fbf80fd95cad6f05dd605c85393b6539d6684502a56b64c348c655de7d",
+            "alias_free_activation\\cuda\\compat.h": "39e530d6d9cf5eda60c25b899cf0ba87c70cdca3424de7cb1716adad8f212388",
+            "alias_free_activation\\cuda\\load.py": "6ee5cbfaedc6b73cf2bff9677f18bcc5a46c91a088523e853bca12805a909e8a",
+            "alias_free_activation\\cuda\\type_shim.h": "3e32f2fec72b2b6749389acd64c336b2932a3764b686634c696af8151df0e38c",
+            "alias_free_activation\\torch\\__init__.py": "2e3138e1052e377ba2e51ea59c7d5d255a519559001757af21dbec4cb9c22471",
+            "alias_free_activation\\torch\\act.py": "651448005dd5ae0c193da60d1a50c0aa53550a4a3050e29ed7d35cf86410e212",
+            "alias_free_activation\\torch\\filter.py": "acf2257276e617dd3161e53abc0a1582e586a3d2d618a43235c7f83818b4e179",
+            "alias_free_activation\\torch\\resample.py": "4d7e1bf4169d03f59360f34f33d029c04b99364150f6737563ebfbee0ab49d79",
+            "bigvgan.py": "2b2c5d7bdc818b90ffc2e1a65776823e46030f51a4e0d7a2d42e9b6d05cba101",
+            "bigvgan_discriminator_optimizer.pt": "41f7718f34fbbd85975316e89b1fbb10e3fb36e7a0dc9e03aefa9b7aed65f8f5",
+            "bigvgan_discriminator_optimizer_3msteps.pt": "efcc619cd2f6e7bd3f9827efeb63212a882e86eddd6e90da120c49d8b279ff90",
+            "bigvgan_generator.pt": "6f9c5715550c9d0f11159ceb8935638da5aeb19e27d1e63677632df095e376f5",
+            "bigvgan_generator_3msteps.pt": "f6e3ad0dc7efe9a60b13be041a8bc5c20f2080a0faa54ed8d625fa52ae0846c7",
+            "config.json": "d77e2c96583ca2296ac112a56ec7cc6bd5da4bf7681ceff18448bedc4fcf6512",
+            "env.py": "54ae665797fbb20ed3fc9b856be688f6b8a903b0bed8ff7edabff81dd9cdcd33",
+            "meldataset.py": "691e8413fb4c65ee3f603a43b19bdd69652a06a150ce82e72c43363cd268dfc6",
+            "nv-modelcard++\\.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "nv-modelcard++\\bias.md": "0b374821eb4a1a1a0c4f7e3d5d0474620eea573ec3cc4bd238cce78b6595b375",
+            "nv-modelcard++\\explainability.md": "58d21b235cca347db09b7e120199351840b456d7475d90006df0ff7c49239e35",
+            "nv-modelcard++\\overview.md": "0c9016e379a90a4cbb8476e09845d3e197fa4bb12bd1912ccb01b96436849721",
+            "nv-modelcard++\\privacy.md": "87f3de69d52bf16ea8bc5fe8671eee7fd2a4ba0ce9fd7ae1fe9fbe9c7771df0d",
+            "nv-modelcard++\\safety.md": "f244890262cd9074fad924fcadfc8bfa66e99ddeb2bf33b379ad04f325861386",
+            "utils.py": "04eee590ca04ca33a6b2b79802a6514bbe7d6867164c72d61f9404ea9b0101c4"
+        },
+        "path": "bigvgan",
     },
     # Default Voices
     "voices": {
@@ -173,7 +338,15 @@ TTS_MODEL_LINKS = {
 }
 
 model_list = {
-    "en & zh": ["F5-TTS", "E2-TTS"],
+    "English & Chinese": ["F5-TTS", "E2-TTS", "F5-TTS-bigvgan"],
+    "French": ["F5-TTS_French"],
+    "German": ["F5-TTS_German", "F5-TTS_German-bigvgan"],
+    "Italian": ["F5-TTS_Italian"],
+    "Japanese": ["F5-TTS_Japanese"],
+    "Spanish": ["F5-TTS_Spanish"],
+    "Russian": ["F5-TTS_Russian"],
+    "Vietnamese": ["F5-TTS_Vietnamese"],
+    "Malaysian": ["F5-TTS_Malaysian"],
 }
 
 speed_mapping = {
@@ -199,7 +372,8 @@ class F5TTS:
 
     device = None
     ema_model = None
-    vocos = None
+    vocoder = None
+    vocoder_name = "vocos"
 
     currently_downloading = False
 
@@ -241,16 +415,25 @@ class F5TTS:
 
         # iterate over all TTS_MODEL_LINKS[model_name]["files"] entries and download them
         if needs_download and not self.currently_downloading:
+            print("download started... F5-TTS")
             self.currently_downloading = True
+            zip_filename = os.path.basename(TTS_MODEL_LINKS[model_name]["urls"][0])
             if not downloader.download_extract(TTS_MODEL_LINKS[model_name]["urls"],
                                                str(model_directory.resolve()),
-                                               TTS_MODEL_LINKS[model_name]["checksum"], title="Text 2 Speech (F5/E2 TTS) - " + model_name, extract_format="zip"):
+                                               TTS_MODEL_LINKS[model_name]["checksum"],
+                                               alt_fallback=False,
+                                               force_non_ui_dl=True,
+                                               fallback_extract_func=downloader.extract_zip,
+                                               fallback_extract_func_args=(
+                                                       str(Path(model_directory / zip_filename)),
+                                                       str(Path(model_directory).resolve()),
+                                               ),
+                                               title="Text 2 Speech (F5/E2 TTS) - " + model_name, extract_format="zip"):
                 print(f"Download failed: Text 2 Speech (F5/E2 TTS) - {model_name}")
 
         self.currently_downloading = False
 
-    def load(self):
-
+    def _get_model_name(self):
         model = "F5-TTS"
         if len(settings.GetOption('tts_model')) == 2:
             #language = settings.GetOption('tts_model')[0]
@@ -260,34 +443,63 @@ class F5TTS:
 
         if model == "" or model not in TTS_MODEL_LINKS:
             model = "F5-TTS"
+        return model
 
-        self.download_model("vocab")
+    def load(self):
+        model = self._get_model_name()
+
+        model_directory = Path(cache_path / TTS_MODEL_LINKS[model]["path"])
+
         self.download_model("vocos")
+        self.download_model("bigvgan")
         self.download_model("voices")
         self.download_model(model)
 
         self.model_id = model
         # load models
-        if model == "F5-TTS":
+        if model.startswith("F5-TTS"):
             model_cls = DiT
             model_cfg = dict(dim=1024, depth=22, heads=16, ff_mult=2, text_dim=512, conv_layers=4)
-            exp_name = "F5TTS_Base"
-            #ckpt_file = str(cached_path(f"hf://SWivid/{repo_name}/{exp_name}/model_{ckpt_step}.safetensors"))
-            ckpt_file = str(Path(cache_path / exp_name / f"model.safetensors").resolve())
-            # ckpt_path = f"ckpts/{exp_name}/model_{ckpt_step}.pt"  # .pt | .safetensors; local path
+            if Path(model_directory / f"model.safetensors").exists():
+                ckpt_file = str(Path(model_directory / f"model.safetensors").resolve())
+            elif Path(model_directory / f"model.pt").exists():
+                ckpt_file = str(Path(model_directory / f"model.pt").resolve())
+            vocab_file = str(Path(model_directory / "vocab.txt").resolve())
 
-        elif model == "E2-TTS":
+        # check if model starts with the string "E2-TTS"
+        elif model.startswith("E2-TTS"):
             model_cls = UNetT
             model_cfg = dict(dim=1024, depth=24, heads=16, ff_mult=4)
-            exp_name = "E2TTS_Base"
-            #ckpt_file = str(cached_path(f"hf://SWivid/{repo_name}/{exp_name}/model_{ckpt_step}.safetensors"))
-            ckpt_file = str(Path(cache_path / exp_name / f"model.safetensors").resolve())
-            # ckpt_path = f"ckpts/{exp_name}/model_{ckpt_step}.pt"  # .pt | .safetensors; local path
+            if Path(model_directory / f"model.safetensors").exists():
+                ckpt_file = str(Path(model_directory / f"model.safetensors").resolve())
+            elif Path(model_directory / f"model.pt").exists():
+                ckpt_file = str(Path(model_directory / f"model.pt").resolve())
+            vocab_file = str(Path(model_directory / "vocab.txt").resolve())
 
-        vocab_file = str(Path(cache_path / "vocab" / "Emilia_ZH_EN_pinyin" / "vocab.txt").resolve())
+        # set model specific cfg if needed.
+        if "model_cfg" in TTS_MODEL_LINKS[model]:
+            model_cfg = TTS_MODEL_LINKS[model]["model_cfg"]
 
-        print(f"Using {model}...")
-        self.ema_model = load_model(model_cls, model_cfg, ckpt_file, vocab_file)
+        mel_spec_type = "vocos"
+        if "mel_spec_type" in TTS_MODEL_LINKS[model]:
+            mel_spec_type = TTS_MODEL_LINKS[model]["mel_spec_type"]
+
+        self.ema_model = load_model(model_cls, model_cfg, ckpt_file, mel_spec_type=mel_spec_type, vocab_file=vocab_file)
+
+        # load vocoder model
+        vocoder_name = "vocos"
+        if self.vocoder is None or ("mel_spec_type" not in TTS_MODEL_LINKS[self.model_id] and self.vocoder_name != "vocos") or ("mel_spec_type" in TTS_MODEL_LINKS[self.model_id] and self.vocoder_name != TTS_MODEL_LINKS[self.model_id]["mel_spec_type"]):
+            if "mel_spec_type" in TTS_MODEL_LINKS[self.model_id]:
+                vocoder_name = TTS_MODEL_LINKS[self.model_id]["mel_spec_type"]
+            print(f"loading vocoder model: {vocoder_name}")
+            try:
+                self.load_vocoder(vocoder_name)
+            except Exception as e:
+                print(e)
+                print(f"Failed to load vocoder model: {vocoder_name}, falling back to default vocoder.")
+                self.load_vocoder("vocos")
+
+        print(f"Model {model} with vocoder {vocoder_name} loaded successfully.")
 
     def list_models(self):
         return model_list
@@ -319,10 +531,13 @@ class F5TTS:
                 return voice
         return None
 
-    def load_vocos(self):
-        self.vocos = load_vocoder(is_local=True, local_path=vocos_local_path)
+    def load_vocoder(self, vocoder_name="vocos"):
+        self.vocoder_name = vocoder_name
+        vocoder_local_path = vocoder_paths[vocoder_name]
+        self.vocoder = load_vocoder(vocoder_name=vocoder_name, is_local=True, local_path=vocoder_local_path)
 
     def tts(self, text, ref_audio=None, ref_text=None, remove_silence=True):
+        print("TTS requested F5/E2 TTS")
         tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
         return_sample_rate = self.target_sample_rate
         if ref_audio is None and ref_text is None:
@@ -330,13 +545,6 @@ class F5TTS:
             selected_voice = self.get_voice_by_name(voice_name)
             ref_audio = selected_voice["wav_filename"]
             ref_text = selected_voice["text_content"]
-
-        if self.ema_model is None:
-            print("loading ema_model...")
-            self.load_model(self.model_id)
-        if self.vocos is None:
-            print("loading vocos model...")
-            self.load_vocos()
 
         if ref_audio is None:
             ref_audio = self.config["ref_audio"]
@@ -393,8 +601,7 @@ class F5TTS:
             ref_audio = voices[voice]['ref_audio']
             ref_text = voices[voice]['ref_text']
 
-            #print(f"Voice: {voice}")
-            audio, final_sample_rate, spectragram = infer_process(ref_audio, ref_text, gen_text, self.ema_model, speed=tts_speed, show_info=None)
+            audio, final_sample_rate, spectragram = infer_process(ref_audio, ref_text, gen_text, self.ema_model, self.vocoder, mel_spec_type=self.vocoder_name, speed=tts_speed, show_info=None)
             return_sample_rate = final_sample_rate
             generated_audio_segments.append(audio)
 

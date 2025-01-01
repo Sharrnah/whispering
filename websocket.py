@@ -470,7 +470,7 @@ async def main_on_connect_handler(server_instance, websocket):
                                    json.dumps({"type": "available_img_languages", "data": available_languages}))
 
     # send all available TTS models + voices
-    if tts.init():
+    if tts.tts is not None and not tts.failed:
         available_tts_models = tts.tts.list_models_indexed()
         await server_instance.send(websocket,
                                    json.dumps({"type": "available_tts_models", "data": available_tts_models}))
