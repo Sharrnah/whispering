@@ -1,11 +1,13 @@
 import io
 import os
 import re
+import traceback
 from pathlib import Path
 
 import numpy
 import numpy as np
 import soundfile as sf
+import torch
 from scipy.io.wavfile import write
 
 import Plugins
@@ -362,6 +364,7 @@ class F5TTS:
     lang = 'en'
     model_id = 'F5-TTS'
     model = None
+    compute_device = "cpu"
 
     target_sample_rate = 24000
     target_rms = 0.1
@@ -393,6 +396,7 @@ class F5TTS:
     }
 
     def __init__(self):
+        self.compute_device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
         pass
 
     def download_model(self, model_name):
@@ -445,6 +449,27 @@ class F5TTS:
             model = "F5-TTS"
         return model
 
+    def set_compute_device(self, device):
+        self.compute_device_str = device
+        if device is None or device == "cuda" or device == "auto" or device == "":
+            self.compute_device_str = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+            #device = torch.device(self.compute_device_str)
+            device = self.compute_device_str
+        #elif device == "mps":
+            #device = torch.device("mps")
+        #    device = "mps"
+        #elif device == "cpu":
+            #device = torch.device("cpu")
+        #    device = "cpu"
+        #elif device.startswith("direct-ml"):
+            #device_id = 0
+            #device_id_split = device.split(":")
+            #if len(device_id_split) > 1:
+            #    device_id = int(device_id_split[1])
+            #import torch_directml
+            #device = torch_directml.device(device_id)
+        self.compute_device = device
+
     def load(self):
         model = self._get_model_name()
 
@@ -456,6 +481,9 @@ class F5TTS:
         self.download_model(model)
 
         self.model_id = model
+
+        self.set_compute_device(settings.GetOption('tts_ai_device'))
+
         # load models
         if model.startswith("F5-TTS"):
             model_cls = DiT
@@ -484,20 +512,30 @@ class F5TTS:
         if "mel_spec_type" in TTS_MODEL_LINKS[model]:
             mel_spec_type = TTS_MODEL_LINKS[model]["mel_spec_type"]
 
-        self.ema_model = load_model(model_cls, model_cfg, ckpt_file, mel_spec_type=mel_spec_type, vocab_file=vocab_file)
+        try:
+            self.ema_model = load_model(model_cls, model_cfg, ckpt_file, mel_spec_type=mel_spec_type, vocab_file=vocab_file, device=self.compute_device)
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
+            return
 
         # load vocoder model
         vocoder_name = "vocos"
-        if self.vocoder is None or ("mel_spec_type" not in TTS_MODEL_LINKS[self.model_id] and self.vocoder_name != "vocos") or ("mel_spec_type" in TTS_MODEL_LINKS[self.model_id] and self.vocoder_name != TTS_MODEL_LINKS[self.model_id]["mel_spec_type"]):
-            if "mel_spec_type" in TTS_MODEL_LINKS[self.model_id]:
-                vocoder_name = TTS_MODEL_LINKS[self.model_id]["mel_spec_type"]
-            print(f"loading vocoder model: {vocoder_name}")
-            try:
-                self.load_vocoder(vocoder_name)
-            except Exception as e:
-                print(e)
-                print(f"Failed to load vocoder model: {vocoder_name}, falling back to default vocoder.")
-                self.load_vocoder("vocos")
+        try:
+            if self.vocoder is None or ("mel_spec_type" not in TTS_MODEL_LINKS[self.model_id] and self.vocoder_name != "vocos") or ("mel_spec_type" in TTS_MODEL_LINKS[self.model_id] and self.vocoder_name != TTS_MODEL_LINKS[self.model_id]["mel_spec_type"]):
+                if "mel_spec_type" in TTS_MODEL_LINKS[self.model_id]:
+                    vocoder_name = TTS_MODEL_LINKS[self.model_id]["mel_spec_type"]
+                print(f"loading vocoder model: {vocoder_name}")
+                try:
+                    self.load_vocoder(vocoder_name, device=self.compute_device)
+                except Exception as e:
+                    print(e)
+                    print(f"Failed to load vocoder model: {vocoder_name}, falling back to default vocoder.")
+                    self.load_vocoder("vocos", device=self.compute_device)
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
+            return
 
         print(f"Model {model} with vocoder {vocoder_name} loaded successfully.")
 
@@ -531,10 +569,10 @@ class F5TTS:
                 return voice
         return None
 
-    def load_vocoder(self, vocoder_name="vocos"):
+    def load_vocoder(self, vocoder_name="vocos", device=None):
         self.vocoder_name = vocoder_name
         vocoder_local_path = vocoder_paths[vocoder_name]
-        self.vocoder = load_vocoder(vocoder_name=vocoder_name, is_local=True, local_path=vocoder_local_path)
+        self.vocoder = load_vocoder(vocoder_name=vocoder_name, is_local=True, local_path=vocoder_local_path, device=device)
 
     def tts(self, text, ref_audio=None, ref_text=None, remove_silence=True):
         print("TTS requested F5/E2 TTS")
@@ -601,7 +639,7 @@ class F5TTS:
             ref_audio = voices[voice]['ref_audio']
             ref_text = voices[voice]['ref_text']
 
-            audio, final_sample_rate, spectragram = infer_process(ref_audio, ref_text, gen_text, self.ema_model, self.vocoder, mel_spec_type=self.vocoder_name, speed=tts_speed, show_info=None)
+            audio, final_sample_rate, spectragram = infer_process(ref_audio, ref_text, gen_text, self.ema_model, self.vocoder, mel_spec_type=self.vocoder_name, speed=tts_speed, device=self.compute_device, show_info=None)
             return_sample_rate = final_sample_rate
             generated_audio_segments.append(audio)
 

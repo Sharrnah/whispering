@@ -143,7 +143,7 @@ def initialize_asr_pipeline(device: str = device, dtype=None):
     if dtype is None:
         dtype = (
             torch.float16
-            if "cuda" in device
+            if (isinstance(device, str) and "cuda" in device)
             and torch.cuda.get_device_properties(device).major >= 6
             and not torch.cuda.get_device_name().endswith("[ZLUDA]")
             else torch.float32
@@ -180,7 +180,7 @@ def load_checkpoint(model, ckpt_path, device: str, dtype=None, use_ema=True):
     if dtype is None:
         dtype = (
             torch.float16
-            if "cuda" in device
+            if (isinstance(device, str) and "cuda" in device)
             and torch.cuda.get_device_properties(device).major >= 6
             and not torch.cuda.get_device_name().endswith("[ZLUDA]")
             else torch.float32
