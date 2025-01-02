@@ -902,6 +902,58 @@ def split_audio_with_padding(audio_bytes, chunk_size, bytes_per_sample = 2, merg
 
     return audio_frames
 
+
+def change_volume(audio_data, volume_factor=1, dtype=None):
+    """
+    Adjusts the volume of the audio data.
+
+    Args:
+        audio_data: The audio data, either as bytes, numpy array or torch.tensor.
+        volume_factor: The factor by which to adjust the volume. Greater than 1 increases volume, less than 1 decreases it.
+        dtype: The data type of the audio samples (e.g., np.int16, np.float32). Can be set to none if data is numpy array.
+
+    Returns:
+        The audio data with adjusted volume, in the same format as the input.
+    """
+
+    # no volume change, just return audio data
+    if volume_factor == 1.0:
+        return audio_data
+
+    if isinstance(audio_data, bytes):
+        # Convert bytes to numpy array
+        audio_array = np.frombuffer(audio_data, dtype=dtype)
+    elif isinstance(audio_data, np.ndarray):
+        audio_array = audio_data
+        if dtype is None:
+            dtype = audio_array.dtype
+    elif isinstance(audio_data, torch.Tensor):
+        # Convert torch.Tensor to numpy array
+        audio_array = audio_data.detach().cpu().numpy()
+        if dtype is None:
+            dtype = audio_array.dtype
+    else:
+        raise ValueError("Unsupported audio format. Please provide bytes or numpy array.")
+
+    # Adjust the volume
+    audio_array = audio_array * volume_factor
+
+    # Ensure the audio data stays within the valid range
+    if np.issubdtype(dtype, np.integer):
+        max_val = np.iinfo(dtype).max
+        min_val = np.iinfo(dtype).min
+        audio_array = np.clip(audio_array, min_val, max_val)
+    elif np.issubdtype(dtype, np.floating):
+        audio_array = np.clip(audio_array, -1.0, 1.0)
+
+    # Convert back to the original format if needed
+    if isinstance(audio_data, bytes):
+        return audio_array.astype(dtype).tobytes()
+    elif isinstance(audio_data, torch.Tensor):
+        return torch.from_numpy(audio_array.astype(dtype))
+    else:
+        return audio_array.astype(dtype)
+
 # ======================================
 # buffered audio streaming playback
 # ======================================

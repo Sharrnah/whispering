@@ -569,6 +569,63 @@ class F5TTS:
                 return voice
         return None
 
+    def remove_silence_parts(self, audio_data: bytes|np.ndarray, sample_rate, dtype=None, silence_threshold=0.03, max_silence_length=0.8,
+                             keep_silence_length=0.20):
+        if isinstance(audio_data, bytes):
+            # Convert bytes to numpy array
+            audio = np.frombuffer(audio_data, dtype=dtype)
+        elif isinstance(audio_data, np.ndarray):
+            audio = audio_data
+            if dtype is None:
+                dtype = audio_data.dtype
+        else:
+            raise ValueError("Unsupported audio format. Please provide bytes or numpy array.")
+
+        audio_abs = np.abs(audio)
+        above_threshold = audio_abs > silence_threshold
+
+        # Convert length parameters to number of samples
+        max_silence_samples = int(max_silence_length * sample_rate)
+        keep_silence_samples = int(keep_silence_length * sample_rate)
+
+        last_silence_end = 0
+        silence_start = None
+
+        chunks = []
+
+        for i, sample in enumerate(above_threshold):
+            if not sample:
+                if silence_start is None:
+                    silence_start = i
+            else:
+                if silence_start is not None:
+                    silence_duration = i - silence_start
+                    if silence_duration > max_silence_samples:
+                        # Subtract keep_silence_samples from the start and add it to the end
+                        start = max(last_silence_end - keep_silence_samples, 0)
+                        end = min(silence_start + keep_silence_samples, len(audio))
+                        chunks.append(audio[start:end])
+                        last_silence_end = i
+                    silence_start = None
+
+        # Append the final chunk of audio after the last silence
+        if last_silence_end < len(audio):
+            start = max(last_silence_end - keep_silence_samples, 0)
+            end = len(audio)
+            chunks.append(audio[start:end])
+
+        if len(chunks) == 0:
+            print("No non-silent sections found in audio.")
+            return_np_array = np.array([]).astype(dtype)
+        else:
+            print(f"found {len(chunks)} non-silent sections in audio")
+            return_np_array = np.concatenate(chunks).astype(dtype)
+
+        if isinstance(audio_data, bytes):
+            return return_np_array.tobytes()
+        else:
+            return return_np_array
+
     def load_vocoder(self, vocoder_name="vocos", device=None):
         self.vocoder_name = vocoder_name
         vocoder_local_path = vocoder_paths[vocoder_name]
@@ -576,6 +633,7 @@ class F5TTS:
 
     def tts(self, text, ref_audio=None, ref_text=None, remove_silence=True):
         print("TTS requested F5/E2 TTS")
+        tts_volume = settings.GetOption("tts_volume")
         tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
         return_sample_rate = self.target_sample_rate
         if ref_audio is None and ref_text is None:
@@ -639,7 +697,7 @@ class F5TTS:
             ref_audio = voices[voice]['ref_audio']
             ref_text = voices[voice]['ref_text']
 
-            audio, final_sample_rate, spectragram = infer_process(ref_audio, ref_text, gen_text, self.ema_model, self.vocoder, mel_spec_type=self.vocoder_name, speed=tts_speed, device=self.compute_device, show_info=None)
+            audio, final_sample_rate, spectragram = infer_process(ref_audio, ref_text, gen_text, self.ema_model, self.vocoder, mel_spec_type=self.vocoder_name, speed=tts_speed, device=self.compute_device, nfe_step=64, show_info=None)
             return_sample_rate = final_sample_rate
             generated_audio_segments.append(audio)
 
@@ -649,6 +707,14 @@ class F5TTS:
         if generated_audio_segments:
             #wave_path = Path(Path.cwd() / "temp_tts_f5.wav")
             final_wave = np.concatenate(generated_audio_segments)
+
+            if remove_silence:
+                final_wave = self.remove_silence_parts(final_wave, sample_rate=return_sample_rate)
+
+            # change volume
+            if tts_volume != 1.0:
+                final_wave = audio_tools.change_volume(final_wave, tts_volume)
+
             return final_wave, return_sample_rate
             # with open(wave_path, "wb") as f:
             #     sf.write(f.name, final_wave, final_sample_rate)
@@ -698,7 +764,6 @@ class F5TTS:
         plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio',
                                                         {'audio': buff, 'sample_rate': sample_rate})
         if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
-            print("applied plugin_tts_after_audio")
             buff = plugin_audio['audio']
 
         return buff.read()

@@ -395,6 +395,8 @@ class Silero:
         else:
             self.speaker = settings.GetOption('tts_voice')
 
+        tts_volume = settings.GetOption("tts_volume")
+
         # Try to load model repo from GitHub or locally
         if not self.load():
             return None, None
@@ -424,6 +426,10 @@ class Silero:
                                          voice_path=voice_path,
                                          put_accent=True,
                                          put_yo=True)
+
+            # change volume
+            if tts_volume != 1.0:
+                audio = audio_tools.change_volume(audio, tts_volume)
 
             # call custom plugin event method
             plugin_audio = Plugins.plugin_custom_event_call('silero_tts_after_audio', {'audio': audio})
