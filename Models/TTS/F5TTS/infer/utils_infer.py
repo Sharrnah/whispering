@@ -1,5 +1,6 @@
 # A unified script for inference process
 # Make adjustments inside functions, and consider both gradio and cli scripts if need to change func output format
+import io
 import os
 import sys
 
@@ -32,6 +33,8 @@ from ..model.utils import (
     get_tokenizer,
     convert_char_to_pinyin,
 )
+
+from scipy.io.wavfile import write as write_wav
 
 _ref_audio_cache = {}
 
@@ -124,10 +127,24 @@ def load_vocoder(vocoder_name="vocos", is_local=False, local_path="", device=dev
             return None
         if is_local:
             """download from https://huggingface.co/nvidia/bigvgan_v2_24khz_100band_256x/tree/main"""
-            vocoder = bigvgan.BigVGAN.from_pretrained(local_path, use_cuda_kernel=False)
+            if device == "cuda":
+                try:
+                    vocoder = bigvgan.BigVGAN.from_pretrained(local_path, use_cuda_kernel=True)
+                except Exception as e:
+                    print(f"Failed to run BigVGAN with cuda kernel: {str(e)}")
+                    vocoder = bigvgan.BigVGAN.from_pretrained(local_path, use_cuda_kernel=False)
+            else:
+                vocoder = bigvgan.BigVGAN.from_pretrained(local_path, use_cuda_kernel=False)
         else:
             local_path = snapshot_download(repo_id="nvidia/bigvgan_v2_24khz_100band_256x", cache_dir=hf_cache_dir)
-            vocoder = bigvgan.BigVGAN.from_pretrained(local_path, use_cuda_kernel=False)
+            if device == "cuda":
+                try:
+                    vocoder = bigvgan.BigVGAN.from_pretrained(local_path, use_cuda_kernel=True)
+                except Exception as e:
+                    print(f"Failed to run BigVGAN with cuda kernel: {str(e)}")
+                    vocoder = bigvgan.BigVGAN.from_pretrained(local_path, use_cuda_kernel=False)
+            else:
+                vocoder = bigvgan.BigVGAN.from_pretrained(local_path, use_cuda_kernel=False)
 
         vocoder.remove_weight_norm()
         vocoder = vocoder.eval().to(device)
@@ -537,9 +554,35 @@ def infer_batch_process(
     return final_wave, target_sample_rate, combined_spectrogram
 
 
+# def apply_vocos_on_audio(audio_data, vocos, sample_rate=24000):
+#     # check if audio_data is bytes
+#     wav_file = audio_data
+#     if isinstance(audio_data, bytes):
+#         wav_file = io.BytesIO(audio_data)
+#
+#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#
+#     y, sr = torchaudio.load(wav_file)
+#     if y.size(0) > 1:  # mix to mono
+#         y = y.mean(dim=0, keepdim=True)
+#     y = torchaudio.functional.resample(y, orig_freq=sr, new_freq=24000)
+#     y = y.to(device)
+#     bandwidth_id = torch.tensor([2]).to(device)  # 6 kbps
+#     y_hat = vocos.decode(y, bandwidth_id=bandwidth_id)
+#
+#     #audio_data_np_array = audio_tools.resample_audio(y_hat, 24000, sample_rate, target_channels=1,
+#     #                                                 input_channels=1, dtype="float32")
+#
+#     y_hat = np.int16(y_hat * 32767)  # Convert to 16-bit PCM
+#
+#     buff = io.BytesIO()
+#     write_wav(buff, sample_rate, y_hat)
+#
+#     buff.seek(0)
+#     return buff
+
+
 # remove silence from generated wav
-
-
 def remove_silence_for_generated_wav(filename):
     aseg = AudioSegment.from_file(filename)
     non_silent_segs = silence.split_on_silence(

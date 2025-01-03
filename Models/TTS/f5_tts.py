@@ -8,7 +8,8 @@ import numpy
 import numpy as np
 import soundfile as sf
 import torch
-from scipy.io.wavfile import write
+import torchaudio
+from scipy.io.wavfile import write as write_wav
 
 import Plugins
 import audio_tools
@@ -372,6 +373,8 @@ class F5TTS:
     hop_length = 256
     ode_method = "euler"
     speed = 1.0
+    #nfe_step = 32
+    nfe_step = 64
 
     device = None
     ema_model = None
@@ -448,6 +451,33 @@ class F5TTS:
         if model == "" or model not in TTS_MODEL_LINKS:
             model = "F5-TTS"
         return model
+
+    # def apply_vocos_on_audio(self, audio_data, sample_rate=24000):
+    #     # check if audio_data is bytes
+    #     wav_file = audio_data
+    #     if isinstance(audio_data, bytes):
+    #         wav_file = io.BytesIO(audio_data)
+    #
+    #     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #
+    #     y, sr = torchaudio.load(wav_file)
+    #     if y.size(0) > 1:  # mix to mono
+    #         y = y.mean(dim=0, keepdim=True)
+    #     y = torchaudio.functional.resample(y, orig_freq=sr, new_freq=sample_rate)
+    #     y = y.to(device)
+    #     bandwidth_id = torch.tensor([2]).to(device)  # 6 kbps
+    #     y_hat = self.vocoder.decode(y, bandwidth_id=bandwidth_id)
+    #
+    #     #audio_data_np_array = audio_tools.resample_audio(y_hat, 24000, sample_rate, target_channels=1,
+    #     #                                                 input_channels=1, dtype="float32")
+    #
+    #     #audio_data_16bit = np.int16(audio_data_np_array * 32767)  # Convert to 16-bit PCM
+    #
+    #     #buff = io.BytesIO()
+    #     #write_wav(buff, sample_rate, audio_data_16bit)
+    #
+    #     #buff.seek(0)
+    #     return y_hat
 
     def set_compute_device(self, device):
         self.compute_device_str = device
@@ -631,6 +661,7 @@ class F5TTS:
         vocoder_local_path = vocoder_paths[vocoder_name]
         self.vocoder = load_vocoder(vocoder_name=vocoder_name, is_local=True, local_path=vocoder_local_path, device=device)
 
+
     def tts(self, text, ref_audio=None, ref_text=None, remove_silence=True):
         print("TTS requested F5/E2 TTS")
         tts_volume = settings.GetOption("tts_volume")
@@ -697,7 +728,7 @@ class F5TTS:
             ref_audio = voices[voice]['ref_audio']
             ref_text = voices[voice]['ref_text']
 
-            audio, final_sample_rate, spectragram = infer_process(ref_audio, ref_text, gen_text, self.ema_model, self.vocoder, mel_spec_type=self.vocoder_name, speed=tts_speed, device=self.compute_device, nfe_step=64, show_info=None)
+            audio, final_sample_rate, spectragram = infer_process(ref_audio, ref_text, gen_text, self.ema_model, self.vocoder, mel_spec_type=self.vocoder_name, speed=tts_speed, device=self.compute_device, nfe_step=self.nfe_step, show_info=None)
             return_sample_rate = final_sample_rate
             generated_audio_segments.append(audio)
 
@@ -705,8 +736,10 @@ class F5TTS:
             print(f"TTS progress: {int((i+1) / len(chunks) * 100)}% ({i+1} of {len(chunks)} segments){estimate_time_full_str}")
 
         if generated_audio_segments:
-            #wave_path = Path(Path.cwd() / "temp_tts_f5.wav")
             final_wave = np.concatenate(generated_audio_segments)
+
+            #final_wave = np.frombuffer(final_wave, dtype=np.float32)
+            #final_wave = self.apply_vocos_on_audio(final_wave, sample_rate=return_sample_rate)
 
             if remove_silence:
                 final_wave = self.remove_silence_parts(final_wave, sample_rate=return_sample_rate)
@@ -758,7 +791,7 @@ class F5TTS:
     def return_wav_file_binary(self, audio, sample_rate=24000):
         # convert numpy array to wav file
         buff = io.BytesIO()
-        write(buff, sample_rate, audio)
+        write_wav(buff, sample_rate, audio)
 
         # call custom plugin event method
         plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio',

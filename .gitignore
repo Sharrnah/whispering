@@ -11,3 +11,5 @@ __pycache__
 ignorelist.custom.txt
 /Plugins/
 !/Plugins/__init__.py
+Models/TTS/F5TTS/third_party/BigVGAN/alias_free_activation/cuda/build/.ninja_log
+Models/TTS/F5TTS/third_party/BigVGAN/alias_free_activation/cuda/build/build.ninja
