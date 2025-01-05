@@ -77,7 +77,9 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
     else:
         if not alt_fallback and fallback_extract_func is None:
             try:
-                download(urls[0], filename=file_name, folder=extract_dir, sha256=checksum, retry_max=5)
+                import random
+                selected_url = random.choice(urls)
+                download(selected_url, filename=file_name, folder=extract_dir, sha256=checksum, retry_max=5)
                 if extract_format != "none":
                     with zipfile.ZipFile(str(local_dl_file), "r") as f:
                         f.extractall(extract_dir)
@@ -89,7 +91,9 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
                 success = False
         else:
             try:
-                download_file_normal(urls[0], extract_dir, checksum)
+                import random
+                selected_url = random.choice(urls)
+                download_file_normal(selected_url, extract_dir, checksum)
             except Exception as first_exception:
                 if len(urls) > 1:
                     download_successful = False

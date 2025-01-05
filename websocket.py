@@ -12,7 +12,6 @@ import base64
 
 import Utilities
 import audio_tools
-from audioprocessor import save_transcriptions
 import processmanager
 
 from Models.TextTranslation import texttranslate
@@ -449,7 +448,7 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
             Path(Path.cwd() / ("transcriptions_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv")).resolve())
         if "value" in msg_obj:
             save_file = msg_obj["value"]
-        save_transcriptions(file_path=save_file)
+        Utilities.save_transcriptions(file_path=save_file)
 
     if msg_obj["type"] == "quit":
         print("Received quit command.")

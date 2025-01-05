@@ -10,11 +10,8 @@ if __name__ == '__main__':
     import json
     import traceback
 
-    import Utilities
     import processmanager
     import atexit
-
-    from Models.TTS import tts
 
     # set environment variable CT2_CUDA_ALLOW_FP16 to 1 (before ctranslate2 is imported)
     # to allow using FP16 computation on GPU even if the device does not have efficient FP16 support.
@@ -500,17 +497,19 @@ if __name__ == '__main__':
 
         # initialize Integrated TTS
         try:
+            from Models.TTS import tts
             tts.init()
-            available_tts_models = tts.tts.list_models_indexed()
-            threading.Thread(
-               target=websocket.BroadcastMessage,
-               args=(json.dumps({"type": "available_tts_models", "data": available_tts_models}),)
-            ).start()
-            tts.tts.load()
-            threading.Thread(
-               target=websocket.BroadcastMessage,
-               args=(json.dumps({"type": "available_tts_voices", "data": tts.tts.list_voices()}),)
-            ).start()
+            if tts.tts is not None and not tts.failed:
+                available_tts_models = tts.tts.list_models_indexed()
+                threading.Thread(
+                   target=websocket.BroadcastMessage,
+                   args=(json.dumps({"type": "available_tts_models", "data": available_tts_models}),)
+                ).start()
+                tts.tts.load()
+                threading.Thread(
+                   target=websocket.BroadcastMessage,
+                   args=(json.dumps({"type": "available_tts_voices", "data": tts.tts.list_voices()}),)
+                ).start()
         except Exception as e:
             print(e)
 
