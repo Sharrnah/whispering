@@ -1,18 +1,18 @@
 # A unified script for inference process
 # Make adjustments inside functions, and consider both gradio and cli scripts if need to change func output format
-#import io
 import os
 import sys
-
-#from numpy.f2py.auxfuncs import throw_error
+from pathlib import Path
 
 os.environ["PYTOCH_ENABLE_MPS_FALLBACK"] = "1"  # for MPS device compatibility
-sys.path.append(f"{os.path.dirname(os.path.abspath(__file__))}/../third_party/BigVGAN/")
+#sys.path.append(f"{os.path.dirname(os.path.abspath(__file__))}/../third_party/BigVGAN/")
+
+cache_path = Path(Path.cwd() / ".cache" / "f5tts-cache" / "bigvgan")
+sys.path.append(str(cache_path))
 
 import hashlib
 import re
 import tempfile
-#from importlib.resources import files
 
 import matplotlib
 

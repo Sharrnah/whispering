@@ -4,11 +4,11 @@ import re
 import traceback
 from pathlib import Path
 
-import numpy
+#import numpy
 import numpy as np
-import soundfile as sf
+#import soundfile as sf
 import torch
-import torchaudio
+#import torchaudio
 from scipy.io.wavfile import write as write_wav
 
 import Plugins
@@ -429,7 +429,7 @@ class F5TTS:
                                                str(model_directory.resolve()),
                                                TTS_MODEL_LINKS[model_name]["checksum"],
                                                alt_fallback=False,
-                                               force_non_ui_dl=True,
+                                               force_non_ui_dl=False,
                                                fallback_extract_func=downloader.extract_zip,
                                                fallback_extract_func_args=(
                                                        str(Path(model_directory / zip_filename)),
