@@ -90,15 +90,17 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
                 print(e)
                 success = False
         else:
+            import random
+            selected_url = random.choice(urls)
             try:
-                import random
-                selected_url = random.choice(urls)
                 download_file_normal(selected_url, extract_dir, checksum)
             except Exception as first_exception:
                 if len(urls) > 1:
                     download_successful = False
                     last_exception = None
-                    for url in urls[1:]:
+                    # Remove the selected URL from the list
+                    remaining_urls = [url for url in urls if url != selected_url]
+                    for url in remaining_urls:
                         try:
                             download_file_simple(url, extract_dir, checksum)
                             download_successful = True
@@ -117,7 +119,6 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
                     print(first_exception)
             if fallback_extract_func is not None:
                 fallback_extract_func(*fallback_extract_func_args)
-
     return success
 
 

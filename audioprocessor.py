@@ -145,7 +145,7 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
     osc_ip = settings.GetOption("osc_ip")
     do_txt_translate = settings.GetOption("txt_translate")
     transcription_auto_save_file = settings.GetOption("transcription_auto_save_file")
-    transcription_auto_save_continous_text = settings.GetOption("transcription_auto_save_continous_text")
+    transcription_auto_save_continuous_text = settings.GetOption("transcription_auto_save_continuous_text")
 
     predicted_text = result.get('text').strip()
     result["type"] = "transcript"
@@ -217,7 +217,7 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
                 translation_text = ""
 
             Utilities.add_transcription(audio_timestamp, time.time_ns(), result["text"], translation_text,
-                              transcription_auto_save_continous_text, transcription_auto_save_file
+                                        transcription_auto_save_continuous_text, transcription_auto_save_file
                               )
 
         # send realtime processing data to websocket

@@ -89,7 +89,7 @@ whisper_apply_voice_markers: False,  # if enabled, Whisper will apply voice mark
 max_sentence_repetition: -1,  # set max sentence repetition in result (-1 = disabled)
 
 transcription_auto_save_file: "",  # set to filepath to save transcriptions. (empty or None to disable)
-transcription_auto_save_continous_text: False,  # set to save continous text line instead of CSV
+transcription_auto_save_continuous_text: False,  # set to save continuous text line instead of CSV
 transcription_save_audio_dir: "",  # set to filepath to save transcriptions wav files. (empty or None to disable)
 
 silence_cutting_enabled: True,

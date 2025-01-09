@@ -6,6 +6,7 @@ from faster_whisper import WhisperModel
 from pathlib import Path
 import os
 import downloader
+import settings
 from Models.Singleton import SingletonMeta
 
 MODEL_LINKS = {
@@ -1148,7 +1149,7 @@ class FasterWhisper(metaclass=SingletonMeta):
         segment_list = []
         for segment in result_segments:
             # large-v3 hallucination improvement by only checking no_speech_threshold
-            if segment.no_speech_prob > no_speech_threshold and "-v3" in self.loaded_model_size:
+            if settings.GetOption("only_no_speech_threshold_for_segments") and segment.no_speech_prob > no_speech_threshold:
                 continue
 
             #audio_data_numpy_split = audio_sample[int(segment.start * self.sample_rate):
