@@ -948,8 +948,13 @@ def needs_download(model: str, compute_type: str = "float32"):
         elif compute_type == "float16":
             compute_type = "float32"
             model_path = model_cache_path / f"{model}-ct2"
+        else:
+            compute_type = list(MODEL_LINKS[model].keys())[0]
+            if compute_type == "float32":
+                model_path = model_cache_path / f"{model}-ct2"
+            elif compute_type == "float16":
+                model_path = model_cache_path / f"{model}-ct2-fp16"
 
-    model_files = MODEL_LINKS[model][compute_type]["file_checksums"]
     required_files = ["model.bin", "tokenizer.json"]
     if not model_cache_path.exists() or not model_path.exists():
         return True
@@ -957,7 +962,6 @@ def needs_download(model: str, compute_type: str = "float32"):
         if not (model_path / file_name).is_file():
             return True
 
-    hash_checked_file = model_path / "hash_checked"
     expected_hashes = MODEL_LINKS[model][compute_type]["file_checksums"]
     actual_hashes = downloader.load_hashes(model_path)
 
@@ -992,6 +996,12 @@ def download_model(model: str, compute_type: str = "float32"):
         elif compute_type == "float16":
             compute_type = "float32"
             model_path = model_cache_path / f"{model}-ct2"
+        else:
+            compute_type = list(MODEL_LINKS[model].keys())[0]
+            if compute_type == "float32":
+                model_path = model_cache_path / f"{model}-ct2"
+            elif compute_type == "float16":
+                model_path = model_cache_path / f"{model}-ct2-fp16"
 
     pretrained_lang_model_file = model_path / "model.bin"
     file_checksums_check_need_dl = False
@@ -1092,6 +1102,12 @@ class FasterWhisper(metaclass=SingletonMeta):
                 model_folder_name = model + "-ct2-fp16"
             elif compute_type == "float16":
                 model_folder_name = model + "-ct2"
+            else:
+                compute_type = list(MODEL_LINKS[model].keys())[0]
+                if compute_type == "float32":
+                    model_folder_name = model + "-ct2"
+                elif compute_type == "float16":
+                    model_folder_name = model + "-ct2-fp16"
 
         # load user custom model
         if model == "custom":
@@ -1119,7 +1135,7 @@ class FasterWhisper(metaclass=SingletonMeta):
                    initial_prompt, logprob_threshold, no_speech_threshold, temperature, beam_size,
                    word_timestamps, without_timestamps, patience, length_penalty: float = 1,
                    prompt_reset_on_temperature: float = 0.5, repetition_penalty: float = 1,
-                   no_repeat_ngram_size: int = 0) -> dict:
+                   no_repeat_ngram_size: int = 0, multilingual: bool = False) -> dict:
 
         # large-v3 fix see https://github.com/SYSTRAN/faster-whisper/issues/777
         compression_ratio_threshold = 2.4
@@ -1129,6 +1145,7 @@ class FasterWhisper(metaclass=SingletonMeta):
 
         result_segments, audio_info = self.model.transcribe(audio_sample, task=task,
                                                             language=language,
+                                                            multilingual=multilingual,
                                                             condition_on_previous_text=condition_on_previous_text,
                                                             prompt_reset_on_temperature=prompt_reset_on_temperature,
                                                             initial_prompt=initial_prompt,

@@ -186,6 +186,10 @@ class WhisperVoiceMarker(metaclass=SingletonMeta):
         repetition_penalty = kwargs["repetition_penalty"]
         no_repeat_ngram_size = kwargs["no_repeat_ngram_size"]
 
+        multilingual = None
+        if "multilingual" in kwargs:
+            multilingual = kwargs["multilingual"]
+
         # possibly convert language to marker language code
         marker_language = whisper_language
         marker_language = iso3_to_iso_1(marker_language)
@@ -197,21 +201,27 @@ class WhisperVoiceMarker(metaclass=SingletonMeta):
         audio_sample = self.apply_voice_markers(audio_sample, marker_language)
 
         if stt_model.lower() == "whisper":
-            result = self.audio_model.transcribe(audio_sample, task=whisper_task,
-                                                 language=whisper_language,
-                                                 condition_on_previous_text=whisper_condition_on_previous_text,
-                                                 prompt_reset_on_temperature=prompt_reset_on_temperature,
-                                                 initial_prompt=whisper_initial_prompt,
-                                                 logprob_threshold=whisper_logprob_threshold,
-                                                 no_speech_threshold=whisper_no_speech_threshold,
-                                                 temperature=whisper_temperature_fallback_option,
-                                                 beam_size=whisper_beam_size,
-                                                 word_timestamps=whisper_word_timestamps,
-                                                 without_timestamps=whisper_faster_without_timestamps,
-                                                 patience=whisper_faster_beam_search_patience,
-                                                 length_penalty=whisper_faster_length_penalty,
-                                                 repetition_penalty=repetition_penalty,
-                                                 no_repeat_ngram_size=no_repeat_ngram_size)
+            transcribe_args = {
+                "task": whisper_task,
+                "language": whisper_language,
+                "condition_on_previous_text": whisper_condition_on_previous_text,
+                "prompt_reset_on_temperature": prompt_reset_on_temperature,
+                "initial_prompt": whisper_initial_prompt,
+                "logprob_threshold": whisper_logprob_threshold,
+                "no_speech_threshold": whisper_no_speech_threshold,
+                "temperature": whisper_temperature_fallback_option,
+                "beam_size": whisper_beam_size,
+                "word_timestamps": whisper_word_timestamps,
+                "without_timestamps": whisper_faster_without_timestamps,
+                "patience": whisper_faster_beam_search_patience,
+                "length_penalty": whisper_faster_length_penalty,
+                "repetition_penalty": repetition_penalty,
+                "no_repeat_ngram_size": no_repeat_ngram_size,
+            }
+            if multilingual is not None:
+                transcribe_args["multilingual"] = multilingual
+
+            result = self.audio_model.transcribe(audio_sample, **transcribe_args)
         elif stt_model.lower() == "seamless_m4t":
             result = self.audio_model.transcribe(audio_sample,
                                                  source_lang=whisper_language,

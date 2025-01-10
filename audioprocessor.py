@@ -664,6 +664,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                 beam_size=whisper_beam_size,
                                                 word_timestamps=whisper_word_timestamps)
         elif settings.GetOption("stt_type") == "faster_whisper":
+
             # faster whisper
             if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
                 if not settings.GetOption("whisper_apply_voice_markers"):
@@ -681,7 +682,8 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                              patience=whisper_faster_beam_search_patience,
                                                              length_penalty=whisper_faster_length_penalty,
                                                              repetition_penalty=repetition_penalty,
-                                                             no_repeat_ngram_size=no_repeat_ngram_size)
+                                                             no_repeat_ngram_size=no_repeat_ngram_size,
+                                                             multilingual=settings.GetOption("language_detection_on_each_segment"))
                 else:
                     marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_model)
                     result = marker_audio_tool.voice_marker_transcribe(audio=audio_data_numpy,
@@ -700,7 +702,8 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                                        patience=whisper_faster_beam_search_patience,
                                                                        length_penalty=whisper_faster_length_penalty,
                                                                        repetition_penalty=repetition_penalty,
-                                                                       no_repeat_ngram_size=no_repeat_ngram_size)
+                                                                       no_repeat_ngram_size=no_repeat_ngram_size,
+                                                                       multilingual=settings.GetOption("language_detection_on_each_segment"))
                     del marker_audio_tool
 
             else:
@@ -719,7 +722,8 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                     patience=whisper_faster_beam_search_patience,
                                                     length_penalty=whisper_faster_length_penalty,
                                                     repetition_penalty=repetition_penalty,
-                                                    no_repeat_ngram_size=no_repeat_ngram_size)
+                                                    no_repeat_ngram_size=no_repeat_ngram_size,
+                                                    multilingual=settings.GetOption("language_detection_on_each_segment"))
                 else:
                     print("Applying voice markers.")
                     marker_audio_tool = whisper_audio_markers.WhisperVoiceMarker(audio_model)
@@ -739,7 +743,8 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                                                        patience=whisper_faster_beam_search_patience,
                                                                        length_penalty=whisper_faster_length_penalty,
                                                                        repetition_penalty=repetition_penalty,
-                                                                       no_repeat_ngram_size=no_repeat_ngram_size)
+                                                                       no_repeat_ngram_size=no_repeat_ngram_size,
+                                                                       multilingual=settings.GetOption("language_detection_on_each_segment"))
                     del marker_audio_tool
         elif settings.GetOption("stt_type") == "seamless_m4t":
             # facebook seamless M4T
