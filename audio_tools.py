@@ -207,31 +207,30 @@ def _resample(smp, scale=1.0):
     )
 
 
-def _interleave(left, right):
-    """Given two separate arrays, return a new interleaved array
+def _interleave(*channels):
+    """Given multiple separate arrays, return a new interleaved array
 
-    This function is useful for converting separate left/right audio
-    streams into one stereo audio stream.  Input arrays and returned
-    array are Numpy arrays.
+    This function is useful for converting separate audio streams into one multi-channel audio stream.
+    Input arrays and returned array are Numpy arrays.
 
     See also: uninterleave()
 
     """
-    return numpy.ravel(numpy.vstack((left, right)), order='F')
+    return numpy.ravel(numpy.vstack(channels), order='F')
 
 
-def _uninterleave(data):
-    """Given a stereo array, return separate left and right streams
+def _uninterleave(data, num_channels=2):
+    """Given an interleaved array, return separate streams for each channel
 
-    This function converts one array representing interleaved left and
-    right audio streams into separate left and right arrays.  The return
-    value is a list of length two.  Input array and output arrays are all
-    Numpy arrays.
+    This function converts one array representing interleaved audio streams
+    into separate arrays for each channel. The return value is a list of
+    Numpy arrays, each representing a channel.
 
     See also: interleave()
 
     """
-    return data.reshape(2, len(data) // 2, order='F')
+    reshaped_data = data.reshape(num_channels, -1, order='F')
+    return [reshaped_data[i] for i in range(num_channels)]
 
 
 def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_channels=None, input_channels=None, dtype="int16"):
