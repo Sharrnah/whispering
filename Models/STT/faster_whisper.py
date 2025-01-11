@@ -401,21 +401,16 @@ MODEL_LINKS = {
     "large-distilled-v3.en": {
         "float32": {
             "urls": [
-                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/large-distilled-v3.en-ct2.zip",
-                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/large-distilled-v3.en-ct2.zip",
-                "https://s3.libs.space:9000/ai-models/Whisper-CT2/large-distilled-v3.en-ct2.zip",
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/new1/large-distilled-v3.en-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/new1/large-distilled-v3.en-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/new1/large-distilled-v3.en-ct2.zip",
             ],
-            "checksum": "a1b202a5a281a5d488768b58961b5d9cfe4505136623f4aefb03478e43918e52",
+            "checksum": "cbbb7bb9b4d933746909551be465cd448571036bc684e2b8db85c7e418fcb07f",
             "file_checksums": {
-                "added_tokens.json": "3c51f66c4c21f9e126970078f11ae77a78c74aee8df606ee9daba86e467108e0",
                 "config.json": "90c55f775cc4e0bb17293d0bf12f96557a486f20dea886fabd8e6075a3588b21",
-                "merges.txt": "2df2990a395e35e8dfbc7511e08c12d56018d8d04691e0133e5d63b21e154dc6",
-                "model.bin": "8ea78a126adc145e020901f8891ad3536684e2754fcae77fc241f628298fd785",
-                "normalizer.json": "bf1c507dc8724ca9cf9903640dacfb69dae2f00edee4f21ceba106a7392f26dd",
+                "model.bin": "b79368e19b6623813609431a6e5ee309a71506701ebc49fd7820e692dec7c5f5",
                 "preprocessor_config.json": "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711",
-                "special_tokens_map.json": "baea4ea09372eb4fca86b4e4346139fd73cb807d5087e9de0948e971739c3e74",
-                "tokenizer_config.json": "844b642c73a91359722f47b35705f7174686df33d252695d8572cf9ac03a6389",
-                "vocab.json": "e2aa043ef015641d363d8288e7c241c85e36a5c761fb303598e0710233344387",
+                "tokenizer.json": "6d8cbd7cd0d8d5815e478dac67b85a26bbe77c1f5e0c6d76d1ce2abc0e5f21ca",
                 "vocabulary.json": "c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1"
             }
         },
