@@ -933,7 +933,7 @@ TOKENIZER_LINKS = {
 def needs_download(model: str, compute_type: str = "float32"):
     # return True since custom models don't need downloading
     if model == "custom":
-        return True
+        return False
 
     model_cache_path = Path(".cache/whisper")
     model_path = model_cache_path / f"{model}-ct2"
@@ -1097,7 +1097,7 @@ class FasterWhisper(metaclass=SingletonMeta):
         if compute_type == "float16" or compute_type == "int8_float16" or compute_type == "int16" or compute_type == "int8":
             model_folder_name = model + "-ct2-fp16"
         # special case for models that are only available in one precision (as float16 vs float32 showed no difference in large-v3 and distilled versions)
-        if compute_type not in MODEL_LINKS[model]:
+        if model != "custom" and compute_type not in MODEL_LINKS[model]:
             if compute_type == "float32":
                 model_folder_name = model + "-ct2-fp16"
             elif compute_type == "float16":
