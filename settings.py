@@ -92,6 +92,7 @@ class SettingsManager:
             "whisper_apply_voice_markers": False,  # if enabled, Whisper will apply voice markers.
             "max_sentence_repetition": -1,  # set max sentence repetition in result (-1 = disabled)
             "only_no_speech_threshold_for_segments": False,  # if enabled, only use no_speech_threshold for silence detection in segments.
+            "language_detection_on_each_segment": False,  # Perform language detection on each segment. (faster-whisper only)
 
             "transcription_auto_save_file": "",  # set to filepath to save transcriptions. (empty or None to disable)
             "transcription_auto_save_continuous_text": False,  # set to save continuous text line instead of CSV
