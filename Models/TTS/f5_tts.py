@@ -255,6 +255,19 @@ TTS_MODEL_LINKS = {
         },
         "path": "F5-TTS_Malaysian",
     },
+    "F5-TTS_Greek": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/f5-tts/models/F5-TTS_Greek.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/f5-tts/models/F5-TTS_Greek.zip",
+            "https://s3.libs.space:9000/ai-models/f5-tts/models/F5-TTS_Greek.zip",
+        ],
+        "checksum": "0a453c321de7a1be2b5041180f30566e3392cbb404227560593522a69a6a83b1",
+        "file_checksums": {
+            "model.safetensors": "3051d025dc0fbb70733098fc9fd0d0a516bb404921002c4c1b9bf7283a00effa",
+            "vocab.txt": "7eaef18c7b89ae0c6ac52a1d6ff6e121e396cc87827f88eaf032f44150842a78"
+        },
+        "path": "F5-TTS_Greek",
+    },
     # Vocoders
     "vocos": {
         "urls": [
@@ -344,6 +357,7 @@ model_list = {
     "English & Chinese": ["F5-TTS", "E2-TTS", "F5-TTS-bigvgan"],
     "French": ["F5-TTS_French"],
     "German": ["F5-TTS_German", "F5-TTS_German-bigvgan"],
+    "Greek": ["F5-TTS_Greek"],
     "Italian": ["F5-TTS_Italian"],
     "Japanese": ["F5-TTS_Japanese"],
     "Spanish": ["F5-TTS_Spanish"],
