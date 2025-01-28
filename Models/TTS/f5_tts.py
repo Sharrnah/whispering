@@ -676,7 +676,7 @@ class F5TTS:
         self.vocoder = load_vocoder(vocoder_name=vocoder_name, is_local=True, local_path=vocoder_local_path, device=device)
 
 
-    def tts(self, text, ref_audio=None, ref_text=None, remove_silence=True):
+    def tts(self, text, ref_audio=None, ref_text=None, remove_silence=True, silence_after_segments=0.2):
         print("TTS requested F5/E2 TTS")
         tts_volume = settings.GetOption("tts_volume")
         tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
@@ -744,6 +744,12 @@ class F5TTS:
 
             audio, final_sample_rate, spectragram = infer_process(ref_audio, ref_text, gen_text, self.ema_model, self.vocoder, mel_spec_type=self.vocoder_name, speed=tts_speed, device=self.compute_device, nfe_step=self.nfe_step, show_info=None)
             return_sample_rate = final_sample_rate
+
+            # Add silence when silence_after_segments > 0 and not last segment
+            if silence_after_segments > 0 and i < len(chunks) - 1:
+                silence_samples = int(silence_after_segments * return_sample_rate)
+                audio = np.concatenate([audio, np.zeros(silence_samples, dtype=np.float32)])
+
             generated_audio_segments.append(audio)
 
             estimate_time_full_str = estimate_remaining_time(len(chunks), segment_times, 3)
