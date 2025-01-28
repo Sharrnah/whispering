@@ -1,6 +1,7 @@
 import io
 import os
 import re
+import time
 import traceback
 from pathlib import Path
 
@@ -742,6 +743,10 @@ class F5TTS:
             ref_audio = voices[voice]['ref_audio']
             ref_text = voices[voice]['ref_text']
 
+            start_time = time.time()
+            estimate_time_full_str = estimate_remaining_time(len(chunks), segment_times, 3)
+            print(f"\nTTS progress: {int((i) / len(chunks) * 100)}% ({i} of {len(chunks)} segments){estimate_time_full_str}")
+
             audio, final_sample_rate, spectragram = infer_process(ref_audio, ref_text, gen_text, self.ema_model, self.vocoder, mel_spec_type=self.vocoder_name, speed=tts_speed, device=self.compute_device, nfe_step=self.nfe_step, show_info=None)
             return_sample_rate = final_sample_rate
 
@@ -752,8 +757,8 @@ class F5TTS:
 
             generated_audio_segments.append(audio)
 
-            estimate_time_full_str = estimate_remaining_time(len(chunks), segment_times, 3)
-            print(f"TTS progress: {int((i+1) / len(chunks) * 100)}% ({i+1} of {len(chunks)} segments){estimate_time_full_str}")
+            end_time = time.time()
+            segment_times.append(end_time - start_time)
 
         if generated_audio_segments:
             final_wave = np.concatenate(generated_audio_segments)
