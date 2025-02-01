@@ -618,7 +618,7 @@ def calculate_lufs(audio, sample_rate):
 
 
 # Function to normalize the audio based on LUFS
-def normalize_audio_lufs(audio, sample_rate, lower_threshold=-24.0, upper_threshold=-16.0, gain_factor=2.0,
+def normalize_audio_lufs(audio, sample_rate, lower_threshold=-24.0, upper_threshold=-16.0, gain_factor=1.3,
                          verbose=False):
     block_size_samples = int(
         sample_rate * 0.400)  # calculate block size in samples. (0.400 is the default block size of pyloudnorm)

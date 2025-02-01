@@ -677,7 +677,7 @@ class F5TTS:
         self.vocoder = load_vocoder(vocoder_name=vocoder_name, is_local=True, local_path=vocoder_local_path, device=device)
 
 
-    def tts(self, text, ref_audio=None, ref_text=None, remove_silence=True, silence_after_segments=0.2):
+    def tts(self, text, ref_audio=None, ref_text=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         print("TTS requested F5/E2 TTS")
         tts_volume = settings.GetOption("tts_volume")
         tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
@@ -768,6 +768,12 @@ class F5TTS:
 
             if remove_silence:
                 final_wave = self.remove_silence_parts(final_wave, sample_rate=return_sample_rate)
+
+            if normalize:
+                final_wave, _ = audio_tools.normalize_audio_lufs(
+                    final_wave, return_sample_rate, -24.0, -16.0,
+                    1.3, verbose=True
+                )
 
             # change volume
             if tts_volume != 1.0:
