@@ -65,6 +65,81 @@ def tts_request(msgObj, websocket):
         print("TTS failed")
 
 
+def tts_request_last(msgObj, websocket):
+    path = ""
+    if "path" in msgObj["value"] and msgObj["value"]["path"] != "":
+        path = msgObj["value"]["path"]
+
+    if hasattr(tts.tts, 'get_last_generation'):
+        tts_wav, sample_rate = tts.tts.get_last_generation()
+    else:
+        print("TTS does not support get_last_generation")
+        return
+
+    if tts_wav is not None:
+        if msgObj["value"]["to_device"]:
+            if "device_index" in msgObj["value"]:
+                tts.tts.play_audio(tts_wav, msgObj["value"]["device_index"])
+            else:
+                tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
+        else:
+            # send raw wav data to non UI clients (like html websocket pages, for backwards compatibility)
+            if websocket is not None and websocket != UI_CONNECTED["websocket"]:
+                AnswerMessage(websocket, json.dumps(
+                    {"type": "tts_result", "wav_data": tts_wav.tolist(), "sample_rate": sample_rate}))
+            if msgObj["value"]["download"]:
+                wav_data = tts.tts.return_wav_file_binary(tts_wav)
+                if path is not None and path != '':
+                    # write wav_data to file in path
+                    try:
+                        with open(path, "wb") as f:
+                            f.write(wav_data)
+                        print("100% Finished. TTS file saved to:", path)
+                    except Exception as e:
+                        print("Failed to save TTS file:", e)
+                        traceback.print_exc()
+                else:
+                    wav_data = base64.b64encode(wav_data).decode('utf-8')
+                    AnswerMessage(websocket, json.dumps({"type": "tts_save", "wav_data": wav_data}))
+    else:
+        print("No TTS generation found")
+
+def tts_request_last_plugin(msgObj, websocket):
+    path = ""
+    if "path" in msgObj["value"] and msgObj["value"]["path"] != "":
+        path = msgObj["value"]["path"]
+
+    tts_wav, sample_rate = None, None
+
+    for plugin_inst in Plugins.plugins:
+        if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'get_last_generation'):
+            try:
+                tts_wav, sample_rate = plugin_inst.get_last_generation()
+            except Exception as e:
+                print(f"Plugin TTS failed in Plugin {plugin_inst.__class__.__name__}:", e)
+                traceback.print_exc()
+
+    if tts_wav is not None:
+        # send raw wav data to non UI clients (like html websocket pages, for backwards compatibility)
+        if websocket is not None and websocket != UI_CONNECTED["websocket"]:
+            AnswerMessage(websocket, json.dumps(
+                {"type": "tts_result", "wav_data": tts_wav.tolist(), "sample_rate": sample_rate}))
+        if path is not None and path != '':
+            # write wav_data to file in path
+            try:
+                with open(path, "wb") as f:
+                    f.write(tts_wav)
+                print("100% Finished. TTS file saved to:", path)
+            except Exception as e:
+                print("Failed to save TTS file:", e)
+                traceback.print_exc()
+        else:
+            wav_data = base64.b64encode(tts_wav).decode('utf-8')
+            AnswerMessage(websocket, json.dumps({"type": "tts_save", "wav_data": wav_data}))
+    else:
+        print("No TTS generation found")
+
+
 def translate_request(msgObj, websocket):
     def send_osc_request(msg_obj, websocket):
         # delay sending message if it is the final audio and until TTS starts playing
@@ -363,6 +438,7 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
             exclude_client=websocket)  # broadcast updated settings to all clients
         # reload tts voices if tts model changed
         if msg_obj["name"] == "tts_model":
+            print("Loading new TTS model. Please wait.")
             tts.tts.load()
             server_instance.broadcast_message(
                 json.dumps({"type": "available_tts_voices", "data": tts.tts.list_voices()}))
@@ -380,6 +456,14 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
     if msg_obj["type"] == "ocr_req":
         ocr_thread = threading.Thread(target=ocr_req, args=(msg_obj, websocket))
         ocr_thread.start()
+
+    if msg_obj["type"] == "tts_req_last":
+        if tts.init():
+            tts_thread = threading.Thread(target=tts_request_last, args=(msg_obj, websocket))
+            tts_thread.start()
+        else:
+            tts_thread = threading.Thread(target=tts_request_last_plugin, args=(msg_obj, websocket))
+            tts_thread.start()
 
     if msg_obj["type"] == "tts_req":
         if tts.init():

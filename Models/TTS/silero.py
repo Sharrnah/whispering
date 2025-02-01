@@ -201,6 +201,8 @@ class Silero:
     last_speaker = None
     last_voice = str(Path(voices_path / "last_voice.pt").resolve())
 
+    last_generation = {"audio": None, "sample_rate": None}
+
     def __init__(self):
         global failed
         self.device = "cuda" if settings.GetOption("tts_ai_device") == "cuda" or settings.GetOption(
@@ -387,6 +389,9 @@ class Silero:
 
         return text
 
+    def get_last_generation(self):
+        return self.last_generation["audio"], self.last_generation["sample_rate"]
+
     def tts(self, text):
         voice_path = None
         if settings.GetOption('tts_voice') == 'last':
@@ -439,6 +444,9 @@ class Silero:
         except Exception as e:
             print(e)
             return None, None
+
+        # save last generation in memory
+        self.last_generation = {"audio": audio, "sample_rate": self.sample_rate}
 
         return audio, self.sample_rate
 

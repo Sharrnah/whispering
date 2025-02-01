@@ -398,6 +398,8 @@ class F5TTS:
 
     currently_downloading = False
 
+    last_generation = {"audio": None, "sample_rate": None}
+
     config = {
         "model": "F5-TTS",
         #"model": "E2-TTS",
@@ -676,6 +678,8 @@ class F5TTS:
         vocoder_local_path = vocoder_paths[vocoder_name]
         self.vocoder = load_vocoder(vocoder_name=vocoder_name, is_local=True, local_path=vocoder_local_path, device=device)
 
+    def get_last_generation(self):
+        return self.last_generation["audio"], self.last_generation["sample_rate"]
 
     def tts(self, text, ref_audio=None, ref_text=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         print("TTS requested F5/E2 TTS")
@@ -778,6 +782,9 @@ class F5TTS:
             # change volume
             if tts_volume != 1.0:
                 final_wave = audio_tools.change_volume(final_wave, tts_volume)
+
+            # save last generation in memory
+            self.last_generation = {"audio": final_wave, "sample_rate": return_sample_rate}
 
             return final_wave, return_sample_rate
             # with open(wave_path, "wb") as f:
