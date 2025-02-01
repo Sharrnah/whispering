@@ -18,5 +18,12 @@ wget -P "${WORKDIR}/.cache/nltk/tokenizers" https://s3.libs.space:9000/ai-models
 unzip -o ${WORKDIR}/.cache/nltk/tokenizers/punkt.zip -d ${WORKDIR}/.cache/nltk/tokenizers
 rm ${WORKDIR}/.cache/nltk/tokenizers/punkt.zip
 
+# prepare nltk tokenizers before building using pyinstaller
+mkdir -p ${WORKDIR}/.cache/
+mkdir -p ${WORKDIR}/.cache/nltk/tokenizers/
+wget -P "${WORKDIR}/.cache/nltk/tokenizers" https://s3.libs.space:9000/ai-models/nltk/tokenizers/punkt_tab.zip
+unzip -o ${WORKDIR}/.cache/nltk/tokenizers/punkt_tab.zip -d ${WORKDIR}/.cache/nltk/tokenizers
+rm ${WORKDIR}/.cache/nltk/tokenizers/punkt_tab.zip
+
 mkdir -p ${WORKDIR}/.cache/nltk/corpora/
 wget -P "${WORKDIR}/.cache/nltk/corpora" https://s3.libs.space:9000/ai-models/nltk/corpora/wordnet.zip

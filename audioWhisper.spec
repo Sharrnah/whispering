@@ -128,6 +128,10 @@ punkt_path_options = [
     r'C:\src\.cache\nltk\tokenizers\punkt',
     workdir + r'\.cache\nltk\tokenizers\punkt',
 
+    r'.cache/nltk/tokenizers/punkt_tab',
+    r'C:\src\.cache\nltk\tokenizers\punkt_tab',
+    workdir + r'\.cache\nltk\tokenizers\punkt_tab',
+
     r'.cache/nltk/corpora',
     r'C:\src\.cache\nltk\corpora',
     workdir + r'\.cache\nltk\corpora',
@@ -135,6 +139,7 @@ punkt_path_options = [
 for path_option in punkt_path_options:
     if os.path.exists(path_option):
         datas.append((path_option, r'./nltk_data/tokenizers/punkt'))
+        datas.append((path_option, r'./nltk_data/tokenizers/punkt_tab'))
         datas.append((path_option, r'./nltk_data/corpora'))
         break  # Exit the loop once we find the existing path
 

@@ -112,9 +112,9 @@ def tts_request_last_plugin(msgObj, websocket):
     tts_wav, sample_rate = None, None
 
     for plugin_inst in Plugins.plugins:
-        if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'get_last_generation'):
+        if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'tts_get_last_generation'):
             try:
-                tts_wav, sample_rate = plugin_inst.get_last_generation()
+                tts_wav, sample_rate = plugin_inst.tts_get_last_generation()
             except Exception as e:
                 print(f"Plugin TTS failed in Plugin {plugin_inst.__class__.__name__}:", e)
                 traceback.print_exc()

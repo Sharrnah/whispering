@@ -365,6 +365,8 @@ class Silero:
         if self.device == "cpu":
             torch.set_num_threads(4)
 
+        print(f"Model silero_tts loaded successfully.")
+
         return load_error
 
     def save_voice(self, voice_path=last_voice):
@@ -437,7 +439,7 @@ class Silero:
                 audio = audio_tools.change_volume(audio, tts_volume)
 
             # call custom plugin event method
-            plugin_audio = Plugins.plugin_custom_event_call('silero_tts_after_audio', {'audio': audio})
+            plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': audio, 'sample_rate': self.sample_rate})
             if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
                 audio = plugin_audio['audio']
 
