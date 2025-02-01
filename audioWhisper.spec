@@ -11,7 +11,7 @@ binaries = []
 # Collect dynamic libraries from onnxruntime
 binaries= collect_dynamic_libs('onnxruntime', destdir='onnxruntime/capi')
 
-hiddenimports = ['torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers.models.nllb', 'sentencepiece', 'df.deepfilternet3', 'bitsandbytes', 'faiss', 'faiss-cpu', 'praat-parselmouth', 'parselmouth', 'pyworld', 'torchcrepe', 'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio', 'pyannote.pipeline', 'noisereduce', 'frozendict', 'torch_directml', 'x_transformers', 'wandb', 'wandb_gql']
+hiddenimports = ['torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers.models.nllb', 'sentencepiece', 'df.deepfilternet3', 'bitsandbytes', 'faiss', 'faiss-cpu', 'praat-parselmouth', 'parselmouth', 'pyworld', 'torchcrepe', 'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio', 'pyannote.pipeline', 'pyloudnorm', 'future', 'noisereduce', 'frozendict', 'torch_directml', 'x_transformers', 'wandb', 'wandb_gql']
 datas += collect_data_files('torch', include_py_files=True)
 datas += collect_data_files('whisper')
 datas += collect_data_files('pykakasi')
@@ -32,6 +32,7 @@ datas += copy_metadata('huggingface-hub')
 datas += copy_metadata('safetensors')
 datas += copy_metadata('pyyaml')
 datas += copy_metadata('pyloudnorm')
+datas += copy_metadata('future')
 datas += copy_metadata('nltk')
 datas += copy_metadata('noisereduce')
 hiddenimports += collect_submodules('fairseq')
@@ -125,11 +126,16 @@ workdir = "C:" + workdir  # Now workdir = "C:\drone\src"
 punkt_path_options = [
     r'.cache/nltk/tokenizers/punkt',
     r'C:\src\.cache\nltk\tokenizers\punkt',
-    workdir + r'\.cache\nltk\tokenizers\punkt'
+    workdir + r'\.cache\nltk\tokenizers\punkt',
+
+    r'.cache/nltk/corpora',
+    r'C:\src\.cache\nltk\corpora',
+    workdir + r'\.cache\nltk\corpora',
 ]
 for path_option in punkt_path_options:
     if os.path.exists(path_option):
         datas.append((path_option, r'./nltk_data/tokenizers/punkt'))
+        datas.append((path_option, r'./nltk_data/corpora'))
         break  # Exit the loop once we find the existing path
 
 # add local module

@@ -54,13 +54,14 @@ mss==7.0.1
 scipy==1.10.1
 num2words==0.5.13
 onnxruntime==1.18.1
-requests==2.31.0
+requests==2.32.3
 # downgradea of scikit-image to v1.19.3 to prevent https://github.com/scikit-image/scikit-image/issues/6784
 scikit-image==v0.22.0
 
 deepfilternet==0.5.6
 pyloudnorm
-nltk
+future
+nltk==3.9
 
 # NVIDIA Nemo (Canary) dependency
 Cython==3.0.10
@@ -79,6 +80,9 @@ frozendict==2.4.4
 
 # speaker diarization
 pyannote.audio==3.2.0
+
+# decoder for wav2vec_bert
+pyctcdecode==0.5.0
 
 #RVC dependencies
 #fairseq @ https://github.com/Sharrnah/fairseq/archive/refs/heads/main.zip
