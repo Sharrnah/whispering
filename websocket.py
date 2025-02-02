@@ -439,9 +439,14 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
         # reload tts voices if tts model changed
         if msg_obj["name"] == "tts_model":
             print("Loading new TTS model. Please wait.")
-            tts.tts.load()
-            server_instance.broadcast_message(
-                json.dumps({"type": "available_tts_voices", "data": tts.tts.list_voices()}))
+            def tts_load():
+                if hasattr(tts.tts, 'load'):
+                    tts.tts.load()
+                if hasattr(tts.tts, 'list_voices'):
+                    server_instance.broadcast_message(
+                        json.dumps({"type": "available_tts_voices", "data": tts.tts.list_voices()}))
+            tts_load = threading.Thread(target=tts_load)
+            tts_load.start()
         if msg_obj["name"] == "osc_min_time_between_messages":
             VRC_OSCLib.set_min_time_between_messages(msg_obj["value"])
 
