@@ -544,6 +544,9 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
             save_file = msg_obj["value"]
         Utilities.save_transcriptions(file_path=save_file)
 
+    if msg_obj["type"] == "clear_transcription" and msg_obj["value"]:
+        Utilities.clear_transcriptions()
+
     if msg_obj["type"] == "quit":
         print("Received quit command.")
         processmanager.cleanup_subprocesses()

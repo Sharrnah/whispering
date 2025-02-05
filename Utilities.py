@@ -75,3 +75,8 @@ def save_transcriptions(file_path: str):
             end_time_str = ns_to_datetime(end_time)
             csv_writer.writerow([start_time_str, end_time_str, transcription, translation])
         transcription_file.close()
+
+def clear_transcriptions():
+    global transcriptions_list
+    with transcriptions_list_lock:
+        transcriptions_list = {}
