@@ -127,21 +127,33 @@ punkt_path_options = [
     r'.cache/nltk/tokenizers/punkt',
     r'C:\src\.cache\nltk\tokenizers\punkt',
     workdir + r'\.cache\nltk\tokenizers\punkt',
-
-    r'.cache/nltk/tokenizers/punkt_tab',
-    r'C:\src\.cache\nltk\tokenizers\punkt_tab',
-    workdir + r'\.cache\nltk\tokenizers\punkt_tab',
-
-    r'.cache/nltk/corpora',
-    r'C:\src\.cache\nltk\corpora',
-    workdir + r'\.cache\nltk\corpora',
 ]
 for path_option in punkt_path_options:
     if os.path.exists(path_option):
         datas.append((path_option, r'./nltk_data/tokenizers/punkt'))
+        break  # Exit the loop once we find the existing path
+
+
+punkt_tab_path_options = [
+    r'.cache/nltk/tokenizers/punkt_tab',
+    r'C:\src\.cache\nltk\tokenizers\punkt_tab',
+    workdir + r'\.cache\nltk\tokenizers\punkt_tab',
+]
+for path_option in punkt_tab_path_options:
+    if os.path.exists(path_option):
         datas.append((path_option, r'./nltk_data/tokenizers/punkt_tab'))
+        break  # Exit the loop once we find the existing path
+
+corpora_path_options = [
+    r'.cache/nltk/corpora',
+    r'C:\src\.cache\nltk\corpora',
+    workdir + r'\.cache\nltk\corpora',
+]
+for path_option in corpora_path_options:
+    if os.path.exists(path_option):
         datas.append((path_option, r'./nltk_data/corpora'))
         break  # Exit the loop once we find the existing path
+
 
 # add local module
 #datas.append((r'./Models/TTS/F5TTS', r'Models.TTS.F5TTS'))
