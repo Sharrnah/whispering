@@ -162,7 +162,7 @@ class SettingsManager:
             "tts_ai_device": "cpu",  # can be "auto", "cuda" or "cpu".
             "tts_answer": False,  # send whisper results to TTS engine
             "tts_model": ["en", "v3_en"],  # TTS language and model to use
-            "tts_voice": "en_0",  # TTS voice (one of silero tts voices, or "last" to use last used voice)
+            "tts_voice": "en_1",  # TTS voice (one of silero tts voices, or "last" to use last used voice)
             "tts_prosody_rate": "",  # TTS voice speed. Can be "x-slow", "slow", "medium", "fast", "x-fast" or "" for default.
             "tts_prosody_pitch": "",  # TTS voice pitch. Can be "x-low", "low", "medium", "high", "x-high" or "" for default.
             "tts_use_secondary_playback": False,  # Play TTS audio to a secondary audio device at the same time.

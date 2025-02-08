@@ -400,6 +400,8 @@ class F5TTS:
 
     last_generation = {"audio": None, "sample_rate": None}
 
+    voice_list = []
+
     config = {
         "model": "F5-TTS",
         #"model": "E2-TTS",
@@ -594,6 +596,9 @@ class F5TTS:
         return tuple([{"language": language, "models": models} for language, models in model_list.items()])
 
     def _get_voices(self):
+        return self.voice_list
+
+    def update_voices(self):
         voices_path = Path(cache_path / "voices")
         # find all voices that have both a .wav and .txt file
         voice_files = [f.stem for f in voices_path.iterdir() if f.is_file() and f.suffix == ".wav"]
@@ -605,9 +610,10 @@ class F5TTS:
                 with open(txt_file, 'r', encoding='utf-8') as file:
                     text_content = file.read().strip()
                 voice_list.append({"name": voice_id, "wav_filename": str(wav_file.resolve()), "text_content": text_content})
-        return voice_list
+        self.voice_list = voice_list
 
     def list_voices(self):
+        self.update_voices()
         return [voice["name"] for voice in self._get_voices()]
 
     def get_voice_by_name(self, voice_name):
@@ -689,8 +695,15 @@ class F5TTS:
         if ref_audio is None and ref_text is None:
             voice_name = settings.GetOption('tts_voice')
             selected_voice = self.get_voice_by_name(voice_name)
-            ref_audio = selected_voice["wav_filename"]
-            ref_text = selected_voice["text_content"]
+            if selected_voice is not None:
+                ref_audio = selected_voice["wav_filename"]
+                ref_text = selected_voice["text_content"]
+            else:
+                print("No voice selected or does not exist. Using default voice 'en_1'.")
+                voice_name = "en_1"
+                selected_voice = self.get_voice_by_name(voice_name)
+                ref_audio = selected_voice["wav_filename"]
+                ref_text = selected_voice["text_content"]
 
         if ref_audio is None:
             ref_audio = self.config["ref_audio"]
