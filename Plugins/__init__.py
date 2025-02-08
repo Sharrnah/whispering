@@ -9,8 +9,8 @@ import copy
 from audio_tools import get_audio_device_index_by_name_and_api, get_audio_api_index_by_name
 import settings
 
-SUPPORTED_WIDGET_TYPES = ["button", "slider", "select", "textarea", "textfield", "hyperlink", "label", "file_open", "file_save",
-                          "folder_open", "dir_open", "select_audio"]
+SUPPORTED_WIDGET_TYPES = ["button", "slider", "select", "select_textvalue", "textarea", "textfield", "hyperlink", "label", "file_open", "file_save",
+                          "folder_open", "dir_open", "select_audio", "select_completion"]
 
 
 class Base:
@@ -123,6 +123,16 @@ class Base:
             if settings_value["type"] == "select_audio" and "_value_text" in settings_value and settings_value["_value_text"] != "":
                 device_api, is_input, value = self._audio_widget_device_getter(settings_value)
                 return get_audio_device_index_by_name_and_api(settings_value["_value_text"], device_api, is_input, value)
+            # special case for select_completion and select_textvalue widget
+            if settings_value["type"] == "select_completion" or settings_value["type"] == "select_textvalue":
+                if "_value_real" in settings_value:
+                    return settings_value["_value_real"]
+                else:
+                    # in case there is no _value_real, try to find value in values list
+                    for item in settings_value["values"]:
+                        if item[0] == settings_value["value"]:
+                            return item[1]
+
             # regular widgets
             return settings_value["value"]
         # non widget setting
