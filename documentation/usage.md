@@ -45,9 +45,10 @@
 ### Desktop+ (Currently only new-ui Beta with embedded Browser)
 
 1. Run the Application listening on your Audio-Device with the VRChat Sound.
-2. Add the Overlay in [Desktop+](https://store.steampowered.com/app/1494460/Desktop/) (or stanadlone without steam: https://github.com/elvissteinjr/DesktopPlus/) and installed [embedded Browser DLC](https://store.steampowered.com/app/3263240/Desktop_Browser/) with a URL like (`file:///E:/AI/Whispering-Tiger/websocket_clients/streaming-overlay-02/index.html?ws_server=ws://127.0.0.1:5001&auto_hide_message=25&no_scroll=1&no_loader=1`) or similar depending on your Path, which overlay type you want and its settings.
-3. Set the Browser to allow Transparency.
-4. Attach the Browser to your VR-Headset.
+2. Install [Desktop+](https://store.steampowered.com/app/1494460/Desktop/) (or stanadlone without steam: https://github.com/elvissteinjr/DesktopPlus/) and installed [embedded Browser DLC](https://store.steampowered.com/app/3263240/Desktop_Browser/)
+3. Add the Browser Overlay with a URL like (`file:///E:/AI/Whispering-Tiger/websocket_clients/streaming-overlay-02/index.html?ws_server=ws://127.0.0.1:5001&auto_hide_message=25&no_scroll=1&no_loader=1`) or similar depending on your Path, which overlay type you want and its settings.
+4. Set the Browser to allow Transparency.
+5. Attach the Browser to your VR-Headset.
 
 Voilà, you have live translated subtitles in VR of other people speaking (or videos playing) which automatically disappear after 25 seconds.
 
