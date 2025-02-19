@@ -10,7 +10,7 @@ librosa==0.10.2.post1
 #transformers==4.35.0
 #transformers @ https://github.com/huggingface/transformers/archive/235e5d4991e8a0984aa78db91087b49622c7740e.zip
 #transformers==4.43.3
-transformers==4.44.0
+transformers==4.48.3
 
 torch-directml
 tensorboardX==2.6.2.2
@@ -32,7 +32,8 @@ pydub>=0.25.1
 git+https://github.com/openai/whisper.git
 #triton @ https://github.com/PrashantSaikia/Triton-for-Windows/raw/84739dfcb724845b301fbde6a738e15c3ed25905/triton-2.0.0-cp310-cp310-win_amd64.whl
 #triton @ https://s3.libs.space:9000/projects/wheels/triton-2.1.0-cp310-cp310-win_amd64.whl
-triton @ https://s3.libs.space:9000/projects/wheels/triton-2.1.0-cp311-cp311-win_amd64.whl
+#triton @ https://s3.libs.space:9000/projects/wheels/triton-2.1.0-cp311-cp311-win_amd64.whl
+triton @ https://github.com/woct0rdho/triton-windows/releases/download/v3.2.0-windows.post9/triton-3.2.0-cp311-cp311-win_amd64.whl
 soundfile==0.12.1
 python-osc>=1.8.0
 websockets>=10.4
@@ -66,7 +67,7 @@ nltk==3.9
 # NVIDIA Nemo (Canary) dependency
 Cython==3.0.10
 youtokentome @ https://github.com/gburlet/YouTokenToMe/archive/refs/heads/dependencies.zip
-git+https://github.com/NVIDIA/NeMo.git@r1.23.0#egg=nemo_toolkit[asr]
+git+https://github.com/NVIDIA/NeMo.git@r2.1.0#egg=nemo_toolkit[asr]
 
 # plugin dependencies
 omegaconf==2.2.3
@@ -111,3 +112,11 @@ wandb==0.16.6
 # not windows compatible?
 #pynini==2.1.6
 #WeTextProcessing
+
+
+# Zonos TTS dependencies
+kanjize>=1.5.0
+phonemizer>=3.3.0
+sudachidict-full>=20241021
+sudachipy>=0.6.10
+inflect>=7.5.0

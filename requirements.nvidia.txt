@@ -1,8 +1,32 @@
---extra-index-url https://download.pytorch.org/whl/cu121
-torch==2.4.1
-torchvision==0.19.1
-torchaudio==2.4.1
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch==2.6.0
+torchvision==0.21.0
+torchaudio==2.6.0
+#flash-attn @ https://github.com/kingbri1/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu124torch2.6.0cxx11abiFALSE-cp311-cp311-win_amd64.whl
+#flash-attn
 
-#tensorRT-LLM (currently overwrites torch with 2.2.0)
-#--extra-index-url https://pypi.nvidia.com
-#tensorrt_llm
+# install flash attention from https://huggingface.co/lldacing/flash-attention-windows-wheel/tree/main
+# or compile using https://github.com/Dao-AILab/flash-attention/issues/1469
+
+flash-attn @ wheels/flash_attn-2.7.4+cu124torch2.6.0cxx11abiFALSE-cp311-cp311-win_amd64.whl
+
+
+# --extra-index-url https://download.pytorch.org/whl/cu124
+# torch==2.5.1
+# torchvision==0.20.1
+# torchaudio==2.5.1
+# flash-attn @ https://github.com/kingbri1/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu124torch2.5.1cxx11abiFALSE-cp311-cp311-win_amd64.whl
+
+
+# --extra-index-url https://download.pytorch.org/whl/cu124
+# torch==2.4.1
+# torchvision==0.19.1
+# torchaudio==2.4.1
+# flash-attn @ https://github.com/kingbri1/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu124torch2.4.0cxx11abiFALSE-cp311-cp311-win_amd64.whl
+
+# tensorRT-LLM (currently overwrites torch with 2.2.0)
+# --extra-index-url https://pypi.nvidia.com
+# tensorrt_llm
+# einops==0.8.0
+
+#triton @ https://github.com/woct0rdho/triton-windows/releases/download/v3.2.0-windows.post9/triton-3.2.0-cp311-cp311-win_amd64.whl
