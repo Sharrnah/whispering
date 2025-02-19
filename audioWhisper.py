@@ -410,6 +410,7 @@ if __name__ == '__main__':
         print("###################################")
 
         print("running Python: " + platform.python_implementation() + " / v" + platform.python_version())
+        print("using Torch: " + torch.__version__)
         print("using Audio API: " + audio_api_name)
         print("")
 
