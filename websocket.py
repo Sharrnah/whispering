@@ -35,33 +35,44 @@ def tts_request(msgObj, websocket):
     if "path" in msgObj["value"] and msgObj["value"]["path"] != "":
         path = msgObj["value"]["path"]
 
-    tts_wav, sample_rate = tts.tts.tts(text)
-    if tts_wav is not None:
-        if msgObj["value"]["to_device"]:
-            if "device_index" in msgObj["value"]:
-                tts.tts.play_audio(tts_wav, msgObj["value"]["device_index"])
-            else:
-                tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
-        else:
-            # send raw wav data to non UI clients (like html websocket pages, for backwards compatibility)
-            if websocket is not None and websocket != UI_CONNECTED["websocket"]:
-                AnswerMessage(websocket, json.dumps(
-                    {"type": "tts_result", "wav_data": tts_wav.tolist(), "sample_rate": sample_rate}))
-            if msgObj["value"]["download"]:
-                wav_data = tts.tts.return_wav_file_binary(tts_wav)
-                if path is not None and path != '':
-                    # write wav_data to file in path
-                    try:
-                        with open(path, "wb") as f:
-                            f.write(wav_data)
-                        print("100% Finished. TTS file saved to:", path)
-                    except Exception as e:
-                        print("Failed to save TTS file:", e)
-                        traceback.print_exc()
+    streamed_playback = settings.GetOption("tts_streamed_playback")
+
+    tts_wav = None
+    if streamed_playback and hasattr(tts.tts, "tts_streaming"):
+        tts_wav, sample_rate = tts.tts.tts_streaming(text)
+        if tts_wav is not None:
+            return
+
+    if tts_wav is None:
+        tts_wav, sample_rate = tts.tts.tts(text)
+
+        if tts_wav is not None:
+            if msgObj["value"]["to_device"]:
+                if "device_index" in msgObj["value"]:
+                    tts.tts.play_audio(tts_wav, msgObj["value"]["device_index"])
                 else:
-                    wav_data = base64.b64encode(wav_data).decode('utf-8')
-                    AnswerMessage(websocket, json.dumps({"type": "tts_save", "wav_data": wav_data}))
-    else:
+                    tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
+            else:
+                # send raw wav data to non UI clients (like html websocket pages, for backwards compatibility)
+                if websocket is not None and websocket != UI_CONNECTED["websocket"]:
+                    AnswerMessage(websocket, json.dumps(
+                        {"type": "tts_result", "wav_data": tts_wav.tolist(), "sample_rate": sample_rate}))
+                if msgObj["value"]["download"]:
+                    wav_data = tts.tts.return_wav_file_binary(tts_wav)
+                    if path is not None and path != '':
+                        # write wav_data to file in path
+                        try:
+                            with open(path, "wb") as f:
+                                f.write(wav_data)
+                            print("100% Finished. TTS file saved to:", path)
+                        except Exception as e:
+                            print("Failed to save TTS file:", e)
+                            traceback.print_exc()
+                    else:
+                        wav_data = base64.b64encode(wav_data).decode('utf-8')
+                        AnswerMessage(websocket, json.dumps({"type": "tts_save", "wav_data": wav_data}))
+            return
+
         print("TTS failed")
 
 
@@ -480,6 +491,11 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
                 download = True
             tts_thread = threading.Thread(target=tts_plugin_process, args=(msg_obj, websocket, download))
             tts_thread.start()
+
+    if msg_obj["type"] == "tts_setting_special":
+        if "value" in msg_obj:
+            if tts.init() and hasattr(tts.tts, 'set_special_setting'):
+                tts.tts.set_special_setting(msg_obj["value"])
 
     if msg_obj["type"] == "audio_stop":
         tag = None

@@ -18,6 +18,7 @@ NON_PERSISTENT_SETTINGS = [
     "plugin_timer_stopped", "plugin_current_timer", "websocket_final_messages",
     "device_default_in_index", "device_default_out_index", "ui_download",
     "audio_processor_caller",
+    "tts_setting_special",
 ]
 
 
@@ -40,7 +41,7 @@ class SettingsManager:
             "txt_translate_realtime": False,  # use text translator in realtime mode
 
             "txt_second_translation_enabled": False,  # translate to more languages
-            "txt_second_translation_languages": "eng_Latn",  # comma separated list of languages for further translations
+            "txt_second_translation_languages": "",  # comma separated list of languages for further translations
             "txt_second_translation_wrap": " | ",  # wrap other translations in result with this string
 
             # ocr settings
@@ -157,7 +158,6 @@ class SettingsManager:
             "websocket_final_messages": True,  # if enabled, websocket will send final messages. (internal use)
 
             # TTS settings
-            #"tts_enabled": True,  # enable TTS
             "tts_type": "silero",  # enable TTS
             "tts_ai_device": "cpu",  # can be "auto", "cuda" or "cpu".
             "tts_answer": False,  # send whisper results to TTS engine
@@ -169,6 +169,9 @@ class SettingsManager:
             "tts_secondary_playback_device": -1,  # Play TTS audio to this specified audio device at the same time. (set to -1 to use default audio device)
             "tts_allow_overlapping_audio": False,  # Allow overlapping audio (if disabled, TTS will stop previous audio before playing new audio)
             "tts_volume": 1.0,  # change volume of played audio. lower than 1 reduces volume, higher increases volume.
+            "tts_streamed_playback": True,  # Use streamed playback if TTS supports it
+            "tts_streamed_chunk_size": 400,  # Chunk size of tts streaming.
+            "tts_setting_special": {},
 
             # Plugins
             "plugins": {},  # active plugins
@@ -289,7 +292,7 @@ class SettingsManager:
             "model": self.get_available_models(),
             "whisper_task": ["transcribe", "translate"],
             "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "medusa_whisper", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", ""],
-            "tts_type": ["silero", "f5_e2", ""],
+            "tts_type": ["silero", "f5_e2", "zonos", ""],
             "tts_ai_device": ["cuda", "cpu"],
             "txt_translator_device": ["cuda", "cpu"],
             "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "Seamless_M4T"],

@@ -1035,22 +1035,74 @@ class CircularByteBuffer:
         self.buffer = bytearray(self.size)
 
 
+# class QueueBuffer:
+#     def __init__(self, element_size):
+#         self.buffer = bytearray()
+#         self.element_size = element_size
+#
+#     def append(self, data):
+#         self.buffer += data
+#
+#     def read(self, size):
+#         actual_read_size = min(size, len(self.buffer))
+#         data = self.buffer[:actual_read_size]
+#         self.buffer = self.buffer[actual_read_size:]
+#         return data
+#
+#     def get_available_size(self):
+#         return len(self.buffer) - (len(self.buffer) % self.element_size)
+
+
+# new from chatGPT (full element sizes required)
+# class QueueBuffer:
+#     def __init__(self, element_size):
+#         self.buffer = bytearray()
+#         self.element_size = element_size
+#
+#     def append(self, data):
+#         if not isinstance(data, (bytes, bytearray)):
+#             raise TypeError("Data must be of type bytes or bytearray")
+#         self.buffer += data
+#
+#     def read(self, size):
+#         # Ensure the read size is a multiple of element_size
+#         size = (size // self.element_size) * self.element_size
+#         actual_read_size = min(size, len(self.buffer))
+#         data = self.buffer[:actual_read_size]
+#         self.buffer = self.buffer[actual_read_size:]
+#         return data
+#
+#     def get_available_size(self):
+#         # Return the size of the buffer that is a multiple of element_size
+#         return (len(self.buffer) // self.element_size) * self.element_size
+
 class QueueBuffer:
     def __init__(self, element_size):
         self.buffer = bytearray()
         self.element_size = element_size
 
     def append(self, data):
+        if not isinstance(data, (bytes, bytearray)):
+            raise TypeError("Data must be of type bytes or bytearray")
         self.buffer += data
 
     def read(self, size):
+        # Ensure the read size is a multiple of element_size
+        size = (size // self.element_size) * self.element_size
         actual_read_size = min(size, len(self.buffer))
         data = self.buffer[:actual_read_size]
         self.buffer = self.buffer[actual_read_size:]
         return data
 
+    def get_all_remaining_data(self):
+        # return all remaining data and empty the buffer
+        remaining_data = self.buffer
+        self.buffer = bytearray()
+        return remaining_data
+
     def get_available_size(self):
-        return len(self.buffer) - (len(self.buffer) % self.element_size)
+        # Return the total size of the buffer, allowing for partial elements
+        return len(self.buffer)
 
 
 class AudioStreamer:
@@ -1110,6 +1162,7 @@ class AudioStreamer:
                     available_size = self.buffer.get_available_size()
                     if self.verbose:
                         print("Available size: ", available_size)
+                        print("Data accumulated: ", len(data_accumulated))
                     if available_size > 0:
                         # Read the maximum available data that fits into full elements
                         buffer_entry = self.buffer.read(available_size)
@@ -1126,7 +1179,7 @@ class AudioStreamer:
                         print("Playing audio chunk of size 1: ", len(data_to_play))
                     last_data_time = time.time()
 
-                    if isinstance(data_to_play, np.ndarray) or isinstance(data_to_play, bytes):
+                    if isinstance(data_to_play, bytes):
                         if self.before_playback_hook_func is not None:
                             data_to_play = self.before_playback_hook_func(data_to_play, self.source_sample_rate)
 
@@ -1139,7 +1192,9 @@ class AudioStreamer:
                     has_data_been_written = True
 
                 with self.lock:
-                    if available_size == 0 and len(data_accumulated) > 0:
+                    #if available_size == 0 and len(data_accumulated) > 0:
+                    if available_size > 0 and len(data_accumulated) == 0:
+                        data_accumulated = self.buffer.get_all_remaining_data()
                         # If this is the last chunk and it's not full, pad it
                         padding_length = self.buffer_size - len(data_accumulated)
                         padding = b'\x00' * padding_length
@@ -1147,6 +1202,14 @@ class AudioStreamer:
                         if self.verbose:
                             print("Playing audio chunk of size 2: ", len(data_to_play))
                         last_data_time = time.time()
+
+                        if self.before_playback_hook_func is not None:
+                            data_to_play = self.before_playback_hook_func(data_to_play, self.source_sample_rate)
+
+                        data_to_play = np.frombuffer(data_to_play, dtype=self.np_dtype) if isinstance(data_to_play, bytes) else data_to_play
+                        data_to_play = resample_audio(data_to_play, self.source_sample_rate, self.actual_sample_rate, target_channels=self.playback_channels, input_channels=self.input_channels, dtype=self.dtype)
+                        data_to_play = data_to_play.tobytes()
+
                         self.stream.write(data_to_play)
                         has_data_been_written = True
                         data_accumulated = bytearray()  # Clear after writing
