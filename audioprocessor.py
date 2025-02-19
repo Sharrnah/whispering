@@ -423,10 +423,14 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
 
     # Send to TTS on final audio
     if final_audio:
+        streamed_playback = settings.GetOption("tts_streamed_playback")
         if settings.GetOption("tts_answer") and predicted_text != "" and tts.init():
             try:
-                tts_wav, sample_rate = tts.tts.tts(predicted_text)
-                tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
+                if streamed_playback and hasattr(tts.tts, "tts_streaming"):
+                    tts.tts.tts_streaming(predicted_text)
+                else:
+                    tts_wav, sample_rate = tts.tts.tts(predicted_text)
+                    tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
             except Exception as e:
                 print("Error while playing TTS audio: " + str(e))
 
