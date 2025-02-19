@@ -18,6 +18,7 @@ import downloader
 #from cached_path import cached_path
 
 import settings
+from Models.Singleton import SingletonMeta
 
 from Models.TTS.F5TTS.model.backbones.unett import UNetT
 from Models.TTS.F5TTS.model.backbones.dit import DiT
@@ -92,7 +93,6 @@ vocoder_paths = {
     "bigvgan": Path(cache_path / "bigvgan"),
 }
 
-tts_proc = None
 failed = False
 
 TTS_MODEL_LINKS = {
@@ -376,7 +376,7 @@ speed_mapping = {
     "x-fast": 1.5   # Extra fast speed
 }
 
-class F5TTS:
+class F5TTS(metaclass=SingletonMeta):
     lang = 'en'
     model_id = 'F5-TTS'
     model = None
@@ -419,6 +419,8 @@ class F5TTS:
 
     def __init__(self):
         self.compute_device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+        if not self.voice_list:
+            self.update_voices()
         pass
 
     def download_model(self, model_name):
@@ -599,7 +601,6 @@ class F5TTS:
         return self.voice_list
 
     def update_voices(self):
-        voices_path = Path(cache_path / "voices")
         # find all voices that have both a .wav and .txt file
         voice_files = [f.stem for f in voices_path.iterdir() if f.is_file() and f.suffix == ".wav"]
         voice_list = []
@@ -695,15 +696,12 @@ class F5TTS:
         if ref_audio is None and ref_text is None:
             voice_name = settings.GetOption('tts_voice')
             selected_voice = self.get_voice_by_name(voice_name)
-            if selected_voice is not None:
-                ref_audio = selected_voice["wav_filename"]
-                ref_text = selected_voice["text_content"]
-            else:
+            if selected_voice is None:
                 print("No voice selected or does not exist. Using default voice 'en_1'.")
                 voice_name = "en_1"
                 selected_voice = self.get_voice_by_name(voice_name)
-                ref_audio = selected_voice["wav_filename"]
-                ref_text = selected_voice["text_content"]
+            ref_audio = selected_voice["wav_filename"]
+            ref_text = selected_voice["text_content"]
 
         if ref_audio is None:
             ref_audio = self.config["ref_audio"]

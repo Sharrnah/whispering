@@ -15,6 +15,8 @@ from scipy.io.wavfile import write
 import re
 import num2words
 
+from Models.Singleton import SingletonMeta
+
 tts = None
 failed = False
 
@@ -187,7 +189,7 @@ def replace_numbers(match, lang, text):
         return num2words.num2words(int(match.group(0)), lang=lang)
 
 
-class Silero:
+class Silero(metaclass=SingletonMeta):
     lang = 'en'
     model_id = 'v3_en'
     model = None
