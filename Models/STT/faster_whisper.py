@@ -932,23 +932,19 @@ def needs_download(model: str, compute_type: str = "float32"):
 
     model_cache_path = Path(".cache/whisper")
     model_path = model_cache_path / f"{model}-ct2"
-    if compute_type in ["float16", "int8_float16", "int16", "int8"]:
+    if compute_type in ("float16", "int8_float16", "int16", "int8"):
         compute_type = "float16"
         model_path = model_cache_path / f"{model}-ct2-fp16"
 
     if compute_type not in MODEL_LINKS[model]:
-        if compute_type == "float32":
-            compute_type = "float16"
+        # Default to the first available compute type if not found
+        compute_type = list(MODEL_LINKS[model].keys())[0]
+
+        # Set model path based on compute type
+        model_path = model_cache_path / f"{model}-ct2"
+        if compute_type == "float16":
             model_path = model_cache_path / f"{model}-ct2-fp16"
-        elif compute_type == "float16":
-            compute_type = "float32"
-            model_path = model_cache_path / f"{model}-ct2"
-        else:
-            compute_type = list(MODEL_LINKS[model].keys())[0]
-            if compute_type == "float32":
-                model_path = model_cache_path / f"{model}-ct2"
-            elif compute_type == "float16":
-                model_path = model_cache_path / f"{model}-ct2-fp16"
+
 
     required_files = ["model.bin", "tokenizer.json"]
     if not model_cache_path.exists() or not model_path.exists():
@@ -980,23 +976,18 @@ def download_model(model: str, compute_type: str = "float32"):
     model_cache_path = Path(".cache/whisper")
     os.makedirs(model_cache_path, exist_ok=True)
     model_path = model_cache_path / f"{model}-ct2"
-    if compute_type in ["float16", "int8_float16", "int16", "int8"]:
+    if compute_type in ("float16", "int8_float16", "int16", "int8"):
         compute_type = "float16"
         model_path = model_cache_path / f"{model}-ct2-fp16"
 
     if compute_type not in MODEL_LINKS[model]:
-        if compute_type == "float32":
-            compute_type = "float16"
+        # Default to the first available compute type if not found
+        compute_type = list(MODEL_LINKS[model].keys())[0]
+
+        # Set model path based on compute type
+        model_path = model_cache_path / f"{model}-ct2"
+        if compute_type == "float16":
             model_path = model_cache_path / f"{model}-ct2-fp16"
-        elif compute_type == "float16":
-            compute_type = "float32"
-            model_path = model_cache_path / f"{model}-ct2"
-        else:
-            compute_type = list(MODEL_LINKS[model].keys())[0]
-            if compute_type == "float32":
-                model_path = model_cache_path / f"{model}-ct2"
-            elif compute_type == "float16":
-                model_path = model_cache_path / f"{model}-ct2-fp16"
 
     pretrained_lang_model_file = model_path / "model.bin"
     file_checksums_check_need_dl = False
@@ -1077,7 +1068,6 @@ class FasterWhisper(metaclass=SingletonMeta):
 
     def load_model(self, model: str, device: str = "cpu", compute_type: str = "float32", cpu_threads: int = 0,
                    num_workers: int = 1):
-
         self.loaded_settings = {
             "model": model,
             "device": device,
@@ -1089,20 +1079,15 @@ class FasterWhisper(metaclass=SingletonMeta):
         model_cache_path = Path(".cache/whisper")
         os.makedirs(model_cache_path, exist_ok=True)
         model_folder_name = model + "-ct2"
-        if compute_type == "float16" or compute_type == "int8_float16" or compute_type == "int16" or compute_type == "int8":
+        if compute_type in ("float16", "int8_float16", "int16", "int8"):
             model_folder_name = model + "-ct2-fp16"
         # special case for models that are only available in one precision (as float16 vs float32 showed no difference in large-v3 and distilled versions)
         if model != "custom" and compute_type not in MODEL_LINKS[model]:
-            if compute_type == "float32":
-                model_folder_name = model + "-ct2-fp16"
-            elif compute_type == "float16":
+            existing_compute_type = list(MODEL_LINKS[model].keys())[0]
+            if existing_compute_type == "float32":
                 model_folder_name = model + "-ct2"
-            else:
-                compute_type = list(MODEL_LINKS[model].keys())[0]
-                if compute_type == "float32":
-                    model_folder_name = model + "-ct2"
-                elif compute_type == "float16":
-                    model_folder_name = model + "-ct2-fp16"
+            elif existing_compute_type == "float16":
+                model_folder_name = model + "-ct2-fp16"
 
         # load user custom model
         if model == "custom":
