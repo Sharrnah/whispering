@@ -501,6 +501,9 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
         tag = None
         if "value" in msg_obj:
             tag = msg_obj["value"]
+        if tag == "tts":
+            if tts.init() and hasattr(tts.tts, 'stop'):
+                tts.tts.stop()
         audio_tools.stop_audio(tag=tag)
 
     if msg_obj["type"] == "tts_voice_save_req":

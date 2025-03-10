@@ -169,7 +169,7 @@ class SettingsManager:
             "tts_secondary_playback_device": -1,  # Play TTS audio to this specified audio device at the same time. (set to -1 to use default audio device)
             "tts_allow_overlapping_audio": False,  # Allow overlapping audio (if disabled, TTS will stop previous audio before playing new audio)
             "tts_volume": 1.0,  # change volume of played audio. lower than 1 reduces volume, higher increases volume.
-            "tts_streamed_playback": True,  # Use streamed playback if TTS supports it
+            "tts_streamed_playback": False,  # Use streamed playback if TTS supports it
             "tts_streamed_chunk_size": 400,  # Chunk size of tts streaming.
             "tts_setting_special": {},
 
