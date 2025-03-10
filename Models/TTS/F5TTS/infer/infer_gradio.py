@@ -746,10 +746,10 @@ Have a conversation with an AI using your reference voice!
 
 with gr.Blocks() as app:
     gr.Markdown(
-        """
+        f"""
 # E2/F5 TTS
 
-This is a local web UI for F5 TTS with advanced batch processing support. This app supports the following TTS models:
+This is {"a local web UI for [F5 TTS](https://github.com/SWivid/F5-TTS)" if not USING_SPACES else "an online demo for [F5-TTS](https://github.com/SWivid/F5-TTS)"} with advanced batch processing support. This app supports the following TTS models:
 
 * [F5-TTS](https://arxiv.org/abs/2410.06885) (A Fairytaler that Fakes Fluent and Faithful Speech with Flow Matching)
 * [E2 TTS](https://arxiv.org/abs/2406.18009) (Embarrassingly Easy Fully Non-Autoregressive Zero-Shot TTS)
@@ -875,10 +875,24 @@ If you're having issues, try converting your reference audio to WAV or MP3, clip
     type=str,
     help='The root path (or "mount point") of the application, if it\'s not served from the root ("/") of the domain. Often used when the application is behind a reverse proxy that forwards requests to the application, e.g. set "/myapp" or full URL for application served at "https://example.com/myapp".',
 )
-def main(port, host, share, api, root_path):
+@click.option(
+    "--inbrowser",
+    "-i",
+    is_flag=True,
+    default=False,
+    help="Automatically launch the interface in the default web browser",
+)
+def main(port, host, share, api, root_path, inbrowser):
     global app
     print("Starting app...")
-    app.queue(api_open=api).launch(server_name=host, server_port=port, share=share, show_api=api, root_path=root_path)
+    app.queue(api_open=api).launch(
+        server_name=host,
+        server_port=port,
+        share=share,
+        show_api=api,
+        root_path=root_path,
+        inbrowser=inbrowser,
+    )
 
 
 if __name__ == "__main__":

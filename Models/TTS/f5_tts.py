@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 #import soundfile as sf
 import torch
+import torchaudio
 #import torchaudio
 from scipy.io.wavfile import write as write_wav
 
@@ -28,6 +29,8 @@ from Models.TTS.F5TTS.infer.utils_infer import (
     load_model,
     #preprocess_ref_audio_text,
     infer_process,
+    infer_batch_process,
+    chunk_text,
     #remove_silence_for_generated_wav,
 )
 
@@ -382,6 +385,8 @@ class F5TTS(metaclass=SingletonMeta):
     model = None
     compute_device = "cpu"
 
+    audio_streamer = None
+
     target_sample_rate = 24000
     target_rms = 0.1
     n_mel_channels = 100
@@ -688,8 +693,17 @@ class F5TTS(metaclass=SingletonMeta):
     def get_last_generation(self):
         return self.last_generation["audio"], self.last_generation["sample_rate"]
 
-    def tts(self, text, ref_audio=None, ref_text=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
-        print("TTS requested F5/E2 TTS")
+    def stop(self):
+        print("TTS Stop requested")
+        if self.audio_streamer is not None:
+            self.audio_streamer.stop()
+            self.audio_streamer = None
+
+    def tts(self, text, ref_audio=None, ref_text=None, remove_silence=True, silence_after_segments=0.2, normalize=True, streaming=False):
+        is_streaming_text = ""
+        if streaming:
+            is_streaming_text = " (streaming)"
+        print("TTS requested F5/E2 TTS", is_streaming_text)
         tts_volume = settings.GetOption("tts_volume")
         tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
         return_sample_rate = self.target_sample_rate
@@ -733,6 +747,11 @@ class F5TTS(metaclass=SingletonMeta):
         chunks = re.split(reg1, text)
         reg2 = r'\[(\w+)\]'
 
+        last_ref_audio_data = None
+        streamed_last_ref_audio_filepath = None
+        streamed_last_ref_audio_sample_rate = None
+        streamed_audio_reference = None
+
         # Filter out empty chunks
         chunks = [chunk.strip() for chunk in chunks if chunk.strip()]
         for i, text_chunk in enumerate(chunks):
@@ -762,18 +781,51 @@ class F5TTS(metaclass=SingletonMeta):
             estimate_time_full_str = estimate_remaining_time(len(chunks), segment_times, 3)
             print(f"\nTTS progress: {int((i) / len(chunks) * 100)}% ({i} of {len(chunks)} segments){estimate_time_full_str}")
 
-            audio, final_sample_rate, spectragram = infer_process(ref_audio, ref_text, gen_text, self.ema_model, self.vocoder, mel_spec_type=self.vocoder_name, speed=tts_speed, device=self.compute_device, nfe_step=self.nfe_step, show_info=None)
-            return_sample_rate = final_sample_rate
+            if streaming:
+                chunk_size = settings.GetOption("tts_streamed_chunk_size")
 
-            # Add silence when silence_after_segments > 0 and not last segment
-            if silence_after_segments > 0 and i < len(chunks) - 1:
-                silence_samples = int(silence_after_segments * return_sample_rate)
-                audio = np.concatenate([audio, np.zeros(silence_samples, dtype=np.float32)])
+                # cached audio reference loading
+                if streamed_last_ref_audio_filepath != ref_audio or streamed_last_ref_audio_filepath is None or streamed_audio_reference is None:
+                    streamed_audio_reference, sr = torchaudio.load(ref_audio)
+                    # noinspection PyUnusedLocal
+                    last_ref_audio_data = streamed_audio_reference
+                    # noinspection PyUnusedLocal
+                    streamed_last_ref_audio_filepath = ref_audio
+                    # noinspection PyUnusedLocal
+                    streamed_last_ref_audio_sample_rate = sr
+                else:
+                    sr = streamed_last_ref_audio_sample_rate
+                    streamed_audio_reference = last_ref_audio_data
 
-            generated_audio_segments.append(audio)
+                max_chars = int(len(ref_text.encode("utf-8")) / (streamed_audio_reference.shape[-1] / sr) * (25 - streamed_audio_reference.shape[-1] / sr))
+                gen_text_batches = chunk_text(gen_text, max_chars=max_chars)
+                return infer_batch_process(
+                    (streamed_audio_reference, sr),
+                    ref_text,
+                    gen_text_batches,
+                    self.ema_model,
+                    self.vocoder,
+                    mel_spec_type=self.vocoder_name,
+                    speed=tts_speed,
+                    progress=None,
+                    device=self.compute_device,
+                    nfe_step=self.nfe_step,
+                    streaming=True,
+                    chunk_size=chunk_size,
+                )
+            else:
+                audio, final_sample_rate, spectragram = infer_process(ref_audio, ref_text, gen_text, self.ema_model, self.vocoder, mel_spec_type=self.vocoder_name, speed=tts_speed, device=self.compute_device, nfe_step=self.nfe_step, show_info=None)
+                return_sample_rate = final_sample_rate
 
-            end_time = time.time()
-            segment_times.append(end_time - start_time)
+                # Add silence when silence_after_segments > 0 and not last segment
+                if silence_after_segments > 0 and i < len(chunks) - 1:
+                    silence_samples = int(silence_after_segments * return_sample_rate)
+                    audio = np.concatenate([audio, np.zeros(silence_samples, dtype=np.float32)])
+
+                generated_audio_segments.append(audio)
+
+                end_time = time.time()
+                segment_times.append(end_time - start_time)
 
         if generated_audio_segments:
             final_wave = np.concatenate(generated_audio_segments)
@@ -804,6 +856,49 @@ class F5TTS(metaclass=SingletonMeta):
             #     if remove_silence:
             #         remove_silence_for_generated_wav(f.name)
             #     print(f.name)
+
+    def tts_streaming(self, text, ref_audio=None, ref_text=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
+        tts_volume = settings.GetOption("tts_volume")
+        self.init_audio_stream_playback()
+        audio_stream = self.tts(text, ref_audio, ref_text, remove_silence, silence_after_segments, normalize, streaming=True)
+
+        audio_chunks = []
+        for codes_chunk, _ in audio_stream:
+            if self.audio_streamer is None:
+                break
+            # change volume
+            if tts_volume != 1.0:
+                codes_chunk = audio_tools.change_volume(codes_chunk, tts_volume)
+            audio_chunks.append(codes_chunk)
+            if self.audio_streamer is not None:
+                self.audio_streamer.add_audio_chunk(codes_chunk.tobytes())
+
+        full_audio = np.concatenate(audio_chunks, axis=-1)
+        self.last_generation = {"audio": full_audio, "sample_rate": self.target_sample_rate}
+
+        print("TTS generation finished")
+
+        return full_audio, self.target_sample_rate
+
+    def init_audio_stream_playback(self):
+        audio_device = settings.GetOption("device_out_index")
+        if audio_device is None or audio_device == -1:
+            audio_device = settings.GetOption("device_default_out_index")
+
+        chunk_size = settings.GetOption("tts_streamed_chunk_size")
+        #if self.audio_streamer is not None:
+        #    self.audio_streamer.stop()
+        #    self.audio_streamer = None
+        #else:
+        if self.audio_streamer is None:
+            self.audio_streamer = audio_tools.AudioStreamer(audio_device,
+                                                            source_sample_rate=int(self.target_sample_rate),
+                                                            playback_channels=2,
+                                                            buffer_size=chunk_size*2,
+                                                            input_channels=1,
+                                                            dtype="float32",
+                                                            tag="tts",
+                                                            )
 
     def play_audio(self, audio, device=None):
         source_channels = 1
@@ -849,3 +944,9 @@ class F5TTS(metaclass=SingletonMeta):
             buff = plugin_audio['audio']
 
         return buff.read()
+
+    def return_pcm_audio(self, audio):
+        # convert numpy array to raw PCM bytes
+        pcm_bytes = audio.tobytes()
+
+        return pcm_bytes
