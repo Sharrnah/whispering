@@ -437,6 +437,8 @@ if __name__ == '__main__':
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.wav2vec_bert_get_languages())
         elif settings.SETTINGS.GetOption("stt_type") == "nemo_canary":
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.nemo_canary_get_languages())
+        elif settings.SETTINGS.GetOption("stt_type") == "phi4":
+            settings.SETTINGS.SetOption("whisper_languages", audioprocessor.phi4_get_languages())
         else:
             # show no language if unspecified STT type
             settings.SETTINGS.SetOption("whisper_languages", ({"code": "", "name": ""},))

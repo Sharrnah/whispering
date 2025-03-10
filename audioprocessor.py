@@ -34,6 +34,7 @@ import Models.STT.wav2vec_bert as wav2vec_bert
 import Models.STT.nemo_canary as nemo_canary
 import Models.Multi.seamless_m4t as seamless_m4t
 import Models.Multi.mms as mms
+import Models.Multi.phi4 as phi4
 # import Models.STT.whisperx as whisperx
 import csv
 
@@ -118,6 +119,8 @@ def wav2vec_bert_get_languages():
 def nemo_canary_get_languages():
     return nemo_canary.NemoCanary.get_languages()
 
+def phi4_get_languages():
+    return phi4.Phi4.get_languages()
 
 def remove_repetitions(text, language='english', settings=main_settings):
     do_txt_translate = settings.GetOption("txt_translate")
@@ -512,6 +515,12 @@ def load_whisper(model, ai_device):
             return nemo_canary.NemoCanary(compute_type=compute_dtype, device=ai_device)
         except Exception as e:
             print("Failed to load Nemo Canary model. Application exits. " + str(e))
+    elif stt_type == "phi4":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
+        #try:
+        return phi4.Phi4(compute_type=compute_dtype, device=ai_device)
+        #except Exception as e:
+        #    print("Failed to load Phi4 model. Application exits. " + str(e))
 
     # return None if no stt model is loaded
     return None
@@ -551,6 +560,9 @@ def load_realtime_whisper(model, ai_device):
     elif main_settings.GetOption("stt_type") == "nemo_canary":
         compute_dtype = main_settings.GetOption("realtime_whisper_precision")
         return nemo_canary.NemoCanary(compute_type=compute_dtype, device=ai_device)
+    elif main_settings.GetOption("stt_type") == "phi4":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
+        return phi4.Phi4(compute_type=compute_dtype, device=ai_device)
 
 
 def convert_audio(audio_bytes: bytes):
@@ -881,6 +893,15 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                             beam_size=whisper_beam_size,
                                             length_penalty=whisper_faster_length_penalty,
                                             temperature=1.0,)
+        elif settings.GetOption("stt_type") == "phi4":
+            # Phi4
+            audio_model.set_compute_type(settings.GetOption("whisper_precision"))
+            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            result = audio_model.transcribe(audio_data_numpy,
+                                            task=whisper_task,
+                                            language=whisper_language,
+                                            beam_size=whisper_beam_size,
+                                            )
         else:
             # process audio by plugin for Speech-to-Text
             threading.Thread(target=plugin_process_stt_processing, args=(
