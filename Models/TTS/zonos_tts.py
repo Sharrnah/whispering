@@ -1,17 +1,22 @@
 import io
 import os
-import random
+import threading
 from pathlib import Path
 
 import numpy as np
-from scipy.io import wavfile
 
 import Plugins
 import audio_tools
 import settings
 from Models.Singleton import SingletonMeta
 
-os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = "C:\Program Files\eSpeak NG\libespeak-ng.dll"
+cache_path = Path(Path.cwd() / ".cache" / "zonos-tts-cache")
+os.makedirs(cache_path, exist_ok=True)
+voices_path = Path(cache_path / "voices")
+os.makedirs(voices_path, exist_ok=True)
+
+#os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = "C:\Program Files\eSpeak NG\libespeak-ng.dll"
+os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = str(Path(cache_path / "eSpeak NG" / "libespeak-ng.dll").resolve())
 
 from scipy.io.wavfile import write as write_wav
 import torch
@@ -20,10 +25,6 @@ from Models.TTS.zonos.model import Zonos
 from Models.TTS.zonos.conditioning import make_cond_dict, supported_language_codes
 from Models.TTS.zonos.utils import DEFAULT_DEVICE
 
-cache_path = Path(Path.cwd() / ".cache" / "zonos-tts-cache")
-os.makedirs(cache_path, exist_ok=True)
-voices_path = Path(cache_path / "voices")
-os.makedirs(voices_path, exist_ok=True)
 
 failed = False
 
@@ -40,6 +41,12 @@ model_list = {
     "Default": ["v0.1-transformer"],
 }
 
+
+# patching EspeakWrapper of phonemizer library.
+# See https://github.com/open-mmlab/Amphion/issues/323#issuecomment-2646709006
+
+
+
 class ZonosTTS(metaclass=SingletonMeta):
     model = None
     sample_rate = 44100
@@ -51,6 +58,9 @@ class ZonosTTS(metaclass=SingletonMeta):
     last_speaker_audio = None
 
     compute_device = "cpu"
+
+    stop_flag = False
+    stop_flag_lock = threading.Lock()
 
     special_settings = {
         "language": "en-us",
@@ -65,6 +75,7 @@ class ZonosTTS(metaclass=SingletonMeta):
         "neutral": 0.3077,
 
         "ignore_list": [],
+        "seed": -1,
     }
 
     def __init__(self):
@@ -83,6 +94,12 @@ class ZonosTTS(metaclass=SingletonMeta):
         if not self.voice_list:
             self.update_voices()
         pass
+
+    def stop(self):
+        print("TTS Stop requested")
+        if self.audio_streamer is not None:
+            self.audio_streamer.stop()
+            self.audio_streamer = None
 
     def set_compute_device(self, device):
         self.compute_device_str = device
@@ -123,8 +140,6 @@ class ZonosTTS(metaclass=SingletonMeta):
 
     def list_voices(self):
         self.update_voices()
-        print("self.voice_list")
-        print(self.voice_list)
         return [voice["name"] for voice in self._get_voices()]
 
     def get_voice_by_name(self, voice_name):
@@ -150,6 +165,8 @@ class ZonosTTS(metaclass=SingletonMeta):
         self.special_settings = special_settings
 
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
+        #with self.stop_flag_lock:
+        #    self.stop_flag = False
         print("TTS requested Zonos TTS")
         self.set_compute_device(settings.GetOption('tts_ai_device'))
 
@@ -173,8 +190,17 @@ class ZonosTTS(metaclass=SingletonMeta):
         else:
             speaker = self.last_speaker_embedding
 
-        seed = self.generate_random_seed()
+        seed = self.special_settings["seed"]
+        # convert string to integer. If its invalid, default to -1
+        try:
+            seed = int(seed)
+        except ValueError:
+            seed = -1
+        if seed <= -1:
+            seed = self.generate_random_seed()
         torch.manual_seed(seed)
+
+        print("Using seed:", seed)
 
         tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
 
@@ -214,6 +240,7 @@ class ZonosTTS(metaclass=SingletonMeta):
         if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
             final_wave = plugin_audio['audio']
 
+        final_wave = final_wave.unsqueeze(0)
         # save last generation in memory
         self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
 
@@ -222,7 +249,8 @@ class ZonosTTS(metaclass=SingletonMeta):
         return final_wave, self.sample_rate
 
     def tts_streaming(self, text, ref_audio=None):
-        print("TTS requested Zonos TTS")
+        #self.stop_flag = False
+        print("TTS requested Zonos TTS (Streaming)")
         self.set_compute_device(settings.GetOption('tts_ai_device'))
 
         chunk_size = settings.GetOption("tts_streamed_chunk_size")
@@ -287,6 +315,8 @@ class ZonosTTS(metaclass=SingletonMeta):
 
         audio_chunks = []
         for sr_out, codes_chunk in stream_generator:
+            if self.audio_streamer is None:
+                break
             audio_chunk = self.model.autoencoder.decode(codes_chunk).cpu()
             return_audio_chunk = audio_chunk[0]
             # change volume
@@ -295,7 +325,8 @@ class ZonosTTS(metaclass=SingletonMeta):
             audio_chunks.append(return_audio_chunk)
             # torch tensor to pcm bytes
             wav_bytes = self.return_pcm_audio(return_audio_chunk)
-            self.audio_streamer.add_audio_chunk(wav_bytes)
+            if self.audio_streamer is not None:
+                self.audio_streamer.add_audio_chunk(wav_bytes)
 
         full_audio = np.concatenate(audio_chunks, axis=-1)
         # numpy array to torch.Tensor
@@ -314,6 +345,7 @@ class ZonosTTS(metaclass=SingletonMeta):
         if audio_device is None or audio_device == -1:
             audio_device = settings.GetOption("device_default_out_index")
 
+        chunk_size = settings.GetOption("tts_streamed_chunk_size")
         #if self.audio_streamer is not None:
         #    self.audio_streamer.stop()
         #    self.audio_streamer = None
@@ -322,7 +354,7 @@ class ZonosTTS(metaclass=SingletonMeta):
             self.audio_streamer = audio_tools.AudioStreamer(audio_device,
                                                             source_sample_rate=self.sample_rate,
                                                             playback_channels=2,
-                                                            buffer_size=2048,
+                                                            buffer_size=chunk_size*2,
                                                             input_channels=1,
                                                             dtype="float32",
                                                             tag="tts",

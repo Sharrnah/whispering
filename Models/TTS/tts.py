@@ -2,6 +2,7 @@ import settings
 from Models.TTS.silero import Silero
 from Models.TTS.f5_tts import F5TTS
 from Models.TTS.zonos_tts import ZonosTTS
+from Models.TTS.kokoro_tts import KokoroTTS
 
 tts = None
 failed = None
@@ -23,6 +24,12 @@ def init():
                 return False
         case "zonos":
             tts = ZonosTTS()
+            if not failed:
+                return True
+            else:
+                return False
+        case "kokoro":
+            tts = KokoroTTS()
             if not failed:
                 return True
             else:
