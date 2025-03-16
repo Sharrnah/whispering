@@ -55,7 +55,13 @@ easyocr @ https://github.com/JaidedAI/EasyOCR/archive/refs/tags/v1.7.1.zip
 mss==7.0.1
 scipy==1.15.2
 num2words==0.5.13
-onnxruntime==1.18.1
+
+onnxruntime==1.21.0
+# pip install --pre onnxruntime-genai-cuda -U
+#onnxruntime-genai
+onnxruntime-genai-cuda
+#onnxruntime-genai-directml
+
 requests==2.32.3
 # downgradea of scikit-image to v1.19.3 to prevent https://github.com/scikit-image/scikit-image/issues/6784
 scikit-image==v0.22.0
