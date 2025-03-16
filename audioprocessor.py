@@ -354,6 +354,9 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
         osc_type_transfer_split = settings.GetOption("osc_type_transfer_split")
         osc_type_transfer_split = replace_osc_placeholders(osc_type_transfer_split, result_obj, settings)
 
+        if "txt_translation" in result_obj:
+            predicted_text = result_obj["txt_translation"]
+            
         osc_text = predicted_text
         if "text" in result_obj and result_obj["text"] is not None and result_obj["text"] != "":
             if settings.GetOption("osc_type_transfer") == "source":
