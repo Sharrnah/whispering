@@ -4,6 +4,8 @@ import time
 import zipfile
 import tarfile
 import os
+from pathlib import Path
+
 #from best_download import download_file
 from robust_downloader import download
 import requests
@@ -218,3 +220,112 @@ def check_file_hashes(path, hash_list) -> bool:
         if actual_hash.lower() != expected_hash.lower():
             return False
     return True
+
+
+def download_model(download_settings, state=None):
+    """
+    Download the model from the given URL and extract it to the specified directory.
+    Args:
+        download_settings: {
+            "model_path": [string] Path to the directory where the model will be downloaded (model cache path under '.cache' for example Path(Path.cwd() / ".cache" / "phi4") ).
+            "model_link_dict": Dictionary containing model links and checksums. has to be in the format:
+                MODEL_LINKS = {
+                    "GOT_OCR_2.0": {
+                        "urls": [
+                            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/GOT_OCR_2.0/GOT-OCR-2.0.zip",
+                            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/GOT_OCR_2.0/GOT-OCR-2.0.zip",
+                            "https://s3.libs.space:9000/ai-models/GOT_OCR_2.0/GOT-OCR-2.0.zip",
+                        ],
+                        "checksum": "d98db661dd7d76943807b316685d9561b4cf85403fee1ba749fb691e038a587b",
+                        "file_checksums": {
+                            "config.json": "cbe8aacd6cd84a2d58eafcd0045c6ac40e02e3a448f24b8cee51cc81d8bdccf2",
+                            "generation_config.json": "31915c5a692f43c5765a20cfc5f9403bcd250f5721a0d931bb703169c08993b4",
+                            "model.safetensors": "6175ac7868a4e75735f5d59f78c465081ad3427eb4f312d072a0f1d16b333ba4",
+                            "preprocessor_config.json": "ef9a0dc0935cac11f4230ca30d00a52bedfa52b6633e409e9fbd2ea56373aa7e",
+                            "special_tokens_map.json": "7c2368a3889fdfb37c24cabeb031b53f47934f357b54e56e8e389909a338ea47",
+                            "tokenizer.json": "36b382a3c48c9a143c30139dac6c8230ddfb0b46a3dc43082af6052abe99d9de",
+                            "tokenizer_config.json": "8b0542937d32a67da8ea2d1288b870e325be383a962c65d201864299560a2b8e"
+                        },
+                        "path": "", # Path to the subdirectory where the model will be downloaded.
+                    },
+                }
+            "model_name": Name of the model to download.
+            "title": Title for the download process.
+            "alt_fallback": Boolean indicating whether to use an alternative fallback method.
+            "force_non_ui_dl": Boolean indicating whether to force non-UI download.
+            "extract_format": Format of the file to be extracted (e.g., "zip", "tar.gz" or "none").
+        }
+        state: dictionary {"is_downloading": False} in class to check if the model is already downloading.
+    """
+
+    model_path = download_settings["model_path"]
+    model_link_dict = download_settings["model_link_dict"]
+    model_name = download_settings["model_name"]
+    title = download_settings["title"]
+    alt_fallback = download_settings["alt_fallback"]
+    force_non_ui_dl = download_settings["force_non_ui_dl"]
+    extract_format = download_settings["extract_format"].lower()
+
+    fallback_extract_func = None
+    match extract_format:
+        case "zip":
+            fallback_extract_func = extract_zip
+        case "tar.gz":
+            fallback_extract_func = extract_tar_gz
+        case "none", "":
+            fallback_extract_func = None
+
+    if state is None:
+        state = {"is_downloading": False}
+
+    model_directory = Path(model_path)
+    if "path" in model_link_dict[model_name] and model_link_dict[model_name]["path"] != "":
+        model_directory = Path(model_path / model_link_dict[model_name]["path"])
+    os.makedirs(str(model_directory.resolve()), exist_ok=True)
+
+    hash_checked_file = model_path / "hash_checked"
+
+    # if one of the files does not exist, break the loop and download the files
+    needs_download = False
+    for file, expected_checksum in model_link_dict[model_name]["file_checksums"].items():
+        if not Path(model_directory / file).exists():
+            needs_download = True
+            break
+
+    if not needs_download:
+        if not hash_checked_file.is_file():
+            needs_download = not check_file_hashes(
+                str(model_directory.resolve()),
+                model_link_dict[model_name]["file_checksums"]
+            )
+            if not needs_download:
+                save_hashes(model_path, model_link_dict[model_name]["file_checksums"])
+        else:
+            expected_hashes = model_link_dict[model_name]["file_checksums"]
+            loaded_hashes = load_hashes(model_path)
+            if not loaded_hashes:
+                if check_file_hashes(model_path, expected_hashes):
+                    needs_download = False
+                else:
+                    needs_download = True
+
+    if needs_download and not state["is_downloading"]:
+        print(f"download started... {title}")
+        state["is_downloading"] = True
+        filename = os.path.basename(model_link_dict[model_name]["urls"][0])
+        download_success = download_extract(model_link_dict[model_name]["urls"],
+                                                       str(model_directory.resolve()),
+                                                       model_link_dict[model_name]["checksum"],
+                                                       alt_fallback=alt_fallback,
+                                                       force_non_ui_dl=force_non_ui_dl,
+                                                       fallback_extract_func=fallback_extract_func,
+                                                       fallback_extract_func_args=(
+                                                           str(Path(model_directory / filename)),
+                                                           str(Path(model_directory).resolve()),
+                                                       ),
+                                                       title=f"{title}", extract_format=extract_format)
+        if not download_success:
+            print(f"Download failed: {title}")
+        else:
+            save_hashes(model_path, model_link_dict[model_name]["file_checksums"])
+    state["is_downloading"] = False
