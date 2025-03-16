@@ -15,7 +15,7 @@ import audio_tools
 import processmanager
 
 from Models.TextTranslation import texttranslate
-from Models.OCR import easyocr
+from Models import OCR
 from windowcapture import WindowCapture
 import settings
 import VRC_OSCLib
@@ -297,10 +297,11 @@ def ocr_req(msgObj, websocket):
         to_romaji = msgObj["value"]["to_romaji"]
     if "image" in msgObj["value"]:
         image = base64.b64decode(msgObj["value"]["image"])
-        ocr_result, _, bounding_boxes = easyocr.run_image_processing_from_image(image,
+        OCR.init_ocr_model()
+        ocr_result, _, bounding_boxes = OCR.run_image_processing_from_image(image,
                                                                                 ['en', msgObj["value"]["ocr_lang"]])
     else:
-        ocr_result, image, bounding_boxes = easyocr.run_image_processing(window_name,
+        ocr_result, image, bounding_boxes = OCR.run_image_processing(window_name,
                                                                          ['en', msgObj["value"]["ocr_lang"]])
     if len(ocr_result) > 0:
         image_data = base64.b64encode(image).decode('utf-8')
@@ -579,7 +580,8 @@ async def main_on_connect_handler(server_instance, websocket):
         await server_instance.send(websocket, json.dumps({"type": "installed_languages", "data": available_languages}))
 
     # send all available image recognition languages
-    available_languages = easyocr.get_installed_language_names()
+    OCR.init_ocr_model()
+    available_languages = OCR.get_installed_language_names()
     if available_languages is not None:
         await server_instance.send(websocket,
                                    json.dumps({"type": "available_img_languages", "data": available_languages}))

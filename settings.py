@@ -45,6 +45,7 @@ class SettingsManager:
             "txt_second_translation_wrap": " | ",  # wrap other translations in result with this string
 
             # ocr settings
+            "ocr_type": "easyocr",  # load ocr engine. Can be "easyocr" or "got_ocr_20"
             "ocr_lang": "en",  # language for OCR image to text recognition.
             "ocr_window_name": "VRChat",  # window name for OCR image to text recognition.
             "ocr_txt_src_lang": "auto",  # (internal setting for ocr text translation)
@@ -306,6 +307,7 @@ class SettingsManager:
             "osc_type_transfer": ["source", "translation_result", "both", "both_inverted"],
             "osc_send_type": ["full", "full_or_scroll", "scroll", "chunks"],
             "denoise_audio": ["", "noise_reduce", "deepfilter"],
+            "ocr_type": ["", "easyocr", "got_ocr_20"],
         }
 
         return possible_settings
