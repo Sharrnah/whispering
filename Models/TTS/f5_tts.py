@@ -368,6 +368,7 @@ model_list = {
     "Russian": ["F5-TTS_Russian"],
     "Vietnamese": ["F5-TTS_Vietnamese"],
     "Malaysian": ["F5-TTS_Malaysian"],
+    "Custom": ["F5-TTS_custom", "F5-TTS_custom-bigvgan", "E2-TTS_custom"],
 }
 
 speed_mapping = {
@@ -401,7 +402,8 @@ class F5TTS(metaclass=SingletonMeta):
     vocoder = None
     vocoder_name = "vocos"
 
-    currently_downloading = False
+    #currently_downloading = False
+    download_state = {"is_downloading": False}
 
     last_generation = {"audio": None, "sample_rate": None}
 
@@ -429,42 +431,16 @@ class F5TTS(metaclass=SingletonMeta):
         pass
 
     def download_model(self, model_name):
-        model_directory = Path(cache_path / TTS_MODEL_LINKS[model_name]["path"])
-        os.makedirs(str(model_directory.resolve()), exist_ok=True)
+        downloader.download_model({
+            "model_path": cache_path,
+            "model_link_dict": TTS_MODEL_LINKS,
+            "model_name": model_name,
+            "title": "Text 2 Speech (F5/E2 TTS)",
 
-        # if one of the files does not exist, break the loop and download the files
-        needs_download = False
-        for file, expected_checksum in TTS_MODEL_LINKS[model_name]["file_checksums"].items():
-            if not Path(model_directory / file).exists():
-                needs_download = True
-                break
-
-        if not needs_download:
-            for file, expected_checksum in TTS_MODEL_LINKS[model_name]["file_checksums"].items():
-                checksum = downloader.sha256_checksum(str(model_directory.resolve() / file))
-                if checksum != expected_checksum:
-                    needs_download = True
-                    break
-
-        # iterate over all TTS_MODEL_LINKS[model_name]["files"] entries and download them
-        if needs_download and not self.currently_downloading:
-            print("download started... F5-TTS")
-            self.currently_downloading = True
-            zip_filename = os.path.basename(TTS_MODEL_LINKS[model_name]["urls"][0])
-            if not downloader.download_extract(TTS_MODEL_LINKS[model_name]["urls"],
-                                               str(model_directory.resolve()),
-                                               TTS_MODEL_LINKS[model_name]["checksum"],
-                                               alt_fallback=False,
-                                               force_non_ui_dl=False,
-                                               fallback_extract_func=downloader.extract_zip,
-                                               fallback_extract_func_args=(
-                                                       str(Path(model_directory / zip_filename)),
-                                                       str(Path(model_directory).resolve()),
-                                               ),
-                                               title="Text 2 Speech (F5/E2 TTS) - " + model_name, extract_format="zip"):
-                print(f"Download failed: Text 2 Speech (F5/E2 TTS) - {model_name}")
-
-        self.currently_downloading = False
+            "alt_fallback": False,
+            "force_non_ui_dl": False,
+            "extract_format": "zip",
+        }, self.download_state)
 
     def _get_model_name(self):
         model = "F5-TTS"
@@ -474,8 +450,12 @@ class F5TTS(metaclass=SingletonMeta):
             # remove language part from string example: " (en & zh)"
             model = re.sub(r'\(.*?\)', '', model).strip()
 
+        if "custom" in model:
+            return model
+
         if model == "" or model not in TTS_MODEL_LINKS:
             model = "F5-TTS"
+
         return model
 
     # def apply_vocos_on_audio(self, audio_data, sample_rate=24000):
@@ -529,12 +509,17 @@ class F5TTS(metaclass=SingletonMeta):
     def load(self):
         model = self._get_model_name()
 
-        model_directory = Path(cache_path / TTS_MODEL_LINKS[model]["path"])
+        if "custom" not in model:
+            model_directory = Path(cache_path / TTS_MODEL_LINKS[model]["path"])
+        else:
+            model_directory = Path(cache_path / model)
+            os.makedirs(model_directory, exist_ok=True)
 
         self.download_model("vocos")
         self.download_model("bigvgan")
         self.download_model("voices")
-        self.download_model(model)
+        if "custom" not in model:
+            self.download_model(model)
 
         self.model_id = model
 
@@ -560,13 +545,19 @@ class F5TTS(metaclass=SingletonMeta):
                 ckpt_file = str(Path(model_directory / f"model.pt").resolve())
             vocab_file = str(Path(model_directory / "vocab.txt").resolve())
 
-        # set model specific cfg if needed.
-        if "model_cfg" in TTS_MODEL_LINKS[model]:
-            model_cfg = TTS_MODEL_LINKS[model]["model_cfg"]
+        if "custom" not in model:
+            # set model specific cfg if needed.
+            if "model_cfg" in TTS_MODEL_LINKS[model]:
+                model_cfg = TTS_MODEL_LINKS[model]["model_cfg"]
 
-        mel_spec_type = "vocos"
-        if "mel_spec_type" in TTS_MODEL_LINKS[model]:
-            mel_spec_type = TTS_MODEL_LINKS[model]["mel_spec_type"]
+            mel_spec_type = "vocos"
+            if "mel_spec_type" in TTS_MODEL_LINKS[model]:
+                mel_spec_type = TTS_MODEL_LINKS[model]["mel_spec_type"]
+        else:
+            # set custom model vocoder / mel_spec_type.
+            mel_spec_type = "vocos"
+            if "bigvgan" in model:
+                mel_spec_type = "bigvgan"
 
         try:
             self.ema_model = load_model(model_cls, model_cfg, ckpt_file, mel_spec_type=mel_spec_type, vocab_file=vocab_file, device=self.compute_device)
@@ -578,9 +569,19 @@ class F5TTS(metaclass=SingletonMeta):
         # load vocoder model
         vocoder_name = "vocos"
         try:
-            if self.vocoder is None or ("mel_spec_type" not in TTS_MODEL_LINKS[self.model_id] and self.vocoder_name != "vocos") or ("mel_spec_type" in TTS_MODEL_LINKS[self.model_id] and self.vocoder_name != TTS_MODEL_LINKS[self.model_id]["mel_spec_type"]):
-                if "mel_spec_type" in TTS_MODEL_LINKS[self.model_id]:
-                    vocoder_name = TTS_MODEL_LINKS[self.model_id]["mel_spec_type"]
+            if "custom" not in model:
+                if self.vocoder is None or ("mel_spec_type" not in TTS_MODEL_LINKS[self.model_id] and self.vocoder_name != "vocos") or ("mel_spec_type" in TTS_MODEL_LINKS[self.model_id] and self.vocoder_name != TTS_MODEL_LINKS[self.model_id]["mel_spec_type"]):
+                    if "mel_spec_type" in TTS_MODEL_LINKS[self.model_id]:
+                        vocoder_name = TTS_MODEL_LINKS[self.model_id]["mel_spec_type"]
+                    print(f"loading vocoder model: {vocoder_name}")
+                    try:
+                        self.load_vocoder(vocoder_name, device=self.compute_device)
+                    except Exception as e:
+                        print(e)
+                        print(f"Failed to load vocoder model: {vocoder_name}, falling back to default vocoder.")
+                        self.load_vocoder("vocos", device=self.compute_device)
+            else:
+                vocoder_name = mel_spec_type
                 print(f"loading vocoder model: {vocoder_name}")
                 try:
                     self.load_vocoder(vocoder_name, device=self.compute_device)
@@ -588,6 +589,7 @@ class F5TTS(metaclass=SingletonMeta):
                     print(e)
                     print(f"Failed to load vocoder model: {vocoder_name}, falling back to default vocoder.")
                     self.load_vocoder("vocos", device=self.compute_device)
+
         except Exception as e:
             print(e)
             traceback.print_exc()
