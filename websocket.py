@@ -315,6 +315,26 @@ def ocr_req(msgObj, websocket):
         AnswerMessage(websocket, json.dumps(
             {"type": "ocr_result", "data": {"bounding_boxes": bounding_boxes, "image_data": image_data}}))
 
+def chat_request(msgObj, websocket):
+    system_prompt = ''
+    if "system_prompt" in msgObj["value"]:
+        system_prompt = msgObj["value"]["system_prompt"]
+    chat_message = ''
+    if "text" in msgObj["value"]:
+        chat_message = msgObj["value"]["text"]
+    stt_type = settings.GetOption("stt_type")
+    compute_dtype = settings.GetOption("whisper_precision")
+    ai_device = settings.GetOption("ai_device")
+    if chat_message == '':
+        return
+
+    if stt_type == "phi4":
+        import Models.Multi.phi4 as phi4
+        llm_model = phi4.Phi4(compute_type=compute_dtype, device=ai_device)
+        response = llm_model.transcribe(None, task='chat', language='', chat_message=chat_message, system_prompt=system_prompt)
+        response['text'] = chat_message
+        AnswerMessage(websocket, json.dumps(response))
+        del llm_model
 
 def plugin_event_handler(msgObj, websocket):
     pluginClassName = msgObj["name"]
@@ -492,6 +512,10 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
                 download = True
             tts_thread = threading.Thread(target=tts_plugin_process, args=(msg_obj, websocket, download))
             tts_thread.start()
+
+    if msg_obj["type"] == "chat_req":
+        translate_thread = threading.Thread(target=chat_request, args=(msg_obj, websocket))
+        translate_thread.start()
 
     if msg_obj["type"] == "tts_setting_special":
         if "value" in msg_obj:
