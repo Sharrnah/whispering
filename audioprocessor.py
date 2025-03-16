@@ -516,7 +516,7 @@ def load_whisper(model, ai_device):
         except Exception as e:
             print("Failed to load Nemo Canary model. Application exits. " + str(e))
     elif stt_type == "phi4":
-        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
+        compute_dtype = main_settings.GetOption("whisper_precision")
         #try:
         return phi4.Phi4(compute_type=compute_dtype, device=ai_device)
         #except Exception as e:
