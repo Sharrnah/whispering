@@ -46,6 +46,8 @@ class SettingsManager:
 
             # ocr settings
             "ocr_type": "easyocr",  # load ocr engine. Can be "easyocr" or "got_ocr_20"
+            "ocr_ai_device": "cpu",  # cuda, cpu
+            "ocr_precision": "float32",
             "ocr_lang": "en",  # language for OCR image to text recognition.
             "ocr_window_name": "VRChat",  # window name for OCR image to text recognition.
             "ocr_txt_src_lang": "auto",  # (internal setting for ocr text translation)
@@ -296,7 +298,7 @@ class SettingsManager:
             "tts_type": ["silero", "f5_e2", "zonos", "kokoro", ""],
             "tts_ai_device": ["cuda", "cpu"],
             "txt_translator_device": ["cuda", "cpu"],
-            "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "Seamless_M4T", "phi4"],
+            "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "seamless_m4t", "phi4"],
             "txt_translator_size": ["small", "medium", "large"],
             "txt_translator_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit"],
             "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
@@ -307,7 +309,7 @@ class SettingsManager:
             "osc_type_transfer": ["source", "translation_result", "both", "both_inverted"],
             "osc_send_type": ["full", "full_or_scroll", "scroll", "chunks"],
             "denoise_audio": ["", "noise_reduce", "deepfilter"],
-            "ocr_type": ["", "easyocr", "got_ocr_20"],
+            "ocr_type": ["", "easyocr", "got_ocr_20", "phi4"],
         }
 
         return possible_settings
