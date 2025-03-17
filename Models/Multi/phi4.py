@@ -104,6 +104,7 @@ class Phi4(metaclass=SingletonMeta):
         'transcribe_translate': "<|user|><|audio_1|>Transcribe the audio to text, and then translate the audio to {language_name}. Use <sep> as a separator between the original transcript and the translation.<|end|><|assistant|>",
         'question_answering': "<|user|><|audio_1|><|end|><|assistant|>",
         'chat': "<|system|>You are a helpful assistant.<|end|><|user|>{chat_message}<|end|><|assistant|>",
+        'text_translate': "<|system|>You are a helpful assistant.<|end|><|user|>translate \"{chat_message}\" into {language_name}. Only reply with the translation.<|end|><|assistant|>",
         #'image_recognition': "<|user|><|image_1|>Describe the image in detail.<|end|><|assistant|>",
     }
 
@@ -234,7 +235,7 @@ class Phi4(metaclass=SingletonMeta):
 
         language_code = ""
         language_name = ""
-        if task == 'translate' or task == 'transcribe_translate':
+        if task == 'translate' or task == 'transcribe_translate' or task == 'text_translate':
             if language in supported_text_languages.keys():
                 language_code = language
                 language_name = supported_text_languages[language]

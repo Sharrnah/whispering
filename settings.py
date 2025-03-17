@@ -296,7 +296,7 @@ class SettingsManager:
             "tts_type": ["silero", "f5_e2", "zonos", "kokoro", ""],
             "tts_ai_device": ["cuda", "cpu"],
             "txt_translator_device": ["cuda", "cpu"],
-            "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "Seamless_M4T"],
+            "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "Seamless_M4T", "phi4"],
             "txt_translator_size": ["small", "medium", "large"],
             "txt_translator_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit"],
             "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],

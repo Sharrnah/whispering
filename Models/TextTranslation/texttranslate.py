@@ -7,6 +7,7 @@ from Models.TextTranslation import texttranslateM2M100_CTranslate2
 from Models.TextTranslation import texttranslateNLLB200
 from Models.TextTranslation import texttranslateNLLB200_CTranslate2
 from Models.Multi.seamless_m4t import SeamlessM4T
+from Models.Multi.phi4 import Phi4
 
 import Plugins
 
@@ -50,6 +51,11 @@ def InstallLanguages():
                 compute_type=settings.GetOption("txt_translator_precision"),
                 device=settings.GetOption("txt_translator_device")
             )
+        case "phi4":
+            txt_translator_instance = Phi4(
+                compute_type=settings.GetOption("txt_translator_precision"),
+                device=settings.GetOption("txt_translator_device")
+            )
 
 
 def GetInstalledLanguageNames():
@@ -62,6 +68,8 @@ def GetInstalledLanguageNames():
             return texttranslateNLLB200_CTranslate2.get_installed_language_names()
         case "Seamless_M4T":
             return SeamlessM4T.get_languages()
+        case "phi4":
+            return Phi4.get_languages()
         case _:
             try:
                 # call custom plugin event method
@@ -101,6 +109,18 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
             except Exception as e:
                 print("Error: " + str(e))
                 traceback.print_exc()
+        case "phi4":
+            try:
+                response_dict = txt_translator_instance.transcribe(
+                    None,
+                    task='text_translate',
+                    chat_message=text,
+                    language=to_code,
+                )
+                translation_text, from_code, to_code = response_dict['text'], '', response_dict['language']
+            except Exception as e:
+                print("Error: " + str(e))
+                traceback.print_exc()
         case _:
             for plugin_inst in Plugins.plugins:
                 try:
@@ -121,5 +141,5 @@ def SetDevice(option):
     texttranslateNLLB200.set_device(option)
     texttranslateNLLB200_CTranslate2.set_device(option)
     texttranslateM2M100_CTranslate2.set_device(option)
-    if txt_translator_instance is not None:
+    if txt_translator_instance is not None and hasattr(txt_translator_instance, 'set_device'):
         txt_translator_instance.set_device(option)
