@@ -295,14 +295,17 @@ def ocr_req(msgObj, websocket):
     to_romaji = False
     if "to_romaji" in msgObj["value"]:
         to_romaji = msgObj["value"]["to_romaji"]
+
+    src_languages = msgObj["value"]["ocr_lang"]
+    if settings.GetOption("ocr_type") == "easyocr":
+        src_languages = ['en', msgObj["value"]["ocr_lang"]]
+
     if "image" in msgObj["value"]:
         image = base64.b64decode(msgObj["value"]["image"])
         OCR.init_ocr_model()
-        ocr_result, _, bounding_boxes = OCR.run_image_processing_from_image(image,
-                                                                                ['en', msgObj["value"]["ocr_lang"]])
+        ocr_result, _, bounding_boxes = OCR.run_image_processing_from_image(image, src_languages)
     else:
-        ocr_result, image, bounding_boxes = OCR.run_image_processing(window_name,
-                                                                         ['en', msgObj["value"]["ocr_lang"]])
+        ocr_result, image, bounding_boxes = OCR.run_image_processing(window_name, src_languages)
     if len(ocr_result) > 0:
         image_data = base64.b64encode(image).decode('utf-8')
         translate_result, txt_from_lang, txt_to_lang = (

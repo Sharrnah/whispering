@@ -3,7 +3,6 @@ import requests
 
 import websocket
 from Models.Singleton import SingletonMeta
-from windowcapture import WindowCapture
 import easyocr
 from easyocr import config
 import os
@@ -126,10 +125,6 @@ class EasyOcr(metaclass=SingletonMeta):
     def get_installed_language_names(self):
         return tuple([{"code": code, "name": language} for language, code in LANGUAGE_CODES.items()])
 
-    def initialize_window_capture(self, window_name):
-        win_cap = WindowCapture(window_name)
-        return win_cap
-
     def convert_bounding_box(self, coords):
         # Extract the minimum and maximum x and y coordinates
         min_x = min(coords, key=lambda x: x[0])[0]
@@ -143,30 +138,6 @@ class EasyOcr(metaclass=SingletonMeta):
 
         # Return the absolute pixel coordinates of the bounding box
         return min_x, min_y, min_x + width, min_y + height
-
-    def run_image_processing(self, window_name, src_languages):
-        self.init_reader(src_languages)
-        screenshot_png = None
-        result_lines = []
-        bounding_boxes = []
-        if self.reader is not None:
-            try:
-                win_cap = self.initialize_window_capture(window_name)
-
-                # get an updated image of the game
-                screenshot, screenshot_png = win_cap.get_screenshot_mss()
-                if screenshot is None:
-                    return None, None, None
-
-                # unitialize
-                win_cap.unitialize()
-
-                result_lines, _, bounding_boxes = self.run_image_processing_from_image(screenshot, src_languages)
-
-            except Exception as e:
-                print(e)
-
-        return result_lines, screenshot_png, bounding_boxes
 
     def run_image_processing_from_image(self, image_src, src_languages):
         image_pth = image_src

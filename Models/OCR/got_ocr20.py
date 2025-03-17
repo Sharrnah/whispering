@@ -8,7 +8,6 @@ from attr.validators import instance_of
 import downloader
 import websocket
 from Models.Singleton import SingletonMeta
-from windowcapture import WindowCapture
 import os
 from pathlib import Path
 from transformers import AutoProcessor, AutoModelForImageTextToText
@@ -48,8 +47,22 @@ class Got_ocr_20(metaclass=SingletonMeta):
         "Auto": "",
     }
     device = "cpu"
+    torch_dtype = torch.float32
 
     download_state = {"is_downloading": False}
+
+    def __init__(self, device=""):
+        self.set_compute_device(device)
+
+    def set_compute_device(self, device):
+        if device != "" and device is not None and device != "auto":
+            self.device = device
+        else:
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        self.torch_dtype = torch.float32
+        if self.device == "cuda" or self.device.startswith("cuda:"):
+            self.torch_dtype = torch.bfloat16
 
     def download_model(self, model_name):
         downloader.download_model({
@@ -64,15 +77,12 @@ class Got_ocr_20(metaclass=SingletonMeta):
         }, self.download_state)
 
     def init_reader(self, languages):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        torch_dtype = torch.float32
-        if self.device == "cuda":
-            torch_dtype = torch.bfloat16
+
         try:
             self.download_model("GOT_OCR_2.0")
 
             websocket.set_loading_state("ocr_loading", True)
-            self.model = AutoModelForImageTextToText.from_pretrained(str(model_path.resolve()), torch_dtype=torch_dtype, device_map=self.device)
+            self.model = AutoModelForImageTextToText.from_pretrained(str(model_path.resolve()), torch_dtype=self.torch_dtype, device_map=self.device)
             self.processor = AutoProcessor.from_pretrained(str(model_path.resolve()))
             websocket.set_loading_state("ocr_loading", False)
         except Exception as e:
@@ -82,11 +92,6 @@ class Got_ocr_20(metaclass=SingletonMeta):
 
     def get_installed_language_names(self):
         return tuple([{"code": code, "name": language} for language, code in self.LANGUAGE_CODES.items()])
-
-    def initialize_window_capture(self, window_name):
-        win_cap = WindowCapture(window_name)
-        return win_cap
-
 
     def convert_bounding_box(self, coords):
         # Extract the minimum and maximum x and y coordinates
@@ -101,32 +106,6 @@ class Got_ocr_20(metaclass=SingletonMeta):
 
         # Return the absolute pixel coordinates of the bounding box
         return min_x, min_y, min_x + width, min_y + height
-
-
-    def run_image_processing(self, window_name, src_languages):
-        self.init_reader(src_languages)
-        screenshot_png = None
-        result_lines = []
-        bounding_boxes = []
-        if self.model is not None and self.processor is not None:
-            try:
-                win_cap = self.initialize_window_capture(window_name)
-
-                # get an updated image of the game
-                screenshot, screenshot_png = win_cap.get_screenshot_mss()
-                if screenshot is None:
-                    return None, None, None
-
-                # unitialize
-                win_cap.unitialize()
-
-                result_lines, _, bounding_boxes = self.run_image_processing_from_image(screenshot, src_languages)
-
-            except Exception as e:
-                print(e)
-
-        return result_lines, screenshot_png, bounding_boxes
-
 
     def run_image_processing_from_image(self, image_src, src_languages):
         image_pth = image_src

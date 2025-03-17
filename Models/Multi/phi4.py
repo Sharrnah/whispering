@@ -1,7 +1,11 @@
+import io
 import os
 from pathlib import Path
 
+import numpy
+import requests
 import torch
+from PIL import Image
 from transformers import AutoModelForCausalLM, AutoProcessor, GenerationConfig, BitsAndBytesConfig
 
 import downloader
@@ -105,7 +109,7 @@ class Phi4(metaclass=SingletonMeta):
         'question_answering': "<|user|><|audio_1|><|end|><|assistant|>",
         'chat': "<|system|>You are a helpful assistant.<|end|><|user|>{chat_message}<|end|><|assistant|>",
         'text_translate': "<|system|>You are a helpful assistant.<|end|><|user|>translate \"{chat_message}\" into {language_name}. Only reply with the translation.<|end|><|assistant|>",
-        #'image_recognition': "<|user|><|image_1|>Describe the image in detail.<|end|><|assistant|>",
+        'image_recognition': "<|user|><|image_1|>What text is shown in this image? Only reply with the text.<|end|><|assistant|>",
     }
 
     compute_type = "float32"
@@ -116,8 +120,15 @@ class Phi4(metaclass=SingletonMeta):
     model = None
     generation_config = None
 
-    def __init__(self, compute_type="float32", device="cpu"):
+    def __init__(self, compute_type="", device=""):
+        if device == "" or device is None or device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
         self.set_compute_device(device)
+
+        if compute_type == "":
+            compute_type = "float32"
+            if self.compute_device_str == "cuda" or self.compute_device_str.startswith("cuda:"):
+                compute_type = "bfloat16"
         self.set_compute_type(compute_type)
         if self.model is None or self.processor is None:
             self.load_model()
@@ -145,6 +156,8 @@ class Phi4(metaclass=SingletonMeta):
             return {'dtype': torch.bfloat16, '4bit': False, '8bit': False}
         elif dtype_str == "float32":
             return {'dtype': torch.float32, '4bit': False, '8bit': False}
+        #elif dtype_str == "float8":
+        #    return {'dtype': torch.float8_e4m3fn, '4bit': False, '8bit': False}
         elif dtype_str == "4bit":
             return {'dtype': torch.float16, '4bit': True, '8bit': False}
         elif dtype_str == "8bit":
@@ -185,6 +198,8 @@ class Phi4(metaclass=SingletonMeta):
 
         attention_implementation = 'sdpa'
         quantization_config = None
+        main_torch_dtype = self._str_to_dtype_dict(self.compute_type)['dtype']
+
         if self.compute_device_str.startswith("cuda"):
             if self.compute_type == "4bit" or self.compute_type == "8bit":
                 # @todo not working currently for audio. only for text
@@ -207,7 +222,7 @@ class Phi4(metaclass=SingletonMeta):
                 self.model_path.resolve(),
                 trust_remote_code=True,
                 device_map=self.compute_device_str,
-                torch_dtype=self._str_to_dtype_dict(self.compute_type)['dtype'],
+                torch_dtype=main_torch_dtype,
                 _attn_implementation=attention_implementation,
                 quantization_config=quantization_config,
             )
@@ -219,14 +234,14 @@ class Phi4(metaclass=SingletonMeta):
                 self.model_path.resolve(),
                 trust_remote_code=True,
                 device_map=self.compute_device_str,
-                torch_dtype=self._str_to_dtype_dict(self.compute_type)['dtype'],
+                torch_dtype=main_torch_dtype,
                 _attn_implementation='sdpa',
             ).cpu()
 
         self.generation_config = GenerationConfig.from_pretrained(self.model_path.resolve(), 'generation_config.json')
 
     @torch.no_grad()
-    def transcribe(self, audio_sample, task, language='', chat_message='', system_prompt='',
+    def transcribe(self, audio_sample, task, language='', chat_message='', image_sample=None, system_prompt='',
                    return_timestamps=False, beam_size=4) -> dict:
         # https://huggingface.co/microsoft/Phi-4-multimodal-instruct#speech-language-format
 
@@ -253,6 +268,8 @@ class Phi4(metaclass=SingletonMeta):
         if self.model is not None and self.processor is not None:
             if audio_sample is not None:
                 inputs = self.processor(text=prompt, audios=[(audio_sample,16_000)], return_tensors='pt').to(self.compute_device_str)
+            elif image_sample is not None:
+                inputs = self.processor(text=prompt, images=image_sample, return_tensors='pt').to(self.compute_device_str)
             else:
                 inputs = self.processor(text=prompt, return_tensors='pt').to(self.compute_device_str)
 
@@ -304,3 +321,34 @@ class Phi4(metaclass=SingletonMeta):
                 response_dict['type'] = 'llm_answer'
 
         return response_dict
+
+    def run_image_processing_from_image(self, image_src, src_languages=None):
+        image_pth = image_src
+        image = None
+        if isinstance(image_src, str) and image_src.startswith("http"):
+            print("fetching image url...")
+            image_pth = requests.get(image_src, stream=True).raw
+        elif hasattr(image_src, "file"):
+            print("getting image from file...")
+            image_pth = image_src.file
+
+        if isinstance(image_pth, numpy.ndarray):
+            image = Image.fromarray(image_pth)
+        elif isinstance(image_pth, bytes) or isinstance(image_pth, bytearray):
+            buff = io.BytesIO()
+            buff.write(image_pth)
+            buff.seek(0)
+            image = Image.open(buff).convert('RGB')
+
+        if not isinstance(image, Image.Image):
+            try:
+                image = Image.open(image_pth).convert('RGB')
+            except Exception as e:
+                print("failed to convert image: " + str(e))
+
+        if image is None:
+            image = image_src
+
+        response = self.transcribe(None, 'image_recognition', image_sample=image, language=src_languages)
+        result_lines = response['text'].split("\n")
+        return result_lines, image, None
