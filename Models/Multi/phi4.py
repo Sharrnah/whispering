@@ -130,8 +130,6 @@ class Phi4(metaclass=SingletonMeta):
             if self.compute_device_str == "cuda" or self.compute_device_str.startswith("cuda:"):
                 compute_type = "bfloat16"
         self.set_compute_type(compute_type)
-        if self.model is None or self.processor is None:
-            self.load_model()
 
     def download_model(self, model_name):
         downloader.download_model({
@@ -192,6 +190,8 @@ class Phi4(metaclass=SingletonMeta):
 
     @torch.no_grad()
     def load_model(self, model='small', compute_type="float32", device="cpu"):
+        if self.model is not None and self.processor is not None:
+            return
         self.download_model("Phi-4")
 
         self.processor = AutoProcessor.from_pretrained(self.model_path.resolve(), trust_remote_code=True, use_fast=False)
@@ -243,6 +243,8 @@ class Phi4(metaclass=SingletonMeta):
     @torch.no_grad()
     def transcribe(self, audio_sample, task, language='', chat_message='', image_sample=None, system_prompt='',
                    return_timestamps=False, beam_size=4) -> dict:
+        self.load_model()
+
         # https://huggingface.co/microsoft/Phi-4-multimodal-instruct#speech-language-format
 
         separator = settings.GetOption('txt_second_translation_wrap')
