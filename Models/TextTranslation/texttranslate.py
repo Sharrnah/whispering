@@ -45,7 +45,7 @@ def InstallLanguages():
             texttranslateNLLB200.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "NLLB200_CT2":
             texttranslateNLLB200_CTranslate2.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
-        case "Seamless_M4T":
+        case "seamless_m4t":
             txt_translator_instance = SeamlessM4T(
                 model=settings.GetOption("txt_translator_size"),
                 compute_type=settings.GetOption("txt_translator_precision"),
@@ -66,7 +66,7 @@ def GetInstalledLanguageNames():
             return texttranslateNLLB200.get_installed_language_names()
         case "NLLB200_CT2":
             return texttranslateNLLB200_CTranslate2.get_installed_language_names()
-        case "Seamless_M4T":
+        case "seamless_m4t":
             return SeamlessM4T.get_languages()
         case "phi4":
             return Phi4.get_languages()
@@ -103,7 +103,7 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
             except Exception as e:
                 print("Error: " + str(e))
                 traceback.print_exc()
-        case "Seamless_M4T":
+        case "seamless_m4t":
             try:
                 translation_text, from_code, to_code = txt_translator_instance.text_translate(text, from_code, to_code)
             except Exception as e:
