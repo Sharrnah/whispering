@@ -1,5 +1,7 @@
 import io
+import json
 import os
+import re
 from pathlib import Path
 
 import numpy
@@ -8,6 +10,7 @@ import torch
 from PIL import Image
 from transformers import AutoModelForCausalLM, AutoProcessor, GenerationConfig, BitsAndBytesConfig
 
+import Plugins
 import downloader
 import settings
 from Models.Singleton import SingletonMeta
@@ -55,7 +58,7 @@ MODEL_LINKS = {
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Phi-4/phi4.zip",
             "https://s3.libs.space:9000/ai-models/Phi-4/phi4.zip",
         ],
-        "checksum": "303e3707e3a7f28387d8f58e67d31034066d42d8b744e435fb712f41747ca8da",
+        "checksum": "57f641617c0051f731e07eed0de24cadacd9876e7714003f855e833b91d712d3",
         "file_checksums": {
             "added_tokens.json": "d4f2aceb0f20b71dd1f4bcc7e052e4412946bf281840b8f83d39f259571af486",
             "config.json": "49e1c05f93d43d7f17715b779a2576235b019f587285d7d914e5b05156253f62",
@@ -67,7 +70,7 @@ MODEL_LINKS = {
             "model-00002-of-00003.safetensors": "b3e812c0c8acef4e7f5e34d6c9f77a7640ee4a2b93ea351921365ac62f19918d",
             "model-00003-of-00003.safetensors": "7be96b7339303752634b202d3f377bcf312a03046586eca6cea23347ace1e65a",
             "model.safetensors.index.json": "b67dbc7062e1ccf472faba4222d631dc42929c827fbdaed1ec8e34fe0601819a",
-            "modeling_phi4mm.py": "0d4d86ac8c18eb94e110fc2315895fed6a3135371aac74a6d239ff36d24c0b55",
+            "modeling_phi4mm.py": "e2b44eb7a66d6cc54524cee1ff9ba92d0658d435ea8900329ea0dbdb85c6439d",
             "preprocessor_config.json": "9db19b9663fb86f04c0f11d3a9b7f65a19f13d4543fb4a15bd33f82b0c92d64f",
             "processing_phi4mm.py": "84914d3e12256b4e2186e040c9830c11408468b6774f42afe85e6f8de2626d50",
             "processor_config.json": "798fc4cd09c067053af27f07f0d2b329b471c5b2eb923ceb06efa41dee660c05",
@@ -79,7 +82,7 @@ MODEL_LINKS = {
             "speech-lora\\tokenizer.json": "382cc235b56c725945e149cc25f191da667c836655efd0857b004320e90e91ea",
             "speech-lora\\tokenizer_config.json": "d51bf28bbdc9915926a0b1908f95cec05f3d10b71af0d27f85344d9a486b03ae",
             "speech-lora\\vocab.json": "6cb65a857824fa6615bb1782d95d882617a8bbce1da0317118586b36f39e98bd",
-            "speech_conformer_encoder.py": "7333a272e9ebcebfefe2c03f95cb5983c5439807d93773fcfeac3ea13758a491",
+            "speech_conformer_encoder.py": "3742827e945732cc5deea4a95e14004da037044431a94e3f3fac26239e614e3a",
             "tokenizer.json": "4c1b9f641d4f8b7247b8d5007dd3b6a9f6a87cb5123134fe0d326f14d10c0585",
             "tokenizer_config.json": "a5da2e45718db78924ad5135a58a80b0303596acf54a1dc5c912c98436ddcaf3",
             "vision-lora\\adapter_config.json": "efbff3b978dd25e0c3abd7e71a1e9acb9a4f25e13f7430ce035654c0cb159484",
@@ -106,10 +109,16 @@ class Phi4(metaclass=SingletonMeta):
         'transcribe': "<|user|><|audio_1|>Transcribe the audio clip into text.<|end|><|assistant|>",
         'translate': "<|user|><|audio_1|>Translate the audio to {language_name}.<|end|><|assistant|>",
         'transcribe_translate': "<|user|><|audio_1|>Transcribe the audio to text, and then translate the audio to {language_name}. Use <sep> as a separator between the original transcript and the translation.<|end|><|assistant|>",
-        'question_answering': "<|user|><|audio_1|><|end|><|assistant|>",
-        'chat': "<|system|>You are a helpful assistant.<|end|><|user|>{chat_message}<|end|><|assistant|>",
+        'question_answering': "<|system|>You are a helpful assistant.<|end|><|user|><|audio_1|>{chat_message}<|end|><|assistant|>",
+        #'question_answering': "<|user|><|audio_1|>{chat_message}<|end|><|assistant|>",
+        #'chat': "<|system|>You are a helpful assistant.<|end|><|user|><|audio_1|>{chat_message}<|end|><|assistant|>",
         'text_translate': "<|system|>You are a helpful assistant.<|end|><|user|>translate \"{chat_message}\" into {language_name}. Only reply with the translation.<|end|><|assistant|>",
         'image_recognition': "<|user|><|image_1|>What text is shown in this image? Only reply with the text.<|end|><|assistant|>",
+        'function_calling': '<|system|>You are a helpful assistant with some tools.{tools_definition}<|end|><|user|><|audio_1|>{chat_message}<|end|><|assistant|>',
+        #'function_calling_reply': '<|system|>You are a helpful assistant. You called {function_name} with the result {function_answer} to {function_description}<|end|><|user|><|audio_1|>{chat_message}<|end|><|assistant|>',
+        'function_calling_reply': '<|system|>You are a helpful assistant. {system_prompt}<|end|><|user|><|audio_1|>{chat_message}<|end|><|assistant|>',
+        # tools are defined like this:
+        # <|tool|>[{"name": "get_weather_updates", "description": "Fetches weather updates for a given city using the RapidAPI Weather API.", "parameters": {"city": {"description": "The name of the city for which to retrieve weather information.", "type": "str", "default": "London"}}}]<|/tool|>
     }
 
     compute_type = "float32"
@@ -257,9 +266,32 @@ class Phi4(metaclass=SingletonMeta):
                 language_code = language
                 language_name = supported_text_languages[language]
 
+        tools_definition = ""
+        tools_definitions_list = []
+        if task == 'function_calling':
+            # function call definition event call
+            plugin_function_registration_result_list = Plugins.plugin_custom_event_call_all('plugin_llm_function_registration', {'model': 'phi4', 'task': task})
+            print("plugin_function_registration_result_list: ")
+            print(plugin_function_registration_result_list)
+            if plugin_function_registration_result_list is not None and plugin_function_registration_result_list:
+                for plugin_function_registration_result in plugin_function_registration_result_list:
+                    if plugin_function_registration_result is not None:
+                        tools_definitions_list.append(json.dumps(plugin_function_registration_result['tool_definition']))
+                if tools_definitions_list:
+                    tools_definition = '<|tool|>[' + ','.join(tools_definitions_list) + ']<|/tool|>'
+
+        print("tools_definition: " + str(tools_definition))
+
         prompt = self.prompt_types['transcribe']
         if task in self.prompt_types.keys():
-            prompt = self.prompt_types[task].format(language_code=language_code, language_name=language_name, chat_message=chat_message)
+            prompt = self.prompt_types[task].format(language_code=language_code, language_name=language_name, chat_message=chat_message, system_prompt=system_prompt, tools_definition=tools_definition)
+
+        if audio_sample is None:
+            # remove the <|audio_*|> from the prompt if no audio sample is provided
+            prompt = re.sub(r'<\|audio_\d+\|>', '', prompt)
+        if image_sample is None:
+            # remove the <|image_*|> from the prompt if no image is provided
+            prompt = re.sub(r'<\|image_\d+\|>', '', prompt)
 
         response_dict = {
             'text': '',
@@ -318,9 +350,58 @@ class Phi4(metaclass=SingletonMeta):
                 response_dict["language"] = ''
 
 
-            if task == 'question_answering' or task == 'chat':
+            if task == 'question_answering' or task == 'chat' or task == 'function_calling':
                 response_dict['llm_answer'] = response
+                response_dict['text'] = response
                 response_dict['type'] = 'llm_answer'
+
+            # function event call
+            if tools_definition != "" and response is not None:
+                response = re.sub(r'<\|tool_call\|>', '', response)
+                if response == "":
+                    return response_dict
+                try :
+                    tool_call = json.loads(response)[0]
+                except :
+                    try:
+                        json_part = re.search(r'\[.*]|\{.*}', response, re.DOTALL).group(0)
+                        tool_call = json.loads(json_part)
+                        if isinstance(tool_call, list):
+                            tool_call = tool_call[0]
+                    except :
+                        print("Invalid tool call response 1: " + str(response))
+                        return response_dict
+
+                if "name" not in tool_call or ("arguments" not in tool_call and "parameters" not in tool_call):
+                    print("Invalid tool call response 2: " + str(response))
+                    return response_dict
+
+                function_name = tool_call["name"]
+                if "arguments" not in tool_call:
+                    if "parameters" in tool_call:
+                        tool_call["arguments"] = tool_call["parameters"]
+                    else:
+                        print("Invalid tool call response 3: " + str(response))
+                        return response_dict
+
+                arguments = tool_call["arguments"]
+
+                plugin_function_call_result = Plugins.plugin_custom_event_call('plugin_llm_function_process_'+function_name, {
+                    'model': 'phi4', 'task': task, 'response': response, 'function_name': function_name, 'arguments': arguments
+                })
+                print("cccc:")
+                print(plugin_function_call_result)
+                if plugin_function_call_result is not None:
+                    # send function call result back to LLM to get the final answer
+                    if 'function_calling_reply' in self.prompt_types.keys() and 'reply_prompt' in plugin_function_call_result:
+                        function_reply_prompt = plugin_function_call_result["reply_prompt"]
+                        function_call_reply_obj = self.transcribe(audio_sample, 'function_calling_reply', language=language, chat_message=chat_message, image_sample=image_sample, system_prompt=function_reply_prompt,)
+                        print("function_call_reply_obj:")
+                        print(function_call_reply_obj)
+                        plugin_function_call_result["text"] = function_call_reply_obj['text']
+                        plugin_function_call_result["llm_answer"] = function_call_reply_obj['text']
+
+                    response_dict = plugin_function_call_result
 
         return response_dict
 

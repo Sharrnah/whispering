@@ -237,13 +237,18 @@ def internal_plugin_custom_event_call(plugins_list, event_name, data_obj):
         call_func_name = 'on_'+plugin_event_name+'_call'
         if hasattr(plugin_inst, call_func_name):
             try:
-                data_obj = getattr(plugin_inst, call_func_name)(data_obj)
-                return data_obj
+                print(f"Calling {plugin_inst.__class__.__name__} on {call_func_name}")
+                yield getattr(plugin_inst, call_func_name)(copy.deepcopy(data_obj))
             except Exception as e:
                 print(f"Error in plugin {plugin_inst.__class__.__name__} on {call_func_name}: {e}")
                 traceback.print_exc()
-    return None
 
 
 def plugin_custom_event_call(event_name, data_obj):
-    return internal_plugin_custom_event_call(plugins, event_name, data_obj)
+    # Return the first item from the generator
+    for result in internal_plugin_custom_event_call(plugins, event_name, data_obj):
+        return result
+    return None
+
+def plugin_custom_event_call_all(event_name, data_obj):
+    return list(internal_plugin_custom_event_call(plugins, event_name, data_obj))
