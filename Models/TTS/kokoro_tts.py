@@ -743,7 +743,6 @@ class KokoroTTS(metaclass=SingletonMeta):
         full_audio = np.concatenate(audio_chunks, axis=-1)
         # numpy array to torch.Tensor
         full_audio = torch.from_numpy(full_audio).float()
-        full_audio = full_audio.unsqueeze(0)
 
         # call custom plugin event method
         plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': full_audio, 'sample_rate': self.sample_rate})
@@ -803,7 +802,6 @@ class KokoroTTS(metaclass=SingletonMeta):
         full_audio = np.concatenate(audio_chunks, axis=-1)
         # numpy array to torch.Tensor
         full_audio = torch.from_numpy(full_audio).float()
-        full_audio = full_audio.unsqueeze(0)
 
         # save last generation in memory
         self.last_generation = {"audio": full_audio, "sample_rate": self.sample_rate}
@@ -827,7 +825,7 @@ class KokoroTTS(metaclass=SingletonMeta):
             self.audio_streamer = audio_tools.AudioStreamer(audio_device,
                                                             source_sample_rate=int(self.sample_rate),
                                                             playback_channels=2,
-                                                            buffer_size=chunk_size*2,
+                                                            buffer_size=chunk_size,
                                                             input_channels=1,
                                                             dtype="float32",
                                                             tag="tts",
