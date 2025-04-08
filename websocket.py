@@ -476,13 +476,14 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
             exclude_client=websocket)  # broadcast updated settings to all clients
         # reload tts voices if tts model changed
         if msg_obj["name"] == "tts_model":
-            print("Loading new TTS model. Please wait.")
             def tts_load():
+                print("Loading new TTS model. Please wait.")
                 if hasattr(tts.tts, 'load'):
                     tts.tts.load()
                 if hasattr(tts.tts, 'list_voices'):
                     server_instance.broadcast_message(
                         json.dumps({"type": "available_tts_voices", "data": tts.tts.list_voices()}))
+                print("New TTS model loaded.")
             tts_load = threading.Thread(target=tts_load)
             tts_load.start()
         if msg_obj["name"] == "osc_min_time_between_messages":
