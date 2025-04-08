@@ -28,7 +28,9 @@ class Zonos(nn.Module):
         self.eos_token_id = config.eos_token_id
         self.masked_token_id = config.masked_token_id
 
-        self.autoencoder = DACAutoencoder()
+        self.dac_model = config.dac_model
+
+        self.autoencoder = DACAutoencoder(self.dac_model)
         self.backbone = backbone_cls(config.backbone)
         self.prefix_conditioner = PrefixConditioner(config.prefix_conditioner, dim)
         self.spk_clone_model = None
@@ -65,7 +67,7 @@ class Zonos(nn.Module):
 
     @classmethod
     def from_local(
-        cls, config_path: str, model_path: str, device: str = DEFAULT_DEVICE, backbone: str | None = None
+        cls, config_path: str, model_path: str, dac_path: str = "", device: str = DEFAULT_DEVICE, backbone: str | None = None
     ) -> "Zonos":
         config = ZonosConfig.from_dict(json.load(open(config_path)))
         if backbone:
@@ -76,6 +78,9 @@ class Zonos(nn.Module):
             # Preferentially route to pure torch backbone for increased performance and lower latency.
             if is_transformer and "torch" in BACKBONES:
                 backbone_cls = BACKBONES["torch"]
+
+        if dac_path != "":
+            config.dac_model = dac_path
 
         model = cls(config, backbone_cls).to(device, torch.bfloat16)
         model.autoencoder.dac.to(device)

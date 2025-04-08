@@ -52,6 +52,7 @@ class ZonosConfig:
     eos_token_id: int = 1024
     masked_token_id: int = 1025
     pad_vocab_to_multiple_of: int = 8
+    dac_model: str = "descript/dac_44khz"
 
     @classmethod
     def from_dict(cls, d: dict) -> "ZonosConfig":
