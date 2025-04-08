@@ -150,7 +150,9 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
     transcription_auto_save_file = settings.GetOption("transcription_auto_save_file")
     transcription_auto_save_continuous_text = settings.GetOption("transcription_auto_save_continuous_text")
 
-    predicted_text = result.get('text').strip()
+    predicted_text = ""
+    if result.get('text') is not None:
+        predicted_text = result.get('text').strip()
     result["type"] = "transcript"
 
     # Try to prevent sentence repetition
@@ -912,7 +914,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                              daemon=True).start()
             return
 
-        if result is None or (last_whisper_result == result.get('text').strip() and not final_audio):
+        if result is None or (result.get('text') is not None and last_whisper_result == result.get('text').strip() and not final_audio):
             print("skipping... result: ", result)
             return
 
