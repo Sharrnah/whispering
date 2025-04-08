@@ -325,6 +325,9 @@ def chat_request(msgObj, websocket):
     chat_message = ''
     if "text" in msgObj["value"]:
         chat_message = msgObj["value"]["text"]
+    task = 'chat'
+    if "task" in msgObj["value"] and msgObj["value"]["task"] != '':
+        task = msgObj["value"]["task"]
     stt_type = settings.GetOption("stt_type")
     compute_dtype = settings.GetOption("whisper_precision")
     ai_device = settings.GetOption("ai_device")
@@ -334,8 +337,8 @@ def chat_request(msgObj, websocket):
     if stt_type == "phi4":
         import Models.Multi.phi4 as phi4
         llm_model = phi4.Phi4(compute_type=compute_dtype, device=ai_device)
-        response = llm_model.transcribe(None, task='chat', language='', chat_message=chat_message, system_prompt=system_prompt)
-        response['text'] = chat_message
+        response = llm_model.transcribe(None, task=task, language='', chat_message=chat_message, system_prompt=system_prompt)
+        #response['text'] = chat_message
         AnswerMessage(websocket, json.dumps(response))
         del llm_model
 
