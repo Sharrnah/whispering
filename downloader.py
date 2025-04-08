@@ -283,7 +283,7 @@ def download_model(download_settings, state=None):
         model_directory = Path(model_path / model_link_dict[model_name]["path"])
     os.makedirs(str(model_directory.resolve()), exist_ok=True)
 
-    hash_checked_file = model_path / "hash_checked"
+    hash_checked_file = model_directory / "hash_checked"
 
     # if one of the files does not exist, break the loop and download the files
     needs_download = False
@@ -299,12 +299,12 @@ def download_model(download_settings, state=None):
                 model_link_dict[model_name]["file_checksums"]
             )
             if not needs_download:
-                save_hashes(model_path, model_link_dict[model_name]["file_checksums"])
+                save_hashes(model_directory, model_link_dict[model_name]["file_checksums"])
         else:
             expected_hashes = model_link_dict[model_name]["file_checksums"]
-            loaded_hashes = load_hashes(model_path)
+            loaded_hashes = load_hashes(model_directory)
             if not loaded_hashes:
-                if check_file_hashes(model_path, expected_hashes):
+                if check_file_hashes(model_directory, expected_hashes):
                     needs_download = False
                 else:
                     needs_download = True
@@ -327,5 +327,5 @@ def download_model(download_settings, state=None):
         if not download_success:
             print(f"Download failed: {title}")
         else:
-            save_hashes(model_path, model_link_dict[model_name]["file_checksums"])
+            save_hashes(model_directory, model_link_dict[model_name]["file_checksums"])
     state["is_downloading"] = False
