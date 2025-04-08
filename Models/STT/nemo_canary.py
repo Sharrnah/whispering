@@ -1,5 +1,8 @@
 import json
 import os
+import signal
+# patch (/nemo/utils/exp_manager.py) - https://github.com/NVIDIA/NeMo/issues/12858
+signal.SIGKILL = signal.SIGTERM
 
 import torch
 
@@ -21,6 +24,7 @@ import tempfile
 #        "pytorch-quantization is not installed. Install from "
 #        "https://github.com/NVIDIA/TensorRT/tree/master/tools/pytorch-quantization."
 #    )
+
 
 LANGUAGES = {
     "en": "English",
