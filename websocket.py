@@ -38,41 +38,41 @@ def tts_request(msgObj, websocket):
     streamed_playback = settings.GetOption("tts_streamed_playback")
 
     tts_wav = None
+    # @todo allow audio device selection for streamed playback (to support 'test voice' button)
     if streamed_playback and hasattr(tts.tts, "tts_streaming"):
         tts_wav, sample_rate = tts.tts.tts_streaming(text)
-        if tts_wav is not None:
-            return
 
     if tts_wav is None:
+        streamed_playback = False
         tts_wav, sample_rate = tts.tts.tts(text)
 
-        if tts_wav is not None:
-            if msgObj["value"]["to_device"]:
-                if "device_index" in msgObj["value"]:
-                    tts.tts.play_audio(tts_wav, msgObj["value"]["device_index"])
-                else:
-                    tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
+    if tts_wav is not None:
+        if msgObj["value"]["to_device"] and not streamed_playback:
+            if "device_index" in msgObj["value"]:
+                tts.tts.play_audio(tts_wav, msgObj["value"]["device_index"])
             else:
-                # send raw wav data to non UI clients (like html websocket pages, for backwards compatibility)
-                if websocket is not None and websocket != UI_CONNECTED["websocket"]:
-                    AnswerMessage(websocket, json.dumps(
-                        {"type": "tts_result", "wav_data": tts_wav.tolist(), "sample_rate": sample_rate}))
-                if msgObj["value"]["download"]:
-                    wav_data = tts.tts.return_wav_file_binary(tts_wav)
-                    if path is not None and path != '':
-                        # write wav_data to file in path
-                        try:
-                            with open(path, "wb") as f:
-                                f.write(wav_data)
-                            print("100% Finished. TTS file saved to:", path)
-                        except Exception as e:
-                            print("Failed to save TTS file:", e)
-                            traceback.print_exc()
-                    else:
-                        wav_data = base64.b64encode(wav_data).decode('utf-8')
-                        AnswerMessage(websocket, json.dumps({"type": "tts_save", "wav_data": wav_data}))
-            return
-
+                tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
+        else:
+            # send raw wav data to non UI clients (like html websocket pages, for backwards compatibility)
+            if websocket is not None and websocket != UI_CONNECTED["websocket"]:
+                AnswerMessage(websocket, json.dumps(
+                    {"type": "tts_result", "wav_data": tts_wav.tolist(), "sample_rate": sample_rate}))
+            if msgObj["value"]["download"]:
+                wav_data = tts.tts.return_wav_file_binary(tts_wav)
+                if path is not None and path != '':
+                    # write wav_data to file in path
+                    try:
+                        with open(path, "wb") as f:
+                            f.write(wav_data)
+                        print("100% Finished. TTS file saved to:", path)
+                    except Exception as e:
+                        print("Failed to save TTS file:", e)
+                        traceback.print_exc()
+                else:
+                    wav_data = base64.b64encode(wav_data).decode('utf-8')
+                    AnswerMessage(websocket, json.dumps({"type": "tts_save", "wav_data": wav_data}))
+        return
+    else:
         print("TTS failed")
 
 
