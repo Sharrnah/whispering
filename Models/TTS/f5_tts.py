@@ -707,6 +707,7 @@ class F5TTS(metaclass=SingletonMeta):
             is_streaming_text = " (streaming)"
         print("TTS requested F5/E2 TTS", is_streaming_text)
         tts_volume = settings.GetOption("tts_volume")
+        tts_normalize = settings.GetOption("tts_normalize")
         tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
         return_sample_rate = self.target_sample_rate
         if ref_audio is None and ref_text is None:
@@ -838,7 +839,7 @@ class F5TTS(metaclass=SingletonMeta):
             if remove_silence:
                 final_wave = self.remove_silence_parts(final_wave, sample_rate=return_sample_rate)
 
-            if normalize:
+            if tts_normalize:
                 final_wave, _ = audio_tools.normalize_audio_lufs(
                     final_wave, return_sample_rate, -24.0, -16.0,
                     1.3, verbose=True
@@ -861,6 +862,7 @@ class F5TTS(metaclass=SingletonMeta):
 
     def tts_streaming(self, text, ref_audio=None, ref_text=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         tts_volume = settings.GetOption("tts_volume")
+        tts_normalize = settings.GetOption("tts_normalize")
         self.init_audio_stream_playback()
         audio_stream = self.tts(text, ref_audio, ref_text, remove_silence, silence_after_segments, normalize, streaming=True)
 
@@ -868,6 +870,13 @@ class F5TTS(metaclass=SingletonMeta):
         for codes_chunk, _ in audio_stream:
             if self.audio_streamer is None:
                 break
+
+            if tts_normalize:
+                codes_chunk, _ = audio_tools.normalize_audio_lufs(
+                    codes_chunk, self.target_sample_rate, -24.0, -16.0,
+                    1.3, verbose=False
+                )
+
             # change volume
             if tts_volume != 1.0:
                 codes_chunk = audio_tools.change_volume(codes_chunk, tts_volume)

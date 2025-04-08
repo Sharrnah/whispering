@@ -706,6 +706,7 @@ class ZonosTTS(metaclass=SingletonMeta):
         self.set_compute_device(settings.GetOption('tts_ai_device'))
 
         tts_volume = settings.GetOption("tts_volume")
+        tts_normalize = settings.GetOption("tts_normalize")
 
         if ref_audio is None:
             voice_name = settings.GetOption('tts_voice')
@@ -766,6 +767,13 @@ class ZonosTTS(metaclass=SingletonMeta):
         wavs = self.model.autoencoder.decode(codes).cpu()
 
         final_wave = wavs[0]
+
+        if tts_normalize:
+            final_wave, _ = audio_tools.normalize_audio_lufs(
+                final_wave, self.sample_rate, -24.0, -16.0,
+                1.3, verbose=True
+            )
+
         # change volume
         if tts_volume != 1.0:
             final_wave = audio_tools.change_volume(wavs[0], tts_volume)
@@ -783,7 +791,7 @@ class ZonosTTS(metaclass=SingletonMeta):
 
         return final_wave, self.sample_rate
 
-    def tts_streaming(self, text, ref_audio=None):
+    def tts_streaming(self, text, ref_audio=None, normalize=True):
         #self.stop_flag = False
         print("TTS requested Zonos TTS (Streaming)")
         self.load()
@@ -794,6 +802,7 @@ class ZonosTTS(metaclass=SingletonMeta):
         self.init_audio_stream_playback()
 
         tts_volume = settings.GetOption("tts_volume")
+        tts_normalize = settings.GetOption("tts_normalize")
 
         if ref_audio is None:
             voice_name = settings.GetOption('tts_voice')
@@ -855,6 +864,13 @@ class ZonosTTS(metaclass=SingletonMeta):
                 break
             audio_chunk = self.model.autoencoder.decode(codes_chunk).cpu()
             return_audio_chunk = audio_chunk[0]
+
+            if tts_normalize:
+                return_audio_chunk, _ = audio_tools.normalize_audio_lufs(
+                    return_audio_chunk, self.sample_rate, -24.0, -16.0,
+                    1.3, verbose=False
+                )
+
             # change volume
             if tts_volume != 1.0:
                 return_audio_chunk = audio_tools.change_volume(return_audio_chunk, tts_volume)
