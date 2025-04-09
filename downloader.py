@@ -16,6 +16,7 @@ import shutil
 import settings
 import websocket
 
+running_downloads = []  # Global list tracking ongoing downloads
 
 # import logging
 # logging.basicConfig(filename="download.log", level=logging.INFO)
@@ -51,78 +52,88 @@ def download_extract(urls, extract_dir, checksum, title="", extract_format="", a
     file_name = os.path.basename(urls[0])
     local_dl_file = os.path.join(extract_dir, file_name)
 
-    use_ui_downloader = settings.GetOption("ui_download")
-    if not force_non_ui_dl and use_ui_downloader and websocket.UI_CONNECTED["value"] and websocket.UI_CONNECTED["websocket"] is not None:
-        # send websocket message to UI
-        websocket.AnswerMessage(websocket.UI_CONNECTED["websocket"], json.dumps({"type": "download",
-                                                                                 "data": {"urls": urls,
-                                                                                          "extract_dir": local_dl_file,
-                                                                                          "checksum": checksum,
-                                                                                          "title": title,
-                                                                                          "extract_format": extract_format}}))
-        while True:
-            if os.path.isfile(local_dl_file + ".finished") and os.path.isfile(local_dl_file):
-                if sha256_checksum(local_dl_file) == checksum or checksum == "":
-                    success = True
-                break
-            else:
-                # if the finished file doesn't exist, wait for a second before checking again
+    # Check if the download is already running
+    if local_dl_file in running_downloads:
+        print(f"Download for {file_name} is already in progress. Skipping duplicate start.")
+        return False
+
+    # Add to running downloads list
+    running_downloads.append(local_dl_file)
+    try:
+        use_ui_downloader = settings.GetOption("ui_download")
+        if not force_non_ui_dl and use_ui_downloader and websocket.UI_CONNECTED["value"] and websocket.UI_CONNECTED["websocket"] is not None:
+            # send websocket message to UI
+            websocket.AnswerMessage(websocket.UI_CONNECTED["websocket"], json.dumps({"type": "download",
+                                                                                     "data": {"urls": urls,
+                                                                                              "extract_dir": local_dl_file,
+                                                                                              "checksum": checksum,
+                                                                                              "title": title,
+                                                                                              "extract_format": extract_format}}))
+            while True:
+                if os.path.isfile(local_dl_file + ".finished") and os.path.isfile(local_dl_file):
+                    if sha256_checksum(local_dl_file) == checksum or checksum == "":
+                        success = True
+                    break
+                else:
+                    # if the finished file doesn't exist, wait for a second before checking again
+                    time.sleep(1)
+
+            # remove the zip file after extraction, or just rename if not a compressed file
+            if success:
                 time.sleep(1)
+                os.remove(local_dl_file + ".finished")
+                if extract_format != "none":
+                    os.remove(local_dl_file)
 
-        # remove the zip file after extraction, or just rename if not a compressed file
-        if success:
-            time.sleep(1)
-            os.remove(local_dl_file + ".finished")
-            if extract_format != "none":
-                os.remove(local_dl_file)
-
-    else:
-        if not alt_fallback and fallback_extract_func is None:
-            try:
+        else:
+            if not alt_fallback and fallback_extract_func is None:
+                try:
+                    import random
+                    selected_url = random.choice(urls)
+                    download(selected_url, filename=file_name, folder=extract_dir, sha256=checksum, retry_max=5)
+                    if extract_format != "none":
+                        with zipfile.ZipFile(str(local_dl_file), "r") as f:
+                            f.extractall(extract_dir)
+                        # remove the zip file after extraction
+                        os.remove(local_dl_file)
+                    success = True
+                except Exception as e:
+                    print(e)
+                    success = False
+            else:
                 import random
                 selected_url = random.choice(urls)
-                download(selected_url, filename=file_name, folder=extract_dir, sha256=checksum, retry_max=5)
-                if extract_format != "none":
-                    with zipfile.ZipFile(str(local_dl_file), "r") as f:
-                        f.extractall(extract_dir)
-                    # remove the zip file after extraction
-                    os.remove(local_dl_file)
-                success = True
-            except Exception as e:
-                print(e)
-                success = False
-        else:
-            import random
-            selected_url = random.choice(urls)
-            try:
-                download_file_normal(selected_url, extract_dir, checksum)
-            except Exception as first_exception:
-                if len(urls) > 1:
-                    download_successful = False
-                    last_exception = None
-                    # Remove the selected URL from the list
-                    remaining_urls = [url for url in urls if url != selected_url]
-                    for url in remaining_urls:
-                        try:
-                            download_file_simple(url, extract_dir, checksum)
-                            download_successful = True
-                            success = True
-                            break  # Exit the loop if download is successful
-                        except Exception as e:
-                            last_exception = e
-                            continue  # Try the next URL if this one fails
-                    if not download_successful:
+                try:
+                    download_file_normal(selected_url, extract_dir, checksum)
+                except Exception as first_exception:
+                    if len(urls) > 1:
+                        download_successful = False
+                        last_exception = None
+                        # Remove the selected URL from the list
+                        remaining_urls = [url for url in urls if url != selected_url]
+                        for url in remaining_urls:
+                            try:
+                                download_file_simple(url, extract_dir, checksum)
+                                download_successful = True
+                                success = True
+                                break  # Exit the loop if download is successful
+                            except Exception as e:
+                                last_exception = e
+                                continue  # Try the next URL if this one fails
+                        if not download_successful:
+                            success = False
+                            print("All download attempts failed.")
+                            if last_exception:
+                                print(f"Last encountered exception: {last_exception}")
+                    else:
                         success = False
-                        print("All download attempts failed.")
-                        if last_exception:
-                            print(f"Last encountered exception: {last_exception}")
-                else:
-                    success = False
-                    print(first_exception)
-            if fallback_extract_func is not None:
-                fallback_extract_func(*fallback_extract_func_args)
-    return success
-
+                        print(first_exception)
+                if fallback_extract_func is not None:
+                    fallback_extract_func(*fallback_extract_func_args)
+        return success
+    finally:
+        if local_dl_file in running_downloads:
+            running_downloads.remove(local_dl_file)
 
 def sha256_checksum(file_path):
     sha256_hash = hashlib.sha256()
