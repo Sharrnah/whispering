@@ -1,14 +1,25 @@
---extra-index-url https://download.pytorch.org/whl/cu124
-torch==2.6.0
-torchvision==0.21.0
-torchaudio==2.6.0
-#flash-attn @ https://github.com/kingbri1/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu124torch2.6.0cxx11abiFALSE-cp311-cp311-win_amd64.whl
-#flash-attn
+#--extra-index-url https://download.pytorch.org/whl/cu124
+#torch==2.6.0
+#torchvision==0.21.0
+#torchaudio==2.6.0
+##flash-attn @ https://github.com/kingbri1/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu124torch2.6.0cxx11abiFALSE-cp311-cp311-win_amd64.whl
+##flash-attn
+#
+## install flash attention from https://huggingface.co/lldacing/flash-attention-windows-wheel/tree/main
+## or compile using https://github.com/Dao-AILab/flash-attention/issues/1469
+#
+#flash-attn @ wheels/flash_attn-2.7.4+cu124torch2.6.0cxx11abiFALSE-cp311-cp311-win_amd64.whl
 
-# install flash attention from https://huggingface.co/lldacing/flash-attention-windows-wheel/tree/main
-# or compile using https://github.com/Dao-AILab/flash-attention/issues/1469
 
-flash-attn @ wheels/flash_attn-2.7.4+cu124torch2.6.0cxx11abiFALSE-cp311-cp311-win_amd64.whl
+
+
+
+--extra-index-url https://download.pytorch.org/whl/nightly/cu128
+torch==2.7.0.dev20250311
+torchvision==0.22.0.dev20250312
+torchaudio==2.6.0.dev20250312
+flash-attn @ https://github.com/Sharrnah/flash-attention-win/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu128+torch2.7.0-cp311-cp311-win_amd64.whl
+
 
 
 # --extra-index-url https://download.pytorch.org/whl/cu124
