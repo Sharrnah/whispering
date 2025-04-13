@@ -3,6 +3,7 @@ import os
 import torch
 import gc
 
+import transformers.utils
 import yaml
 from transformers import WhisperForConditionalGeneration, WhisperProcessor, pipeline
 from Models.Singleton import SingletonMeta
@@ -135,7 +136,11 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 self.previous_model = model
                 self.release_model()
                 print(f"Loading Whisper-Transformer model: {model} on {device} with {compute_type} precision...")
-                self.model = WhisperForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit, device_map=self.compute_device, attn_implementation="sdpa")
+                attention_type = "sdpa"
+                if transformers.utils.is_flash_attn_2_available():
+                    attention_type = "flash_attention_2"
+                    print(f"Using Flash Attention 2")
+                self.model = WhisperForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit, device_map=self.compute_device, attn_implementation=attention_type)
                 #try:
                 #    # Enable static cache and compile the forward pass
                 #    self.model.generation_config.cache_implementation = "static"
@@ -168,11 +173,9 @@ class TransformerWhisper(metaclass=SingletonMeta):
         return_language = language
 
         if self.model is not None and self.processor is not None:
-            #input_features = self.processor(audio_sample, sampling_rate=16000, return_attention_mask=True, return_tensors="pt").to(self.compute_device).to(compute_dtype).input_features
-            input_features = self.processor(audio_sample, sampling_rate=16000, return_tensors="pt").to(self.compute_device).to(compute_dtype).input_features
-            #inputs = self.processor(audio_sample, sampling_rate=16000, return_attention_mask=True, return_tensors="pt").to(self.compute_device).to(compute_dtype)
-            #input_features = processor_result.input_features
-            #attention_mask = processor_result.attention_mask
+            processor_result = self.processor(audio_sample, sampling_rate=16000, return_tensors="pt", return_attention_mask=True).to(self.compute_device).to(compute_dtype)
+            input_features = processor_result.input_features
+            attention_mask = processor_result.attention_mask
 
             transcriptions = [""]
             with torch.no_grad():
@@ -184,15 +187,17 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 predicted_ids = self.model.generate(inputs=input_features,
                                                     task=task, language=language, num_beams=beam_size,
                                                     return_timestamps=True,
-                                                    #attention_mask=attention_mask,
+                                                    forced_decoder_ids=None,
+                                                    attention_mask=attention_mask,
                                                     )
                 transcriptions = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)
-                pred_language = self.processor.batch_decode(predicted_ids[:, 1:2], skip_special_tokens=False)
 
+                # @todo this does not work anymore to get the detected language
+                #pred_language = self.processor.batch_decode(predicted_ids[:, 1:2], skip_special_tokens=False)
                 # remove "<|" and "|>" from pred_language
-                if len(pred_language) > 0:
-                    pred_language = [lang.strip("<|>") for lang in pred_language]
-                    return_language = pred_language[0]
+                #if len(pred_language) > 0:
+                #    pred_language = [lang.strip("<|>") for lang in pred_language]
+                #    return_language = pred_language[0]
 
             result_text = ''.join(transcriptions).strip()
 
