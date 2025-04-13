@@ -242,6 +242,10 @@ def internal_plugin_custom_event_call(plugins_list, event_name, data_obj):
                 traceback.print_exc()
 
 
+def call_internal_custom_event_with_plugins(plugins_list, event_name, data_obj):
+    for result in internal_plugin_custom_event_call(plugins_list, event_name, data_obj):
+        return result
+
 def plugin_custom_event_call(event_name, data_obj):
     # Return the first item from the generator
     for result in internal_plugin_custom_event_call(plugins, event_name, data_obj):

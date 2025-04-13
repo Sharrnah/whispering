@@ -257,7 +257,7 @@ def plugin_process(plugins, predicted_text, result_obj, final_audio, settings):
                     traceback.print_exc()
     audio_processor_call_name = settings.GetOption("audio_processor_caller")
     if audio_processor_call_name is not None and audio_processor_call_name != "":
-        Plugins.internal_plugin_custom_event_call(plugins, "audio_processor_stt_"+audio_processor_call_name, {
+        Plugins.call_internal_custom_event_with_plugins(plugins, "audio_processor_stt_"+audio_processor_call_name, {
             "text": predicted_text,
             "result_obj": result_obj,
             "final_audio": final_audio
