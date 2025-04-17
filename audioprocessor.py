@@ -890,6 +890,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
 
         elif settings.GetOption("stt_type") == "nemo_canary":
             # Nemo Canary
+            model_size = settings.GetOption("model")
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
             audio_model.set_compute_device(settings.GetOption("ai_device"))
             result = audio_model.transcribe(audio_data_numpy, task=whisper_task,
@@ -897,7 +898,8 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                             target_lang=stt_target_language,
                                             beam_size=whisper_beam_size,
                                             length_penalty=whisper_faster_length_penalty,
-                                            temperature=1.0,)
+                                            temperature=1.0,
+                                            model=model_size,)
         elif settings.GetOption("stt_type") == "phi4":
             # Phi4
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
