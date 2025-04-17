@@ -793,6 +793,12 @@ class KokoroTTS(metaclass=SingletonMeta):
             # change volume
             if tts_volume != 1.0:
                 audio = audio_tools.change_volume(audio, tts_volume)
+
+            # call custom plugin event method
+            plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': audio, 'sample_rate': self.sample_rate})
+            if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
+                audio = plugin_audio['audio']
+
             audio_chunks.append(audio)
             # torch tensor to pcm bytes
             wav_bytes = self.return_pcm_audio(audio)

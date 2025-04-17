@@ -874,6 +874,7 @@ class ZonosTTS(metaclass=SingletonMeta):
             # change volume
             if tts_volume != 1.0:
                 return_audio_chunk = audio_tools.change_volume(return_audio_chunk, tts_volume)
+
             audio_chunks.append(return_audio_chunk)
             # torch tensor to pcm bytes
             wav_bytes = self.return_pcm_audio(return_audio_chunk)

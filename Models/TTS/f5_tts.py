@@ -880,6 +880,7 @@ class F5TTS(metaclass=SingletonMeta):
             # change volume
             if tts_volume != 1.0:
                 codes_chunk = audio_tools.change_volume(codes_chunk, tts_volume)
+
             audio_chunks.append(codes_chunk)
             if self.audio_streamer is not None:
                 self.audio_streamer.add_audio_chunk(codes_chunk.tobytes())
