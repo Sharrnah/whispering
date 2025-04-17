@@ -780,7 +780,7 @@ class KokoroTTS(metaclass=SingletonMeta):
         voice_tensor = torch.load(ref_voice, weights_only=True)
         generator = self.pipeline(
             text, voice=voice_tensor,
-            speed=tts_speed, split_pattern=r'\n+'
+            speed=tts_speed, split_pattern=r'(?:\.(?=[ \n])|[\n?!。])+'
         )
 
         audio_chunks = []
