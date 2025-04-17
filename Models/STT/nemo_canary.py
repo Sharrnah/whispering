@@ -49,8 +49,8 @@ class NemoCanary(metaclass=SingletonMeta):
     model_cache_path = Path(".cache/nemo-canary")
     MODEL_LINKS = {}
     MODELS_LIST_URLS = [
-        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/nemo-canary/models.yaml",
-        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/nemo-canary/models.yaml",
+        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/nemo-canary/list_250416/models.yaml",
+        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/nemo-canary/list_250416/models.yaml",
         "https://s3.libs.space:9000/ai-models/nemo-canary/models.yaml",
     ]
     _debug_skip_dl = False
@@ -209,13 +209,6 @@ class NemoCanary(metaclass=SingletonMeta):
         if "temperature" in kwargs:
             temperature = kwargs["temperature"]
 
-        #taskname = "asr"
-        #if task == "transcription":
-        #    taskname = "asr"
-        #    source_lang = target_lang
-        #if task == "translation":
-        #    taskname = "ast"
-
         # transcription
         if source_lang == target_lang:
             taskname = "asr"
@@ -243,54 +236,35 @@ class NemoCanary(metaclass=SingletonMeta):
         self.model.cfg.preprocessor.dither = 0.0
         self.model.cfg.preprocessor.pad_to = 0
 
-        #feature_stride = self.model.cfg.preprocessor['window_stride']
-        #model_stride_in_secs = feature_stride * 8  # 8 = model stride, which is 8 for FastConformer
+        # -------------------------------
 
-        #transcript = self.model.transcribe([audio_sample], batch_size=8, num_workers=2, taskname=task, source_lang=source_lang, target_lang=target_lang,)
-        #transcript = self.model.transcribe([audio_sample], batch_size=8, num_workers=2,)
+        # Prepare the manifest data
+        config_kwargs = {
+            "task": taskname,
+            "source_lang": source_lang,
+            "target_lang": target_lang,
+            "pnc": "yes",
+            #"answer": "na",
+            "answer": "predict",
+            "timestamp": "no",
+        }
 
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            audio_path = os.path.join(tmpdirname, "audio.wav")
-            # Save the numpy array as a WAV file
-            sf.write(audio_path, audio_sample, self.sample_rate, 'PCM_16')
+        compute_type = self._str_to_dtype_dict(self.compute_type).get('dtype', torch.float32)
 
-            # calculate audio duration
-            number_of_samples = audio_sample.shape[0]
-            duration_seconds = number_of_samples / self.sample_rate
-
-            # Prepare the manifest data
-            manifest_data = [{
-                "audio_filepath": audio_path,
-                "duration": duration_seconds,
-                "taskname": taskname,
-                "source_lang": source_lang,
-                "target_lang": target_lang,
-                "pnc": "yes",
-                #"answer": "na",
-                "answer": "predict",
-            }]
-
-            manifest_path = os.path.join(tmpdirname, "manifest.json")
-            with open(manifest_path, "w") as manifest_file:
-                for entry in manifest_data:
-                    manifest_file.write(json.dumps(entry) + "\n")
-
-            compute_type = self._str_to_dtype_dict(self.compute_type).get('dtype', torch.float32)
-
-            # Transcribe using the model
-            if not self.compute_device.startswith("cuda"):
+        # Transcribe using the model
+        if not self.compute_device.startswith("cuda"):
+            with torch.no_grad():
+                predicted_text = self.model.transcribe([audio_sample], batch_size=16, verbose=False, **config_kwargs)
+        else:
+            with torch.cuda.amp.autocast(dtype=compute_type):
                 with torch.no_grad():
-                    predicted_text = self.model.transcribe(manifest_path, batch_size=16)
-            else:
-                with torch.cuda.amp.autocast(dtype=compute_type):
-                    with torch.no_grad():
-                        predicted_text = self.model.transcribe(manifest_path, batch_size=16)
+                    predicted_text = self.model.transcribe([audio_sample], batch_size=16, verbose=False, **config_kwargs)
 
-            result = {
-                'text': "".join(predicted_text),
-                'type': "transcribe",
-                'language': source_lang,
-                'target_lang': target_lang
-            }
+        result = {
+            'text': "".join(predicted_text),
+            'type': "transcribe",
+            'language': source_lang,
+            'target_lang': target_lang
+        }
 
-            return result
+        return result
