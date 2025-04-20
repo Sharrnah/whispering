@@ -34,23 +34,32 @@ to a web browser using Websockets or over OSC (examples are **Streaming-overlays
   - OpenAI's [Whisper](https://github.com/openai/whisper), Supports ~98 languages
   - Meta's [Seamless M4T](https://github.com/facebookresearch/seamless_communication), multi modal, Supports ~101 languages
   - Microsoft's [Speech T5](https://github.com/microsoft/SpeechT5), English only
+  - Microsoft's [Phi-4 Multimodal LLM](https://huggingface.co/microsoft/Phi-4-multimodal-instruct), Supports ~23 languages
   - NVIDIA's [NeMo Canary](https://github.com/NVIDIA/NeMo), English, Spanish, German, and French
   - Wav2Vec Bert 2.0, English and German
 - **Text translation**
   - LID _[Language Identification]_ (Supports 200 languages)
-  - NLLB-200 (single model, Supporting 200 languages, high accuracy)
-  - M2M-100 (single model, Supporting 100 languages, high accuracy)
-  - Seamless M4T (single model, multi modal, Supporting ~101 languages)
+  - NLLB-200 (single model, Supports 200 languages, high accuracy)
+  - M2M-100 (single model, Supports 100 languages, high accuracy)
+  - Seamless M4T (single model, multi modal, Supports ~101 languages)
+  - Microsoft's Phi-4 Multimodal LLM (single model, Supports ~23 languages)
 - **OCR** _[Optical Character Recognition]_ (to capture game images and translate in-game text)
   - EasyOCR (Supports 80+ languages)
+  - Microsoft's Phi-4 Multimodal LLM (Supports ~23 languages, supports handwriting)
+  - GOT-OCR 2.0 (supports handwriting)
 - **TTS** _[Text-to-Speech]_ (Read out transcriptions/translations)
   - Silero
+  - F5/E2-TTS (Supports Voice Cloning + Streamed playback)
+  - Kokoro TTS (Supports streamed playback)
+  - Zonos TTS (Supports Voice Cloning + Streamed playback)
 - **VAD** _[Voice Activity Detection]_
   - Silero-VAD
 - **RVC** _[Retrieval-based Voice Conversion]_ (Convert your voice, the voice in audio files or from Text-to-Speech)
   - RVC (Using the RVC Plugin) 
 - **LLM** _[Large language model]_ (Continuation of text. automatic answer generation etc.) **Proof of concept**
-  - FLAN-T5, GPT-J, Bloomz etc. (Using the Whispering Tiger Plugin for LLM)
+  - Microsoft's Phi-4 Multimodal LLM (Supports Question answering and extendable Function Calling)
+  - _**Via Whispering Tiger Plugins:**_
+    - FLAN-T5, GPT-J, Bloomz etc.
 - _And more using other Plugins..._
 
 > **See all available Plugins in the [List of Plugins](https://github.com/Sharrnah/whispering-plugins/blob/main/README.md).** 
