@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy
 import requests
 import torch
+import transformers
 from PIL import Image
 from transformers import AutoModelForCausalLM, AutoProcessor, GenerationConfig, BitsAndBytesConfig
 
@@ -224,7 +225,7 @@ class Phi4(metaclass=SingletonMeta):
                 attention_implementation = 'sdpa'
             elif self.compute_type == "float32":
                 attention_implementation = 'sdpa'
-            elif self.compute_type == "float16" or self.compute_type == "bfloat16":
+            elif (self.compute_type == "float16" or self.compute_type == "bfloat16") and transformers.utils.is_flash_attn_2_available():
                 attention_implementation = 'flash_attention_2'
 
             self.model = AutoModelForCausalLM.from_pretrained(
@@ -271,16 +272,12 @@ class Phi4(metaclass=SingletonMeta):
         if task == 'function_calling':
             # function call definition event call
             plugin_function_registration_result_list = Plugins.plugin_custom_event_call_all('plugin_llm_function_registration', {'model': 'phi4', 'task': task})
-            print("plugin_function_registration_result_list: ")
-            print(plugin_function_registration_result_list)
             if plugin_function_registration_result_list is not None and plugin_function_registration_result_list:
                 for plugin_function_registration_result in plugin_function_registration_result_list:
                     if plugin_function_registration_result is not None:
                         tools_definitions_list.append(json.dumps(plugin_function_registration_result['tool_definition']))
                 if tools_definitions_list:
                     tools_definition = '<|tool|>[' + ','.join(tools_definitions_list) + ']<|/tool|>'
-
-        print("tools_definition: " + str(tools_definition))
 
         prompt = self.prompt_types['transcribe']
         if task in self.prompt_types.keys():
@@ -389,15 +386,11 @@ class Phi4(metaclass=SingletonMeta):
                 plugin_function_call_result = Plugins.plugin_custom_event_call('plugin_llm_function_process_'+function_name, {
                     'model': 'phi4', 'task': task, 'response': response, 'function_name': function_name, 'arguments': arguments
                 })
-                print("cccc:")
-                print(plugin_function_call_result)
                 if plugin_function_call_result is not None:
                     # send function call result back to LLM to get the final answer
                     if 'function_calling_reply' in self.prompt_types.keys() and 'reply_prompt' in plugin_function_call_result:
                         function_reply_prompt = plugin_function_call_result["reply_prompt"]
                         function_call_reply_obj = self.transcribe(audio_sample, 'function_calling_reply', language=language, chat_message=chat_message, image_sample=image_sample, system_prompt=function_reply_prompt,)
-                        print("function_call_reply_obj:")
-                        print(function_call_reply_obj)
                         plugin_function_call_result["text"] = function_call_reply_obj['text']
                         plugin_function_call_result["llm_answer"] = function_call_reply_obj['text']
 

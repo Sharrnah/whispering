@@ -135,11 +135,10 @@ class TransformerWhisper(metaclass=SingletonMeta):
 
                 self.previous_model = model
                 self.release_model()
-                print(f"Loading Whisper-Transformer model: {model} on {device} with {compute_type} precision...")
                 attention_type = "sdpa"
                 if transformers.utils.is_flash_attn_2_available():
                     attention_type = "flash_attention_2"
-                    print(f"Using Flash Attention 2")
+                print(f"Loading Whisper-Transformer model: {model} on {device} with {compute_type} precision using {attention_type}...")
                 self.model = WhisperForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit, device_map=self.compute_device, attn_implementation=attention_type)
                 #try:
                 #    # Enable static cache and compile the forward pass
