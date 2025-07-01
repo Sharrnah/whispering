@@ -5,7 +5,7 @@ numba==0.61.0
 contourpy==1.2.1
 
 tqdm==4.66.4
-rich==12.6.0
+rich==13.5.3
 more-itertools==10.3.0
 librosa==0.10.2.post1
 #transformers==4.33.2
@@ -14,7 +14,7 @@ librosa==0.10.2.post1
 #transformers==4.35.0
 #transformers @ https://github.com/huggingface/transformers/archive/235e5d4991e8a0984aa78db91087b49622c7740e.zip
 #transformers==4.43.3
-transformers==4.49.0
+transformers==4.51.3
 
 #torch-directml  # currently not supported with pytorch 2.6.0
 tensorboardX==2.6.2.2
@@ -39,6 +39,8 @@ git+https://github.com/openai/whisper.git
 #triton @ https://s3.libs.space:9000/projects/wheels/triton-2.1.0-cp310-cp310-win_amd64.whl
 #triton @ https://s3.libs.space:9000/projects/wheels/triton-2.1.0-cp311-cp311-win_amd64.whl
 #triton @ https://github.com/woct0rdho/triton-windows/releases/download/v3.2.0-windows.post9/triton-3.2.0-cp311-cp311-win_amd64.whl
+# https://github.com/woct0rdho/triton-windows
+triton-windows<3.4
 soundfile==0.12.1
 python-osc>=1.8.0
 websockets>=10.4
@@ -82,7 +84,7 @@ nltk==3.9
 # NVIDIA Nemo (Canary) dependency
 Cython==3.0.10
 youtokentome @ https://github.com/gburlet/YouTokenToMe/archive/refs/heads/dependencies.zip
-git+https://github.com/NVIDIA/NeMo.git@r2.1.0#egg=nemo_toolkit[asr]
+git+https://github.com/NVIDIA/NeMo.git@r2.3.0#egg=nemo_toolkit[asr]
 
 # plugin dependencies
 omegaconf==2.2.3
