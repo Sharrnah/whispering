@@ -8,6 +8,7 @@ import torch
 
 import yaml
 from nemo.collections.asr.models import EncDecMultiTaskModel
+import nemo.collections.asr as nemo_asr
 from Models.Singleton import SingletonMeta
 
 from pathlib import Path
@@ -49,8 +50,8 @@ class NemoCanary(metaclass=SingletonMeta):
     model_cache_path = Path(".cache/nemo-canary")
     MODEL_LINKS = {}
     MODELS_LIST_URLS = [
-        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/nemo-canary/list_250416/models.yaml",
-        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/nemo-canary/list_250416/models.yaml",
+        "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/nemo-canary/list_250701/models.yaml",
+        "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/nemo-canary/list_250701/models.yaml",
         "https://s3.libs.space:9000/ai-models/nemo-canary/models.yaml",
     ]
     _debug_skip_dl = False
@@ -144,7 +145,10 @@ class NemoCanary(metaclass=SingletonMeta):
 
         if self.previous_model is None or self.model is None or model != self.previous_model:
             print(f"Loading NeMo Canary model: {model} on {device} with {compute_type} precision...")
-            self.model = EncDecMultiTaskModel.restore_from(str(Path(self.model_cache_path / model / (model+".nemo")).resolve()), map_location=torch.device(device))
+            if model.startswith("canary-"):
+                self.model = EncDecMultiTaskModel.restore_from(str(Path(self.model_cache_path / model / (model+".nemo")).resolve()), map_location=torch.device(device))
+            elif model.startswith("parakeet-"):
+                self.model = nemo_asr.models.ASRModel.restore_from(str(Path(self.model_cache_path / model / (model+".nemo")).resolve()), map_location=torch.device(device))
             #self.model.half()
             #self.model.cuda()
             self.model.eval()
@@ -199,69 +203,82 @@ class NemoCanary(metaclass=SingletonMeta):
 
         self.load_model(model, self.compute_type, self.compute_device)
 
-        beam_size = 4
-        if "beam_size" in kwargs:
-            beam_size = kwargs["beam_size"]
-        length_penalty = 1.0
-        if "length_penalty" in kwargs:
-            length_penalty = kwargs["length_penalty"]
-        temperature = 1.0
-        if "temperature" in kwargs:
-            temperature = kwargs["temperature"]
+        config_kwargs = {}
 
-        # transcription
-        if source_lang == target_lang:
-            taskname = "asr"
-        # translation
-        else:
-            taskname = "s2t_translation"
+        if model.startswith("canary-"):
+            beam_size = 4
+            if "beam_size" in kwargs:
+                beam_size = kwargs["beam_size"]
+            length_penalty = 1.0
+            if "length_penalty" in kwargs:
+                length_penalty = kwargs["length_penalty"]
+            temperature = 1.0
+            if "temperature" in kwargs:
+                temperature = kwargs["temperature"]
 
-        self.model.change_decoding_strategy(None)
-        decode_cfg = self.model.cfg.decoding
-        changed_cfg = False
-        if beam_size != decode_cfg.beam.beam_size:
-            decode_cfg.beam.beam_size = beam_size
-            changed_cfg = True
-        if length_penalty != decode_cfg.beam.len_pen:
-            decode_cfg.beam.len_pen = length_penalty
-            changed_cfg = True
-        if temperature != decode_cfg.temperature:
-            decode_cfg.temperature = temperature
-            changed_cfg = True
+            # transcription
+            if source_lang == target_lang:
+                taskname = "asr"
+            # translation
+            else:
+                taskname = "s2t_translation"
 
-        if changed_cfg:
-            self.model.change_decoding_strategy(decode_cfg)
+            self.model.change_decoding_strategy(None)
+            decode_cfg = self.model.cfg.decoding
+            changed_cfg = False
+            if beam_size != decode_cfg.beam.beam_size:
+                decode_cfg.beam.beam_size = beam_size
+                changed_cfg = True
+            if length_penalty != decode_cfg.beam.len_pen:
+                decode_cfg.beam.len_pen = length_penalty
+                changed_cfg = True
+            if temperature != decode_cfg.temperature:
+                decode_cfg.temperature = temperature
+                changed_cfg = True
 
-        # setup for buffered inference
-        self.model.cfg.preprocessor.dither = 0.0
-        self.model.cfg.preprocessor.pad_to = 0
+            if changed_cfg:
+                self.model.change_decoding_strategy(decode_cfg)
 
-        # -------------------------------
+            # setup for buffered inference
+            self.model.cfg.preprocessor.dither = 0.0
+            self.model.cfg.preprocessor.pad_to = 0
 
-        # Prepare the manifest data
-        config_kwargs = {
-            "task": taskname,
-            "source_lang": source_lang,
-            "target_lang": target_lang,
-            "pnc": "yes",
-            #"answer": "na",
-            "answer": "predict",
-            "timestamp": "no",
-        }
+            # -------------------------------
+
+            # Prepare the manifest data
+            config_kwargs = {
+                "task": taskname,
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+                "pnc": "yes",
+                #"answer": "na",
+                "answer": "predict",
+                "timestamp": "no",
+            }
+
+        result_text = ""
 
         compute_type = self._str_to_dtype_dict(self.compute_type).get('dtype', torch.float32)
 
-        # Transcribe using the model
-        if not self.compute_device.startswith("cuda"):
-            with torch.no_grad():
-                predicted_text = self.model.transcribe([audio_sample], batch_size=16, verbose=False, **config_kwargs)
-        else:
-            with torch.cuda.amp.autocast(dtype=compute_type):
+        if model.startswith("canary-"):
+            # Transcribe using the model
+            if not self.compute_device.startswith("cuda"):
                 with torch.no_grad():
                     predicted_text = self.model.transcribe([audio_sample], batch_size=16, verbose=False, **config_kwargs)
+            else:
+                with torch.cuda.amp.autocast(dtype=compute_type):
+                    with torch.no_grad():
+                        predicted_text = self.model.transcribe([audio_sample], batch_size=16, verbose=False, **config_kwargs)
+            print(predicted_text)
+            result_text = predicted_text[0].text
+
+        elif model.startswith("parakeet-"):
+            with torch.no_grad():
+                predicted_text = self.model.transcribe([audio_sample], verbose=False)
+            result_text = predicted_text[0].text
 
         result = {
-            'text': "".join(predicted_text),
+            'text': result_text,
             'type': "transcribe",
             'language': source_lang,
             'target_lang': target_lang
