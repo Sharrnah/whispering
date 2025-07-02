@@ -489,6 +489,19 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
         if msg_obj["name"] == "osc_min_time_between_messages":
             VRC_OSCLib.set_min_time_between_messages(msg_obj["value"])
 
+    if msg_obj["type"] == "setting_reset_all":
+        if msg_obj["name"] == "plugin":
+            plugin_name = msg_obj["value"]
+            for plugin_inst in Plugins.plugins:
+                if plugin_name == type(plugin_inst).__name__:
+                    if plugin_name in settings.GetOption("plugins"):
+                        if hasattr(plugin_inst, 'reset_plugin_all_settings'):
+                            try:
+                                plugin_inst.reset_plugin_all_settings()
+                            except Exception as e:
+                                print(f"Plugin settings reset failed for {plugin_name}:", e)
+                                traceback.print_exc()
+
     if msg_obj["type"] == "setting_update_req":
         server_instance.answer_message(websocket, json.dumps(
             {"type": "translate_settings", "data": settings.SETTINGS.get_all_settings()}))

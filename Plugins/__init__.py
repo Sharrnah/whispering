@@ -168,6 +168,20 @@ class Base:
         setting[self.__class__.__name__][settings_name] = value
         self._settings.SetOption("plugin_settings", setting)
 
+    def reset_plugin_setting(self, settings_name):
+        setting = copy.deepcopy(self._settings.GetOption("plugin_settings"))
+        if self.__class__.__name__ in setting and settings_name in setting[self.__class__.__name__]:
+            setting[self.__class__.__name__][settings_name] = self.plugin_settings_default[settings_name]
+            self._settings.SetOption("plugin_settings", setting)
+
+    def reset_plugin_all_settings(self):
+        setting = copy.deepcopy(self._settings.GetOption("plugin_settings"))
+        if self.__class__.__name__ in setting:
+            for settings_name in setting[self.__class__.__name__]:
+                if settings_name in self.plugin_settings_default:
+                    setting[self.__class__.__name__][settings_name] = self.plugin_settings_default[settings_name]
+            self._settings.SetOption("plugin_settings", setting)
+
     @abstractmethod
     def init(self):
         pass
