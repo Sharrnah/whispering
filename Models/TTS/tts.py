@@ -1,4 +1,5 @@
 import settings
+from Models.TTS.orpheus_tts import OrpheusTTS
 from Models.TTS.silero import Silero
 from Models.TTS.f5_tts import F5TTS
 from Models.TTS.zonos_tts import ZonosTTS
@@ -30,6 +31,12 @@ def init():
                 return False
         case "kokoro":
             tts = KokoroTTS()
+            if not failed:
+                return True
+            else:
+                return False
+        case "orpheus":
+            tts = OrpheusTTS()
             if not failed:
                 return True
             else:
