@@ -415,6 +415,23 @@ MODEL_LINKS = {
             }
         },
     },
+    "large-distilled-v3.5.en": {
+        "float32": {
+            "urls": [
+                "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Whisper-CT2/new1/large-distilled-v3.5.en-ct2.zip",
+                "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/Whisper-CT2/new1/large-distilled-v3.5.en-ct2.zip",
+                "https://s3.libs.space:9000/ai-models/Whisper-CT2/new1/large-distilled-v3.5.en-ct2.zip",
+            ],
+            "checksum": "ead786695d60ae0e4632e667741c71144a4d5d025251a3db46ead55ca12092b5",
+            "file_checksums": {
+                "config.json": "90c55f775cc4e0bb17293d0bf12f96557a486f20dea886fabd8e6075a3588b21",
+                "model.bin": "c58b88b8585ffcd2135fddaaf421ce72cb223b32edea70d156aed1dea319a119",
+                "preprocessor_config.json": "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711",
+                "tokenizer.json": "b3c8202bbf06d8ee4232c5984baa563784ac4737e2e7fdc42fa180200d3cfcdb",
+                "vocabulary.json": "c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1"
+            }
+        },
+    },
     # Crisper Whisper https://github.com/nyrahealth/CrisperWhisper
     "crisper": {
         "float32": {
