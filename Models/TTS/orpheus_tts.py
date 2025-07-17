@@ -2,6 +2,7 @@ import io
 import os
 import queue
 import re
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -219,63 +220,6 @@ class OrpheusTTS(metaclass=SingletonMeta):
             self.snac_model = self.snac_model.to(self.snac_device)
             print(f"SNAC model {model_name} loaded")
 
-    # def _parse_output(self, generated_ids):
-    #     token_to_find = 128257
-    #     token_to_remove = 128258
-    #
-    #     token_indices = (generated_ids == token_to_find).nonzero(as_tuple=True)
-    #
-    #     if len(token_indices[1]) > 0:
-    #         last_occurrence_idx = token_indices[1][-1].item()
-    #         cropped_tensor = generated_ids[:, last_occurrence_idx+1:]
-    #     else:
-    #         cropped_tensor = generated_ids
-    #
-    #     mask = cropped_tensor != token_to_remove
-    #
-    #     processed_rows = []
-    #
-    #     for row in cropped_tensor:
-    #         masked_row = row[row != token_to_remove]
-    #         processed_rows.append(masked_row)
-    #
-    #     code_lists = []
-    #
-    #     for row in processed_rows:
-    #         row_length = row.size(0)
-    #         new_length = (row_length // 7) * 7
-    #         trimmed_row = row[:new_length]
-    #         trimmed_row = [t - 128266 for t in trimmed_row]
-    #         code_lists.append(trimmed_row)
-    #
-    #
-    #     def redistribute_codes(code_list):
-    #         device = next(self.snac_model.parameters()).device
-    #         layer_1 = []
-    #         layer_2 = []
-    #         layer_3 = []
-    #         for i in range((len(code_list)+1)//7):
-    #             layer_1.append(code_list[7*i])
-    #             layer_2.append(code_list[7*i+1]-4096)
-    #             layer_3.append(code_list[7*i+2]-(2*4096))
-    #             layer_3.append(code_list[7*i+3]-(3*4096))
-    #             layer_2.append(code_list[7*i+4]-(4*4096))
-    #             layer_3.append(code_list[7*i+5]-(5*4096))
-    #             layer_3.append(code_list[7*i+6]-(6*4096))
-    #         codes = [torch.tensor(layer_1).unsqueeze(0).to(device),
-    #                  torch.tensor(layer_2).unsqueeze(0).to(device),
-    #                  torch.tensor(layer_3).unsqueeze(0).to(device)]
-    #         audio_hat = self.snac_model.decode(codes)
-    #         return audio_hat
-    #
-    #     my_samples = []
-    #     for code_list in code_lists:
-    #         samples = redistribute_codes(code_list)
-    #         my_samples.append(samples)
-    #
-    #     return my_samples
-
-
     def _parse_output(self, generated_ids):
         token_to_find = 128257
         token_to_remove = 128258
@@ -347,21 +291,28 @@ class OrpheusTTS(metaclass=SingletonMeta):
             quantization_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 load_in_8bit=False,
-                bnb_4bit_use_double_quant=False,
+                bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4",
+                #bnb_4bit_quant_type="fp4",
                 bnb_4bit_compute_dtype=torch.bfloat16
+                #bnb_4bit_compute_dtype=torch.float16
             )
 
+            #attention_implementation = 'eager'
             attention_implementation = 'sdpa'
             if transformers.utils.is_flash_attn_2_available():
                 attention_implementation = 'flash_attention_2'
 
             self.model = AutoModelForCausalLM.from_pretrained(str(Path(cache_path / model).resolve()),
                                                               torch_dtype=torch.bfloat16,
+                                                              #torch_dtype=torch.float16,
                                                               quantization_config=quantization_config,
-                                                              _attn_implementation=attention_implementation
+
+                                                              attn_implementation=attention_implementation,
+                                                              _attn_implementation=attention_implementation,
                                                               )
-            self.model.cuda()
+            #self.model.cuda()
+            #self.model.to('cuda')
             self.tokenizer = AutoTokenizer.from_pretrained(str(Path(cache_path / model).resolve()))
             self.last_model = model
         pass
@@ -457,115 +408,107 @@ class OrpheusTTS(metaclass=SingletonMeta):
 
     def tts_streaming(self, text, ref_audio=None):
         """
-        Low-latency Orpheus-TTS streaming.
-        Streams chunks to self.audio_streamer.add_audio_chunk(bytes) and,
-        when finished, returns the full utterance as (audio_tensor, sample_rate).
+        Optimized low-latency Orpheus-TTS streaming.
         """
-        # ---- house-keeping ---------------------------------------------------
-        #self.set_compute_device(settings.GetOption("tts_ai_device"))
-        tts_volume   = settings.GetOption("tts_volume")
-        voice_name   = settings.GetOption("tts_voice")
+        # ---- house-keeping ----
+        tts_volume = settings.GetOption("tts_volume")
+        voice_name = settings.GetOption("tts_voice")
         selected_voice = self.get_voice_by_name(voice_name) or "tara"
 
-        # make sure the output device is ready
         self.init_audio_stream_playback()
 
-        # build LLaMA-style prompt → input_ids / attention_mask
         input_ids, attention_mask = self.prompt_builder(text, voice=selected_voice)
 
-
-        # ---- custom streamer -------------------------------------------------
-        class _OrpheusAudioStreamer(BaseStreamer):
+        # ---- Custom Streamer ----
+        class _OptimizedAudioStreamer(BaseStreamer):
             def __init__(self, outer):
                 super().__init__()
                 self.outer = outer
-                self.token_buf   : list[int]  = []   # all tokens received so far
-                self.processed   = 0                 # index of last decoded token
-                self.audio_parts : list[np.ndarray] = []
+                self.token_buf = []
+                self.audio_queue = queue.Queue()
+                self.audio_thread = threading.Thread(target=self.audio_player_thread, daemon=True)
+                self.audio_thread.start()
+                self.in_audio = False
+
+            def audio_player_thread(self):
+                while True:
+                    chunk = self.audio_queue.get()
+                    if chunk is None:
+                        break
+                    if self.outer.audio_streamer:
+                        self.outer.audio_streamer.add_audio_chunk(chunk)
 
             def put(self, value):
-                """
-                Receives freshly generated token IDs from HF `generate()`.
-                Only IDs that come *after* the 128257 start-marker are treated as
-                Orpheus acoustic codes.
-                """
-                ids = value.view(-1).tolist()          # flatten in case of batch
+                ids = value.view(-1).tolist()
 
                 for tok in ids:
-                    # wait for Start-of-Audio (128257)
-                    if not hasattr(self, "in_audio"):
-                        self.in_audio = False
                     if not self.in_audio:
                         if tok == 128257:
-                            self.in_audio = True        # flip the switch
-                        continue                        # ignore everything else
-                    # after 128257: collect codes
+                            self.in_audio = True
+                        continue
                     self.token_buf.append(tok)
 
-                # decode while we have ≥1 complete 7-token frame
-                while len(self.token_buf) - self.processed >= 7:
-                    seg = self.token_buf[self.processed:]
-                    usable_len = (len(seg) // 7) * 7
-                    if usable_len == 0:
-                        break
+                # Decode every time we have at least 14 tokens (2 frames)
+                while len(self.token_buf) >= 14:
+                    seg = self.token_buf[:14]
+                    del self.token_buf[:14]
 
-                    new_ids = seg[:usable_len].copy()   # ALWAYS a real list
-                    self.processed += usable_len
-
-                    ids_t = torch.tensor([new_ids],
-                                         dtype=torch.int64,
-                                         device=self.outer.snac_device)
+                    ids_t = torch.tensor([seg], device=self.outer.snac_device)
 
                     with torch.no_grad():
                         nested = self.outer._parse_output(ids_t)
 
-                    for t in self.outer.flatten_tensors(nested):
-                        chunk = t.squeeze().cpu().numpy()
+                    audio_chunks = list(self.outer.flatten_tensors(nested))
 
+                    for chunk_tensor in audio_chunks:
+                        chunk = chunk_tensor.cpu().numpy().astype(np.float32)
                         if tts_volume != 1.0:
                             chunk = audio_tools.change_volume(chunk, tts_volume)
 
-                        # call custom plugin event method
-                        plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': chunk, 'sample_rate': self.outer.sample_rate})
-                        if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
+                        plugin_audio = Plugins.plugin_custom_event_call(
+                            'plugin_tts_after_audio',
+                            {'audio': chunk, 'sample_rate': self.outer.sample_rate}
+                        )
+                        if plugin_audio and 'audio' in plugin_audio:
                             chunk = plugin_audio['audio']
 
-                        self.audio_parts.append(chunk)
+                        self.audio_queue.put(chunk.tobytes())
 
-                        chunk_bytes = chunk.astype(np.float32, copy=True).tobytes()
-                        if self.outer.audio_streamer is not None:
-                            self.outer.audio_streamer.add_audio_chunk(
-                                #chunk.astype(np.float32, copy=False).tobytes()
-                                chunk_bytes
-                            )
-
-            # called once after EOS
             def end(self):
-                if self.audio_parts:
-                    full = np.concatenate(self.audio_parts, axis=-1)
-                    self.outer.last_generation = {
-                        "audio": torch.from_numpy(full).float(),
-                        "sample_rate": self.outer.sample_rate
-                    }
+                # Decode any remaining tokens
+                if self.token_buf:
+                    ids_t = torch.tensor([self.token_buf], device=self.outer.snac_device)
+                    with torch.no_grad():
+                        nested = self.outer._parse_output(ids_t)
+                    for chunk_tensor in self.outer.flatten_tensors(nested):
+                        chunk = chunk_tensor.cpu().numpy().astype(np.float32)
+                        if tts_volume != 1.0:
+                            chunk = audio_tools.change_volume(chunk, tts_volume)
+                        self.audio_queue.put(chunk.tobytes())
 
-        streamer = _OrpheusAudioStreamer(self)
+                self.audio_queue.put(None)  # Signal thread termination
+                self.audio_thread.join()
 
-        # ---- run generation --------------------------------------------------
-        self.model.generate(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            streamer=streamer,
-            max_new_tokens=2048,
-            do_sample=True,
-            temperature=0.6,
-            top_p=0.95,
-            repetition_penalty=1.1,
-            eos_token_id=128258,   # Orpheus EOT
+        streamer = _OptimizedAudioStreamer(self)
+
+        # ---- optimized generation ----
+        with torch.no_grad(), torch.cuda.stream(self.cuda_stream if self.snac_device == "cuda" else None):
+            self.model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                streamer=streamer,
+                max_new_tokens=1024,  # Lower for better latency
+                do_sample=True,
+                temperature=0.7,  # Slightly higher temp improves speed
+                top_p=0.9,
+                repetition_penalty=1.05,  # Slightly lower penalty
+                eos_token_id=128258,
+            )
+
+        return (
+            self.last_generation["audio"],
+            self.last_generation["sample_rate"]
         )
-
-        # return the whole utterance once generation stopped
-        return (self.last_generation["audio"],
-                self.last_generation["sample_rate"])
 
     def init_audio_stream_playback(self):
         audio_device = settings.GetOption("device_out_index")
@@ -583,6 +526,8 @@ class OrpheusTTS(metaclass=SingletonMeta):
                                                             playback_channels=2,
                                                             buffer_size=chunk_size,
                                                             input_channels=1,
+                                                            min_buffer_play_time=1,
+                                                            start_playback_timeout=1.5,
                                                             dtype="float32",
                                                             tag="tts",
                                                             )
