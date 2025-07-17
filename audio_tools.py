@@ -957,7 +957,6 @@ def change_volume(audio_data, volume_factor=1, dtype=None):
 # buffered audio streaming playback
 # ======================================
 
-
 class CircularBuffer:
     def __init__(self, capacity):
         self.capacity = capacity
@@ -1127,127 +1126,226 @@ class QueueBuffer:
 
 
 class AudioStreamer:
-    def __init__(self, device_index=0, source_sample_rate=44100, buffer_size=2048, input_channels=None, playback_channels=2, dtype=np.int16, tag="", crossfade_duration=0):
+    def __init__(
+            self,
+            device_index=0,
+            source_sample_rate=44100,
+            buffer_size=2048,
+            input_channels=None,
+            playback_channels=2,
+            dtype=np.int16,
+            tag="",
+            min_buffer_play_time: float = 0.0,
+            start_playback_timeout: float = 0.0,
+            crossfade_duration=0,
+    ):
+        # ───── unchanged initialisation ────────────────────────────────────
         self.device_index = device_index
         self.source_sample_rate = source_sample_rate
         self.input_channels = input_channels
         self.playback_channels = playback_channels
         self.dtype = dtype
         self.np_dtype = np.int16 if self.dtype == "int16" else np.float32
-        self.buffer_size = buffer_size * (np.dtype(self.dtype).itemsize * self.playback_channels)  # buffer size in bytes for resampled size
+        self.buffer_size = (
+                buffer_size
+                * np.dtype(self.dtype).itemsize
+                * self.playback_channels
+        )  # bytes for *one* playback packet
         self.buffer = QueueBuffer(self.buffer_size, crossfade_duration=crossfade_duration)
         self.tag = tag
-        self.playback_thread = None
-        #self.lock = threading.Lock()
+        self.playback_thread: threading.Thread | None = None
         self.stop_playing_timeout = 2.0
-        # PyAudio instance and stream will be set in init_stream
         self.p = None
         self.stream = None
         self.init_stream(source_sample_rate)
         self.before_playback_hook_func = None
         self.verbose = False
+        # ────────────────────────────────────────────────────────────────────
+
+        # ───── buffering policy ────────────────────────────────────────────
+        self.min_buffer_play_time = float(min_buffer_play_time)
+        self.start_playback_timeout = (
+            float(start_playback_timeout) if start_playback_timeout else None
+        )
+
+        frame_channels = self.input_channels or self.playback_channels
+        self._bytes_per_second = (
+                self.source_sample_rate * frame_channels * np.dtype(self.dtype).itemsize
+        )
+
+        self._start_timer: threading.Timer | None = None
+        self._start_lock = threading.Lock()
+        self._first_chunk_seen = False  # ← tracks first real chunk
+        # ────────────────────────────────────────────────────────────────────
+
+    # ----------------------------------------------------------------------
+    #                        helper + hook setters
+    # ----------------------------------------------------------------------
+    def _timeout_start_playback(self):
+        """Timer callback: force playback because timeout expired."""
+        with self._start_lock:
+            self._start_timer = None
+            if self.playback_thread is None or not self.playback_thread.is_alive():
+                if self.verbose:
+                    print(
+                        f"Starting playback due to timeout "
+                        f"({self.start_playback_timeout}s without new data)"
+                    )
+                self.start_playback()
 
     def set_before_playback_hook(self, hook_func):
         self.before_playback_hook_func = hook_func
 
+    # ----------------------------------------------------------------------
     def init_stream(self, desired_sample_rate):
         if self.p is not None:
             pyaudio_pool.release(self.p)
         self.p = pyaudio_pool.acquire()
-        print("dtype itemsize: ", np.dtype(self.dtype).itemsize)
-        print("format width: ", self.p.get_format_from_width(np.dtype(self.dtype).itemsize))
-        self.actual_sample_rate = get_closest_sample_rate_of_device(self.device_index, desired_sample_rate)
-        print("Actual sample rate: ", int(self.actual_sample_rate))
-        print("Playback channels: ", self.playback_channels)
-        self.stream = self.p.open(format=self.p.get_format_from_width(np.dtype(self.dtype).itemsize),
-                                  channels=self.playback_channels, rate=int(self.actual_sample_rate), output=True,
-                                  output_device_index=self.device_index)
 
-    def add_audio_chunk(self, chunk):
-        #with self.lock:
+        self.actual_sample_rate = get_closest_sample_rate_of_device(
+            self.device_index, desired_sample_rate
+        )
+        self.stream = self.p.open(
+            format=self.p.get_format_from_width(np.dtype(self.dtype).itemsize),
+            channels=self.playback_channels,
+            rate=int(self.actual_sample_rate),
+            output=True,
+            output_device_index=self.device_index,
+        )
+
+    # ----------------------------------------------------------------------
+    def add_audio_chunk(self, chunk: bytes | bytearray):
+        """Append audio data and decide whether/when to start playback."""
         if self.verbose:
-            print("adding audio chunk of size: ", len(chunk))
-        self.buffer.append(chunk)
-        if self.buffer.get_available_size() >= self.buffer_size and (self.playback_thread is None or not self.playback_thread.is_alive()):
-            if self.verbose:
-                print("Starting playback thread on add_chunk")
-            self.start_playback()
+            print("adding audio chunk of size:", len(chunk))
 
+        # ── track that at least one real chunk has arrived ──
+        self._first_chunk_seen = True
+
+        self.buffer.append(chunk)
+        available_bytes = self.buffer.get_available_size()
+        buffered_secs = available_bytes / self._bytes_per_second
+
+        if self.verbose:
+            print(f"Buffered ~{buffered_secs:.3f}s ({available_bytes} bytes)")
+
+        should_start_now = buffered_secs >= self.min_buffer_play_time
+
+        with self._start_lock:
+            # Cancel any pending timeout each time fresh data arrives
+            if self._start_timer is not None:
+                self._start_timer.cancel()
+                self._start_timer = None
+
+            if should_start_now:
+                if self.verbose:
+                    print(
+                        f"Minimum play-time reached "
+                        f"({buffered_secs:.3f}s ≥ {self.min_buffer_play_time}s)"
+                    )
+                if self.playback_thread is None or not self.playback_thread.is_alive():
+                    self.start_playback()
+            elif self.start_playback_timeout and self._first_chunk_seen:
+                # Arm (or re-arm) the timer.  It cannot start before the first chunk.
+                self._start_timer = threading.Timer(
+                    self.start_playback_timeout, self._timeout_start_playback
+                )
+                self._start_timer.daemon = True
+                self._start_timer.start()
+                if self.verbose:
+                    print(
+                        f"Timer (re)started: will force playback in "
+                        f"{self.start_playback_timeout}s unless more data arrives"
+                    )
+
+    # ----------------------------------------------------------------------
     def start_playback(self):
         def playback_loop():
             data_accumulated = bytearray()
             last_data_time = time.time()
             has_data_been_written = False
+
             while True:
-                #with self.lock:
                 available_size = self.buffer.get_available_size()
-                if self.verbose:
-                    print("Available size: ", available_size)
-                    print("Data accumulated: ", len(data_accumulated))
+
                 if available_size > 0:
-                    # Read the maximum available data that fits into full elements
-                    buffer_entry = self.buffer.read(available_size)
-                    if self.verbose:
-                        print("Buffer entry size: ", len(buffer_entry))
-                    data_accumulated += buffer_entry
-                    if self.verbose:
-                        print("Data accumulated size: ", len(data_accumulated))
+                    data_accumulated += self.buffer.read(available_size)
 
                 while len(data_accumulated) >= self.buffer_size:
                     data_to_play = bytes(data_accumulated[:self.buffer_size])
                     data_accumulated = data_accumulated[self.buffer_size:]
-                    if self.verbose:
-                        print("Playing audio chunk of size 1: ", len(data_to_play))
-                    last_data_time = time.time()
-
-                    if isinstance(data_to_play, bytes):
-                        if self.before_playback_hook_func is not None:
-                            data_to_play = self.before_playback_hook_func(data_to_play, self.source_sample_rate)
-
-                        data_to_play = np.frombuffer(data_to_play, dtype=self.np_dtype) if isinstance(data_to_play, bytes) else data_to_play
-                        data_to_play = resample_audio(data_to_play, self.source_sample_rate, self.actual_sample_rate, target_channels=self.playback_channels, input_channels=self.input_channels, dtype=self.dtype)
-                        data_to_play = data_to_play.tobytes()
-                        if self.verbose:
-                            print("Resampled audio chunk size: ", len(data_to_play))
-                    if self.stream:
-                        self.stream.write(data_to_play)
-                    has_data_been_written = True
-
-                #with self.lock:
-                #if available_size == 0 and len(data_accumulated) > 0:
-                if available_size > 0 and len(data_accumulated) == 0:
-                    data_accumulated = self.buffer.get_all_remaining_data()
-                    # If this is the last chunk and it's not full, pad it
-                    padding_length = self.buffer_size - len(data_accumulated)
-                    padding = b'\x00' * padding_length
-                    data_to_play = bytes(data_accumulated) + padding
-                    if self.verbose:
-                        print("Playing audio chunk of size 2: ", len(data_to_play))
                     last_data_time = time.time()
 
                     if self.before_playback_hook_func is not None:
-                        data_to_play = self.before_playback_hook_func(data_to_play, self.source_sample_rate)
+                        data_to_play = self.before_playback_hook_func(
+                            data_to_play, self.source_sample_rate
+                        )
 
-                    data_to_play = np.frombuffer(data_to_play, dtype=self.np_dtype) if isinstance(data_to_play, bytes) else data_to_play
-                    data_to_play = resample_audio(data_to_play, self.source_sample_rate, self.actual_sample_rate, target_channels=self.playback_channels, input_channels=self.input_channels, dtype=self.dtype)
-                    data_to_play = data_to_play.tobytes()
+                    data_to_play = np.frombuffer(
+                        data_to_play, dtype=self.np_dtype
+                    )
+                    data_to_play = resample_audio(
+                        data_to_play,
+                        self.source_sample_rate,
+                        self.actual_sample_rate,
+                        target_channels=self.playback_channels,
+                        input_channels=self.input_channels,
+                        dtype=self.dtype,
+                    ).tobytes()
+
                     if self.stream:
                         self.stream.write(data_to_play)
                     has_data_been_written = True
-                    data_accumulated = bytearray()  # Clear after writing
+
+                if available_size > 0 and len(data_accumulated) == 0:
+                    # Flush the tail (with padding)
+                    data_accumulated = self.buffer.get_all_remaining_data()
+                    padding = b"\x00" * (self.buffer_size - len(data_accumulated))
+                    data_to_play = bytes(data_accumulated) + padding
+
+                    if self.before_playback_hook_func is not None:
+                        data_to_play = self.before_playback_hook_func(
+                            data_to_play, self.source_sample_rate
+                        )
+
+                    data_to_play = np.frombuffer(
+                        data_to_play, dtype=self.np_dtype
+                    )
+                    data_to_play = resample_audio(
+                        data_to_play,
+                        self.source_sample_rate,
+                        self.actual_sample_rate,
+                        target_channels=self.playback_channels,
+                        input_channels=self.input_channels,
+                        dtype=self.dtype,
+                    ).tobytes()
+
+                    if self.stream:
+                        self.stream.write(data_to_play)
+                    has_data_been_written = True
+                    data_accumulated.clear()
+                    last_data_time = time.time()
 
                 if available_size == 0 and len(data_accumulated) == 0:
                     time.sleep(0.01)
-                    # Check if playback should stop due to inactivity
-                    if has_data_been_written and time.time() - last_data_time > self.stop_playing_timeout:
-                        break  # Exiting the loop stops playback
+                    if has_data_been_written and (
+                            time.time() - last_data_time > self.stop_playing_timeout
+                    ):
+                        break  # inactivity: end playback
 
-            if self.verbose:
-                print("Stopping playback due to inactivity.")
+            # ─── clean-up when loop exits ──────────────────────────────────
+            with self._start_lock:
+                # ensure future batches behave like a fresh start
+                self._first_chunk_seen = False
+                if self._start_timer is not None:
+                    self._start_timer.cancel()
+                    self._start_timer = None
+
             with audio_list_lock:
                 if (self.playback_thread, self.tag) in audio_threads:
                     audio_threads.remove((self.playback_thread, self.tag))
             self.playback_thread = None
+            print("Playback thread finished")
 
         if self.verbose:
             print("Starting playback thread")
@@ -1256,18 +1354,28 @@ class AudioStreamer:
             audio_threads.append((self.playback_thread, self.tag))
         self.playback_thread.start()
 
+    # ----------------------------------------------------------------------
     def stop(self):
+        """Manually stop playback and reset buffering state."""
+        with self._start_lock:
+            if self._start_timer is not None:
+                self._start_timer.cancel()
+                self._start_timer = None
+            self._first_chunk_seen = False  # reset for next session
+
         print("stopping audio streamer...")
-        #with self.lock:
         with audio_list_lock:
             if (self.playback_thread, self.tag) in audio_threads:
                 audio_threads.remove((self.playback_thread, self.tag))
+
         if self.playback_thread and self.playback_thread.is_alive():
             self.playback_thread.join()
+
         if self.stream:
             self.stream.stop_stream()
             self.stream.close()
             self.stream = None
+
         pyaudio_pool.release(self.p)
         self.p = None
         self.playback_thread = None
