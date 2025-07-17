@@ -268,6 +268,7 @@ class SettingsManager:
             available_models_list.insert(0, "medium-distilled.en")
             available_models_list.insert(0, "large-distilled-v2.en")
             available_models_list.insert(0, "large-distilled-v3.en")
+            available_models_list.insert(0, "large-distilled-v3.5.en")
             available_models_list.insert(0, "crisper") # https://huggingface.co/nyrahealth/faster_CrisperWhisper/
             available_models_list.insert(0, "small.eu")
             available_models_list.insert(0, "medium.eu")
