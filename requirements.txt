@@ -14,7 +14,9 @@ librosa==0.10.2.post1
 #transformers==4.35.0
 #transformers @ https://github.com/huggingface/transformers/archive/235e5d4991e8a0984aa78db91087b49622c7740e.zip
 #transformers==4.43.3
-transformers==4.51.3
+transformers==4.53.1
+
+timm==1.0.17
 
 #torch-directml  # currently not supported with pytorch 2.6.0
 tensorboardX==2.6.2.2
