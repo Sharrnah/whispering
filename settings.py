@@ -39,6 +39,7 @@ class SettingsManager:
             "txt_translator_size": "small",  # for M2M100 model size: Can be "small" or "large", for NLLB200 model size: Can be "small", "medium", "large".
             "txt_translator_precision": "float32",  # for ctranwslate based: can be "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
             "txt_translate_realtime": False,  # use text translator in realtime mode
+            "txt_translate_realtime_sync": True,  # if enabled, txt_translate_realtime will be synchronized with realtime setting.
 
             "txt_second_translation_enabled": False,  # translate to more languages
             "txt_second_translation_languages": "",  # comma separated list of languages for further translations
