@@ -5,7 +5,7 @@ import gc
 
 import transformers.utils
 import yaml
-from transformers import WhisperForConditionalGeneration, WhisperProcessor, pipeline
+from transformers import WhisperForConditionalGeneration, WhisperProcessor, pipeline, BitsAndBytesConfig
 from Models.Singleton import SingletonMeta
 
 from pathlib import Path
@@ -49,7 +49,7 @@ class TransformerWhisper(metaclass=SingletonMeta):
         elif dtype_str == "float32":
             return {'dtype': torch.float32, '4bit': False, '8bit': False}
         elif dtype_str == "4bit":
-            return {'dtype': torch.float32, '4bit': True, '8bit': False}
+            return {'dtype': torch.float16, '4bit': True, '8bit': False}
         elif dtype_str == "8bit":
             return {'dtype': torch.float16, '4bit': False, '8bit': True}
         else:
@@ -119,10 +119,9 @@ class TransformerWhisper(metaclass=SingletonMeta):
 
     def load_model(self, model='small', compute_type="float32", device="cpu"):
         if self.previous_model is None or model != self.previous_model:
-            compute_dtype = self._str_to_dtype_dict(compute_type).get('dtype', torch.float32)
-            compute_4bit = self._str_to_dtype_dict(self.compute_type).get('4bit', False)
-            compute_8bit = self._str_to_dtype_dict(self.compute_type).get('8bit', False)
             self.compute_type = compute_type
+
+            compute_dtype = self._str_to_dtype_dict(self.compute_type).get('dtype', torch.float32)
 
             self.set_compute_device(device)
 
@@ -138,8 +137,22 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 attention_type = "sdpa"
                 if transformers.utils.is_flash_attn_2_available():
                     attention_type = "flash_attention_2"
+
+                # build quantization configuration
+                quantization_config = None
+                if self.compute_device_str.startswith("cuda"):
+                    if self.compute_type == "4bit" or self.compute_type == "8bit":
+                        quantization_config = BitsAndBytesConfig(
+                            load_in_4bit=self._str_to_dtype_dict(self.compute_type)['4bit'],
+                            load_in_8bit=self._str_to_dtype_dict(self.compute_type)['8bit'],
+                            bnb_4bit_use_double_quant=False,
+                            bnb_4bit_quant_type="nf4",
+                            #bnb_4bit_compute_dtype=self._str_to_dtype_dict(self.compute_type)['dtype']
+                            bnb_4bit_compute_dtype=torch.float16
+                        )
+
                 print(f"Loading Whisper-Transformer model: {model} on {device} with {compute_type} precision using {attention_type}...")
-                self.model = WhisperForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit, device_map=self.compute_device, attn_implementation=attention_type)
+                self.model = WhisperForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, quantization_config=quantization_config, device_map=self.compute_device, attn_implementation=attention_type)
                 #try:
                 #    # Enable static cache and compile the forward pass
                 #    self.model.generation_config.cache_implementation = "static"
