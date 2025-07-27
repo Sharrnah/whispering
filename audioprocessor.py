@@ -35,6 +35,7 @@ import Models.STT.nemo_canary as nemo_canary
 import Models.Multi.seamless_m4t as seamless_m4t
 import Models.Multi.mms as mms
 import Models.Multi.phi4 as phi4
+import Models.Multi.voxtral as voxtral
 # import Models.STT.whisperx as whisperx
 import csv
 
@@ -121,6 +122,14 @@ def nemo_canary_get_languages():
 
 def phi4_get_languages():
     return phi4.Phi4.get_languages()
+
+def voxtral_get_languages():
+    languages = {
+        "auto": "Auto",
+        **voxtral.supported_audio_languages
+    }
+    return tuple([{"code": code, "name": language} for code, language in languages.items()])
+
 
 def remove_repetitions(text, language='english', settings=main_settings):
     do_txt_translate = settings.GetOption("txt_translate")
@@ -524,8 +533,12 @@ def load_whisper(model, ai_device):
         compute_dtype = main_settings.GetOption("whisper_precision")
         #try:
         return phi4.Phi4(compute_type=compute_dtype, device=ai_device)
-        #except Exception as e:
-        #    print("Failed to load Phi4 model. Application exits. " + str(e))
+    elif stt_type == "voxtral":
+        compute_dtype = main_settings.GetOption("whisper_precision")
+        stt_model_size = main_settings.GetOption("model")
+        model = voxtral.Voxtral(compute_type=compute_dtype, device=ai_device)
+        model.load_model(stt_model_size)
+        return model
 
     # return None if no stt model is loaded
     return None
@@ -568,6 +581,12 @@ def load_realtime_whisper(model, ai_device):
     elif main_settings.GetOption("stt_type") == "phi4":
         compute_dtype = main_settings.GetOption("realtime_whisper_precision")
         return phi4.Phi4(compute_type=compute_dtype, device=ai_device)
+    elif main_settings.GetOption("stt_type") == "voxtral":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
+        stt_model_size = main_settings.GetOption("realtime_whisper_model")
+        model = voxtral.Voxtral(compute_type=compute_dtype, device=ai_device)
+        model.load_model(stt_model_size)
+        return model
 
 
 def convert_audio(audio_bytes: bytes):
@@ -902,6 +921,15 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                             model=model_size,)
         elif settings.GetOption("stt_type") == "phi4":
             # Phi4
+            audio_model.set_compute_type(settings.GetOption("whisper_precision"))
+            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            result = audio_model.transcribe(audio_data_numpy,
+                                            task=whisper_task,
+                                            language=whisper_language,
+                                            beam_size=whisper_beam_size,
+                                            )
+        elif settings.GetOption("stt_type") == "voxtral":
+            # Voxtral
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
             audio_model.set_compute_device(settings.GetOption("ai_device"))
             result = audio_model.transcribe(audio_data_numpy,
