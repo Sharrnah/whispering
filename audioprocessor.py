@@ -125,7 +125,7 @@ def phi4_get_languages():
 
 def voxtral_get_languages():
     languages = {
-        "auto": "Auto",
+        "": "Auto",
         **voxtral.supported_audio_languages
     }
     return tuple([{"code": code, "name": language} for code, language in languages.items()])

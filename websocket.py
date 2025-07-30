@@ -331,14 +331,27 @@ def chat_request(msgObj, websocket):
     stt_type = settings.GetOption("stt_type")
     compute_dtype = settings.GetOption("whisper_precision")
     ai_device = settings.GetOption("ai_device")
-    if chat_message == '':
+    allow_empty = False
+    if "allow_empty" in msgObj["value"]:
+        allow_empty = msgObj["value"]["allow_empty"]
+    if chat_message == '' and not allow_empty:
         return
+
+    if task == 'update_llm_prompt':
+        settings.SetOption("stt_llm_prompt", chat_message)
 
     if stt_type == "phi4":
         import Models.Multi.phi4 as phi4
         llm_model = phi4.Phi4(compute_type=compute_dtype, device=ai_device)
         response = llm_model.transcribe(None, task=task, language='', chat_message=chat_message, system_prompt=system_prompt)
         #response['text'] = chat_message
+        AnswerMessage(websocket, json.dumps(response))
+        del llm_model
+
+    if stt_type == "voxtral":
+        import Models.Multi.voxtral as voxtral
+        llm_model = voxtral.Voxtral(compute_type=compute_dtype, device=ai_device)
+        response = llm_model.transcribe(None, task=task, language='', chat_message=chat_message)
         AnswerMessage(websocket, json.dumps(response))
         del llm_model
 

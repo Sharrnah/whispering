@@ -1,33 +1,47 @@
-import numpy as np
+import io
+import soundfile as sf
+import base64
 from pathlib import Path
 import torch
 import transformers
 from transformers import VoxtralForConditionalGeneration, AutoProcessor, BitsAndBytesConfig
 
 import downloader
+import settings
 from Models.Singleton import SingletonMeta
 
+# patching optional language field
+from typing import Optional
+from pydantic_extra_types.language_code import LanguageAlpha2
+from mistral_common.protocol.transcription.request import TranscriptionRequest as _TR
+
+class TranscriptionRequest(_TR):
+    # make it really optional
+    language: Optional[LanguageAlpha2] = None
+
 supported_audio_languages = {
+    # "en": "English",
+    # "de": "German",
+    # "nl": "Dutch",
+    # "fr": "French",
+    # "it": "Italian",
+    # "es": "Spanish",
+    # "pt": "Portuguese",
+    # "hi": "Hindi",
+    # "ar": "Arabic",
     "en": "English",
     "de": "German",
     "nl": "Dutch",
     "fr": "French",
     "it": "Italian",
     "es": "Spanish",
+    "pl": "Polish",
     "pt": "Portuguese",
     "hi": "Hindi",
     "ar": "Arabic",
-}
-supported_text_languages = {
-    "en": "English",
-    "de": "German",
-    "nl": "Dutch",
-    "fr": "French",
-    "it": "Italian",
-    "es": "Spanish",
-    "pt": "Portuguese",
-    "hi": "Hindi",
-    "ar": "Arabic",
+    "zh": "Chinese (Mandarin/Simplified)",
+    "ja": "Japanese",
+    "ko": "Korean",
 }
 
 transcribe_ignore_results = [
@@ -61,6 +75,7 @@ class Voxtral(metaclass=SingletonMeta):
     processor = None
     model = None
     generation_config = None
+    last_chat_message = ''
 
     def __init__(self, compute_type="", device=""):
         if device == "" or device is None or device == "auto":
@@ -87,7 +102,7 @@ class Voxtral(metaclass=SingletonMeta):
 
     @staticmethod
     def get_languages():
-        return tuple([{"code": code, "name": language} for code, language in supported_text_languages.items()])
+        return tuple([{"code": code, "name": language} for code, language in supported_audio_languages.items()])
 
     def _str_to_dtype_dict(self, dtype_str):
         if dtype_str == "float16":
@@ -182,6 +197,124 @@ class Voxtral(metaclass=SingletonMeta):
                 _attn_implementation='sdpa',
             ).cpu()
 
+    def _numpy_to_wav(self, audio_sample):
+        # serialize NumPy array to WAV in-memory
+        wav_buffer = io.BytesIO()
+        sf.write(wav_buffer, audio_sample, 16000, format='WAV')
+        wav_buffer.seek(0)
+        return wav_buffer
+
+    def _model_transcribe(self, audio_sample, task, language=''):
+        if language == '' or language is None:
+            language = 'auto'
+
+        additional_args = {}
+        if language != 'auto' and language != '' and language != None:
+            # provide additional arguments for processor
+            additional_args = {
+                'language': language,
+            }
+
+        #### alternative way to transcribe using the mistral helper directly
+        wav_buffer = self._numpy_to_wav(audio_sample)
+
+        # build "OpenAI" request using mistral-common helper
+        openai_req = {
+            "model": str(Path(self.model_path / self.current_model).resolve()),
+            "file":  wav_buffer,
+            "temperature": 0.0,
+            **additional_args,
+        }
+        tr = TranscriptionRequest.from_openai(openai_req)
+
+        # Tokenise + feature‑extract like the helper does, but by hand
+        tok = self.processor.tokenizer.tokenizer.encode_transcription(tr)
+        audio_feats = self.processor.feature_extractor(
+            audio_sample, sampling_rate=16000, return_tensors="pt"
+        ).input_features.to(self.model.device)
+
+        # Generate
+        ids = self.model.generate(
+            input_features=audio_feats,
+            input_ids     = torch.tensor([tok.tokens], device=self.model.device),
+            max_new_tokens=500,
+            num_beams=1
+        )
+        response = self.processor.batch_decode(ids, skip_special_tokens=True)[0]
+
+        ####### Original Huggingface Transformer code. (commented out until language argument is optional)
+        # # prepare inputs in-memory
+        # inputs = self.processor.apply_transcription_request(
+        #     audio=audio_sample,
+        #     sampling_rate=16000,
+        #     format=['WAV'],
+        #     model_id=str(Path(self.model_path / self.current_model).resolve()),
+        #      **additional_args
+        # ).to(self.compute_device_str)
+        #
+        # # generate and decode
+        # generate_ids = self.model.generate(
+        #     **inputs,
+        #     max_new_tokens=500,
+        #     generation_config=self.generation_config,
+        #     num_beams=1
+        # )
+        # response = self.processor.batch_decode(
+        #     generate_ids[:, inputs.input_ids.shape[1]:], skip_special_tokens=True
+        # )[0]
+        #######
+        # check if response is in ignore list and set to empty string if so
+
+        response = response.strip()
+
+        # remove "lang:" prefix if it exists
+        if language is not None and language != '' and response.startswith("lang:"+language):
+            response = response[len("lang:"+language):].strip()
+
+        if response in transcribe_ignore_results:
+            response = ""
+
+        response_dict = {'text': response, 'type': task, 'language': language}
+
+        return response_dict
+
+    def _model_question_answering(self, audio_sample, task, chat_message=''):
+        conversation = [
+            {
+                "role": "user",
+                "content": [],
+            }
+        ]
+        if audio_sample is not None:
+            wav_buffer = self._numpy_to_wav(audio_sample)
+            # convert wav_buffer to base64
+            wav_base64 = base64.b64encode(wav_buffer.read()).decode('utf-8')
+            conversation[0]["content"].append({
+                "type": "audio",
+                "base64": wav_base64,
+            })
+
+        if chat_message:
+            conversation[0]["content"].append({
+                "type": "text",
+                "text": chat_message,
+            })
+
+        inputs = self.processor.apply_chat_template(conversation)
+        if self.compute_device_str.startswith("cuda"):
+            inputs = inputs.to(self.model.device, dtype=torch.bfloat16)
+        else:
+            inputs = inputs.to(self.model.device, dtype=torch.float32)
+
+
+        outputs = self.model.generate(**inputs, max_new_tokens=500) # temperature=0.2, top_p=0.95
+        decoded_outputs = self.processor.batch_decode(outputs[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)
+
+        response = decoded_outputs[0]
+
+        response_dict = {'llm_answer': response, 'text': response, 'type': 'llm_answer'}
+        return response_dict
+
     @torch.no_grad()
     def transcribe(self, audio_sample, task, language='', chat_message='', image_sample=None, system_prompt='',
                    return_timestamps=False, beam_size=4) -> dict:
@@ -195,43 +328,43 @@ class Voxtral(metaclass=SingletonMeta):
         }
 
         # require model, processor, and audio_sample
-        if self.model is None or self.processor is None or audio_sample is None:
+        if self.model is None or self.processor is None:
             return response_dict
 
-        if language == '' or language is None:
-            language = 'auto'
+        # switch case for task
+        match task:
+            case 'transcribe':
+                if audio_sample is None:
+                    return response_dict
+                return self._model_transcribe(audio_sample, task, language)
+            case 'question_answering':
+                if chat_message == '':
+                    chat_message = self.last_chat_message
+                if audio_sample is None and chat_message == '':
+                    return response_dict
+                return self._model_question_answering(audio_sample, task, chat_message)
+            case 'translate':
+                prompt = f'Only Translate audio into {supported_text_languages[language]}. Just write the translation without explanations.'
+                response_dict = self._model_question_answering(audio_sample, task, prompt)
+                response_dict["language"] = language
+                return response_dict
+            case 'text_translate':
+                prompt = f'Do not answer or explain. Only translate the following text into {supported_text_languages[language]}: {chat_message}'
+                response_dict = self._model_question_answering(None, task, prompt)
 
-        additional_args = {}
-        if language != 'auto' and language != '' and language != None:
-            # provide additional arguments for processor
-            additional_args = {
-                'language': language,
-            }
+                translation = response_dict["text"].strip()
+                # trim 「」" from the start and end of the translation
+                pairs = {'「': '」', '"': '"'}
+                if translation and pairs.get(translation[0]) == translation[-1]:
+                    translation = translation[1:-1].strip()
 
-        # prepare inputs in-memory
-        inputs = self.processor.apply_transcription_request(
-            audio=audio_sample,
-            sampling_rate=16000,
-            format=['WAV'],
-            model_id=str(Path(self.model_path / self.current_model).resolve()),
-             **additional_args
-        ).to(self.compute_device_str)
-
-        # generate and decode
-        generate_ids = self.model.generate(
-            **inputs,
-            max_new_tokens=500,
-            generation_config=self.generation_config,
-            num_beams=1
-        )
-        response = self.processor.batch_decode(
-            generate_ids[:, inputs.input_ids.shape[1]:], skip_special_tokens=True
-        )[0]
-
-        # check if response is in ignore list and set to empty string if so
-        if response in transcribe_ignore_results:
-            response = ""
-
-        response_dict = {'text': response, 'type': task, 'language': language}
-
-        return response_dict
+                response_dict["language"] = language
+                response_dict["text"] = translation
+                response_dict["txt_translation"] = translation
+                response_dict["txt_translation_target"] = language
+                return response_dict
+            case 'update_llm_prompt':
+                if chat_message == '':
+                    return response_dict
+                self.last_chat_message = chat_message
+                return response_dict
