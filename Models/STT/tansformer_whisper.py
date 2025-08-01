@@ -164,6 +164,8 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 #self.model = self.model.to(self.compute_device)
                 self.processor = WhisperProcessor.from_pretrained(str(Path(self.model_cache_path / model).resolve()))
 
+                print("Whisper-Transformer model loaded successfully.")
+
                 # self.pipe = pipeline(
                 #     "automatic-speech-recognition",
                 #     model=self.model,
