@@ -344,12 +344,12 @@ class Voxtral(metaclass=SingletonMeta):
                     return response_dict
                 return self._model_question_answering(audio_sample, task, chat_message)
             case 'translate':
-                prompt = f'Only Translate audio into {supported_text_languages[language]}. Just write the translation without explanations.'
+                prompt = f'Only Translate audio into {supported_audio_languages[language]}. Just write the translation without explanations.'
                 response_dict = self._model_question_answering(audio_sample, task, prompt)
                 response_dict["language"] = language
                 return response_dict
             case 'text_translate':
-                prompt = f'Do not answer or explain. Only translate the following text into {supported_text_languages[language]}: {chat_message}'
+                prompt = f'Do not answer or explain. Just write the translation without explanations. Translate the following text into {supported_audio_languages[language]}: {chat_message}'
                 response_dict = self._model_question_answering(None, task, prompt)
 
                 translation = response_dict["text"].strip()
