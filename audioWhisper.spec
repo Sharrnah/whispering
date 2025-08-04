@@ -12,16 +12,17 @@ binaries = []
 binaries= collect_dynamic_libs('onnxruntime', destdir='onnxruntime/capi')
 
 hiddenimports = [
-    'torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers.models.nllb', 'sentencepiece',
+    'torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers', 'transformers.models.nllb', 'sentencepiece',
     'df.deepfilternet3', 'bitsandbytes', 'faiss', 'faiss-cpu', 'praat-parselmouth', 'parselmouth', 'pyworld', 'torchcrepe',
     'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio',
     'pyannote.pipeline', 'pyloudnorm', 'future', 'noisereduce', 'frozendict', 'torch_directml', 'x_transformers', 'inflect', 'backoff',
-    'language_tags', 'spacy', 'en-core-web-sm', 'en_core_web_sm', 'misaki', 'fugashi', 'mojimoji', 'ordered_set', 'phonemizer', 'phonemizer-fork'
+    'language_tags', 'spacy', 'en-core-web-sm', 'en_core_web_sm', 'misaki', 'fugashi', 'mojimoji', 'ordered_set', 'phonemizer', 'triton', 'mistral_common', 'snac'
 ]
 datas += collect_data_files('torch', include_py_files=True)
 datas += collect_data_files('whisper')
 datas += collect_data_files('pykakasi')
 datas += collect_data_files('lightning_fabric')
+datas += collect_data_files('transformers', include_py_files=True)
 datas += collect_data_files('x_transformers', include_py_files=True)
 datas += collect_data_files('inflect', include_py_files=True)
 datas += collect_data_files('language_tags', include_py_files=True)
@@ -30,8 +31,10 @@ datas += collect_data_files('en-core-web-sm', include_py_files=True)
 datas += collect_data_files('en_core_web_sm', include_py_files=True)
 datas += collect_data_files('misaki', include_py_files=True)
 datas += collect_data_files('phonemizer')
-datas += collect_data_files('phonemizer-fork')
 datas += collect_data_files('backoff')
+datas += collect_data_files('triton')
+datas += collect_data_files('mistral_common')
+datas += collect_data_files('snac', include_py_files=True)
 datas += copy_metadata('rich')
 datas += copy_metadata('torch')
 datas += copy_metadata('tqdm')
@@ -54,7 +57,6 @@ datas += copy_metadata('spacy')
 datas += copy_metadata('en-core-web-sm')
 datas += copy_metadata('en_core_web_sm')
 datas += copy_metadata('misaki')
-datas += copy_metadata('phonemizer-fork')
 datas += copy_metadata('backoff')
 hiddenimports += collect_submodules('fairseq')
 tmp_ret = collect_all('easyocr')
@@ -147,9 +149,11 @@ tmp_ret = collect_all('en_core_web_sm')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('misaki')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('phonemizer-fork')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('backoff')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('triton')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('mistral_common')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 workdir = os.environ.get('WORKDIR_WIN', r'\drone\src')

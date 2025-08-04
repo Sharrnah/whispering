@@ -1,4 +1,7 @@
-pip install -U pyinstaller==6.7.0
+pip install -U pyinstaller==6.15.0
+
+rem update pyinstaller hooks (needs a clean rebuild using `pyinstaller audioWhisper.spec -y --clean`)
+rem pip install -U pyinstaller-hooks-contrib
 
 rem install plugin dependencies (also added in pyinstaller)
 pip install winsdk
