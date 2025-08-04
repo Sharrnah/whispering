@@ -55,8 +55,16 @@ MODEL_LINKS = {
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/voxtral/Voxtral-Mini-3B-2507.zip",
             "https://s3.libs.space:9000/ai-models/voxtral/Voxtral-Mini-3B-2507.zip",
         ],
-        "checksum": "",
+        "checksum": "d9a392232b0beb4b1ce16169d97cd48bc7346378c6f350434d2acb82929f6edc",
         "file_checksums": {
+            "config.json": "368124c9a9171b3a6c0cdb35cd7fedeff465eefecf315e2a621684bbed7dcd7e",
+            "generation_config.json": "cebeed3d4a1680c9b311863385d32b91008480dfbf8cf7abc2142447b8f73b76",
+            "model-00001-of-00002.safetensors": "1facdc4c5a0e84f2881a59c4756441b7030a1f1036b2124c117540408d0e5fe9",
+            "model-00002-of-00002.safetensors": "0a103ba715bc0d656e94bf79d637d4f8f0f4fe6d76fb1d4db7ee46c6b940f631",
+            "model.safetensors.index.json": "7506794dd65e4324685f9634b3d83f20d36a723543650c1e6b72d81965289930",
+            "params.json": "4a37e19f2524a44bebf36a3da37a55dde31b8df9eab9b35d359b9a315c74e991",
+            "preprocessor_config.json": "86d67d926e17d3a9bb0bae334c9fc46bc163181992357a0357c0aec2c7e131d1",
+            "tekken.json": "4aaf3836c2a5332f029ce85a7a62255c966f47b6797ef81dedd0ade9c862e4a8"
         },
         "path": "Voxtral-Mini-3B-2507",
     },
@@ -88,12 +96,14 @@ class Voxtral(metaclass=SingletonMeta):
                 compute_type = "bfloat16"
         self.set_compute_type(compute_type)
 
+        self.last_chat_message = settings.GetOption("stt_llm_prompt") if settings.GetOption("stt_llm_prompt") else ""
+
     def download_model(self, model_name):
         downloader.download_model({
             "model_path": self.model_path,
             "model_link_dict": MODEL_LINKS,
             "model_name": model_name,
-            "title": "Multimodal (Voxtral)",
+            "title": "Voxtral (Multimodal)",
 
             "alt_fallback": False,
             "force_non_ui_dl": False,
@@ -161,7 +171,6 @@ class Voxtral(metaclass=SingletonMeta):
 
         if self.compute_device_str.startswith("cuda"):
             if self.compute_type == "4bit" or self.compute_type == "8bit":
-                # @todo not working currently for audio. only for text
                 print("Loading model in 4bit or 8bit mode")
                 print(self._str_to_dtype_dict(self.compute_type))
                 quantization_config = BitsAndBytesConfig(
