@@ -14,7 +14,7 @@ import downloader
 import settings
 from Models.Singleton import SingletonMeta
 
-cache_path = Path(Path.cwd() / ".cache" / "orpheus-tts-cache")
+cache_path = Path(Path.cwd() / ".cache" / "orpheus-tts")
 os.makedirs(cache_path, exist_ok=True)
 
 #from Models.TTS.orpheus import OrpheusModel
@@ -35,9 +35,30 @@ TTS_MODEL_LINKS = {
     # Models
     "orpheus-3b-0.1-ft": {
         "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/orpheus-tts/orpheus-3b-0.1-ft.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/orpheus-tts/orpheus-3b-0.1-ft.zip",
+            "https://s3.libs.space:9000/ai-models/orpheus-tts/orpheus-3b-0.1-ft.zip",
         ],
-        "checksum": "",
+        "checksum": "e65db1f79ba5740e763e53d9d4a58ccdb00a226abd185b484de5ecb02b2b91f5",
         "file_checksums": {
+            "README.md": "c632b33c45131b93356ed90dd622825940b40cf11b79589a8f5d4992027a8d83",
+            "config.json": "7a3a6f75007fe91417e4b2082e6cb2acdd7bae2bb6de315882763103a997f422",
+            "generation_config.json": "4681757f689813a9d17686a3987721d845c461b18bc022107d4b27432cf0a752",
+            "model-00001-of-00004.safetensors": "8feb9137e2a243d33827c2196ec81270179ec6e7acf8972a37f84b5eb6852450",
+            "model-00002-of-00004.safetensors": "69df9510f4b3e8d883b51e5d19f5f5b669d99ba9990f9e0e16f4fedd3d73709e",
+            "model-00003-of-00004.safetensors": "d24f6a0f618bd4aa09a23216fe55d086a6db92ee896f98740972702f265f026b",
+            "model-00004-of-00004.safetensors": "a1deaa1b3f38d5b9efe22f012dbb5c3f29e15f31b15dcf95e471a85bb03d2d21",
+            "model.safetensors.index.json": "9081e6f0bb658f1a083bc163396fb7e5460b6e374c70e8df39ea7492143920d6",
+            "rng_state_0.pth": "92cc13315f24c28015d695b6cde08bb1cd6fea4cbc435998485ed6fbe4c91285",
+            "rng_state_1.pth": "f4c154b6a63e0b1f98f7d2847944398f99f1657d35e8eddf7fdf0ae2c24b0552",
+            "rng_state_2.pth": "f784c6a9507b51189f2caffbd178ea9882103b75852e31c15f47fdae6a43af1d",
+            "rng_state_3.pth": "34b023e05bc2d12b91dc436d4922b990d50ec8dc56d40dc3e36b3bb34fc81341",
+            "scheduler.pt": "040d30b668ce68938c29b0a4e5fe6e0e2716e4b69ca568f233ab638b25c29296",
+            "special_tokens_map.json": "02726c1fa32b9ca7e0630f81bf34b76998fe9353a43089d571ee826bae672b25",
+            "tokenizer.json": "fc3fecb199b4170636dbfab986d25f628157268d37b861f9cadaca60b1353bce",
+            "tokenizer_config.json": "a078a36c79f57ccfd47753d9ff37b80b70a9f6518c9959c8529ea6fb3560e40b",
+            "trainer_state.json": "779472c53b787ba35d703cb2b8cef8c14adcbfaf7901dd31edead7df94f36cac",
+            "training_args.bin": "747e52ee642c92c0aea735919fca7751b8235ded2700a8628b5a60c18eb71380"
         },
         "voices": [
             "tara",
@@ -53,10 +74,14 @@ TTS_MODEL_LINKS = {
     },
     "snac_24khz": {
         "urls": [
-            "https://canopylabs.ai/releases/orpheus_can_speak_any_language/snac_24khz.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/orpheus-tts/snac_24khz.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/orpheus-tts/snac_24khz.zip",
+            "https://s3.libs.space:9000/ai-models/orpheus-tts/snac_24khz.zip",
         ],
-        "checksum": "",
+        "checksum": "8ab9b76ea04fc4579c78a7707bb6504d3fb7ac72a0781d2747931f3a22de0b28",
         "file_checksums": {
+            "config.json": "e119b9366d4f5e73c6ca5f31137c4ff361578bbb132953a5203afe037c4012be",
+            "pytorch_model.bin": "4b8164cc6606bfa627f1a784734c1e539891518f1191ed9194fe1e3b9b4bff40"
         },
         "path": "snac_24khz",
     }
@@ -109,9 +134,11 @@ class OrpheusTTS(metaclass=SingletonMeta):
     def __init__(self):
         self.compute_device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
+        if not self.snac_model:
+            self.download_model("snac_24khz")
         if not self.pipeline:
-            #self.download_model("orpheus-3b-0.1-ft")
-
+            self.download_model("orpheus-3b-0.1-ft")
+        if not self.snac_model or not self.pipeline:
             self.load()
 
         # Prepare CUDA streams for parallel processing if available
@@ -288,14 +315,23 @@ class OrpheusTTS(metaclass=SingletonMeta):
             #     tokenizer=str(Path(cache_path / model).resolve()),
             #     max_model_len=2048
             # )
+
+            # quantization_config = BitsAndBytesConfig(
+            #     load_in_4bit=True,
+            #     load_in_8bit=False,
+            #     bnb_4bit_use_double_quant=True,
+            #     bnb_4bit_quant_type="nf4",
+            #     #bnb_4bit_quant_type="fp4",
+            #     bnb_4bit_compute_dtype=torch.bfloat16
+            #     #bnb_4bit_compute_dtype=torch.float16
+            # )
+
             quantization_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                load_in_8bit=False,
-                bnb_4bit_use_double_quant=True,
+                load_in_4bit=False,
+                load_in_8bit=True,
+                bnb_4bit_use_double_quant=False,
                 bnb_4bit_quant_type="nf4",
-                #bnb_4bit_quant_type="fp4",
                 bnb_4bit_compute_dtype=torch.bfloat16
-                #bnb_4bit_compute_dtype=torch.float16
             )
 
             #attention_implementation = 'eager'
