@@ -414,8 +414,6 @@ class OrpheusTTS(metaclass=SingletonMeta):
         tmp_audio_chunks = self._parse_output(generated_ids)
 
         for audio in self.flatten_tensors(tmp_audio_chunks):
-            print("type(audio):", type(audio))
-            print("audio:", audio)
             #with self.stop_flag_lock:
             #    if self.stop_flag:
             #        break
