@@ -153,6 +153,7 @@ inflect>=7.5.0
 
 # Kokoro TTS dependencies
 espeakng-loader==0.2.4
+unidic-lite
 #kokoro-onnx==0.3.9
 # pip uninstall onnxruntime && pip install onnxruntime_gpu==1.21.0
 spacy==3.8.5
