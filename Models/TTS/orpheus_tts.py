@@ -21,7 +21,7 @@ os.makedirs(cache_path, exist_ok=True)
 
 from snac import SNAC
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-from transformers.generation import BaseStreamer
+from transformers.generation.streamers import BaseStreamer
 
 from scipy.io.wavfile import write as write_wav
 import torch
