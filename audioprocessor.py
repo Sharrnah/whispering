@@ -921,6 +921,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                             beam_size=whisper_beam_size,
                                             length_penalty=whisper_faster_length_penalty,
                                             temperature=1.0,
+                                            without_timestamps=whisper_faster_without_timestamps,
                                             model=model_size,)
         elif settings.GetOption("stt_type") == "phi4":
             # Phi4
