@@ -194,8 +194,11 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
 
         # translate using text translator if enabled
         # translate text realtime or after audio is finished
-        if do_txt_translate and (settings.GetOption("txt_translate_realtime") or (settings.GetOption("txt_translate_realtime_sync") and settings.GetOption("realtime"))) or \
-                do_txt_translate and (not settings.GetOption("txt_translate_realtime") or (not settings.GetOption("txt_translate_realtime_sync") and settings.GetOption("realtime"))) and final_audio:
+        realtime_translate = (
+                settings.GetOption("txt_translate_realtime")
+                or (settings.GetOption("txt_translate_realtime_sync") and settings.GetOption("realtime"))
+        )
+        if do_txt_translate and (realtime_translate or final_audio):
             from_lang = settings.GetOption("src_lang")
             to_lang = settings.GetOption("trg_lang")
             to_romaji = settings.GetOption("txt_romaji")
