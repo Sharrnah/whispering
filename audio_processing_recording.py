@@ -97,6 +97,8 @@ def process_audio_chunk(audio_chunk, sample_rate, vad_model=None):
 class AudioProcessor:
     last_callback_time = time.time()
 
+    last_recorded_chunk_time = time.time()
+
     def __init__(self,
                  default_sample_rate=SAMPLE_RATE,
                  start_rec_on_volume_threshold=None,
@@ -481,6 +483,17 @@ class AudioProcessor:
 
                 self.frames.append(audio_chunk)
                 self.start_time = time.time()
+
+                current_spoken_time = time.time()
+
+                # send typing_indicator every 2 seconds while speaking
+                if current_spoken_time - self.last_recorded_chunk_time > 2.0:
+                    self.last_recorded_chunk_time = current_spoken_time
+                    if self.typing_indicator_function is not None:
+                        typing_indicator_thread = threading.Thread(target=self.typing_indicator_function,
+                                                                   args=(self.osc_ip, self.osc_port, True))
+                        typing_indicator_thread.start()
+
                 if self.settings.GetOption("realtime"):
                     #clip = []
                     frame_count = len(self.frames)
