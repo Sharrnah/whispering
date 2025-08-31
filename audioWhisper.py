@@ -411,6 +411,7 @@ if __name__ == '__main__':
 
         print("running Python: " + platform.python_implementation() + " / v" + platform.python_version())
         print("using Torch: " + torch.__version__)
+        print("cuDNN-Version:", torch.backends.cudnn.version())
         print("using Audio API: " + audio_api_name)
         print("")
 
