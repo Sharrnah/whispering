@@ -599,8 +599,16 @@ class KokoroTTS(metaclass=SingletonMeta):
 
     download_state = {"is_downloading": False}
 
+
+    _voice_cache = {}  # voice_name -> torch.Tensor
+
+    split_patterns = {
+        'fast': r'(?:[\.?!。？！,，;；](?=[ \n])|[\n])+',
+        'slow': r'(?:\.(?=[ \n])|[\n?!。])+',
+    }
+
     def __init__(self):
-        self.compute_device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+        self.set_compute_device(settings.GetOption("tts_ai_device"))
 
         if not self.pipeline:
             self.download_model("eSpeak-NG")
@@ -669,12 +677,13 @@ class KokoroTTS(metaclass=SingletonMeta):
 
     def load_model(self, lang='a'):
         if self.model is None:
+            print(f"Loading Kokoro TTS model on device: {self.compute_device_str}")
             self.model = KModel(
                 str(Path(cache_path / "kokoro-v1_0" / "config.json").resolve()),
                 str(Path(cache_path / "kokoro-v1_0" / "kokoro-v1_0.pth").resolve())
             )
         if self.pipeline is None or self.last_language != lang:
-            self.pipeline = KPipeline(lang_code=lang, model=self.model, device="cuda")
+            self.pipeline = KPipeline(lang_code=lang, model=self.model, device=self.compute_device)
         pass
 
     def _get_voices(self):
@@ -702,40 +711,40 @@ class KokoroTTS(metaclass=SingletonMeta):
                 return voice
         return None
 
+    def _get_voice_tensor(self, voice_name):
+        cached = self._voice_cache.get(voice_name)
+        if cached is not None:
+            return cached
+        selected_voice = self.get_voice_by_name(voice_name)
+        if selected_voice is None:
+            voice_name = "af_heart"
+            selected_voice = self.get_voice_by_name(voice_name)
+        voice_tensor = torch.load(selected_voice["voice_filename"], weights_only=True)
+        self._voice_cache[voice_name] = voice_tensor
+        return voice_tensor
+
     def get_last_generation(self):
         return self.last_generation["audio"], self.last_generation["sample_rate"]
 
     def tts(self, text, remove_silence=True, silence_after_segments=0.2, normalize=True):
         print("TTS requested Kokoro TTS")
-        self.set_compute_device(settings.GetOption('tts_ai_device'))
 
         lang = self.special_settings["language"]
         self.load(lang)
 
         tts_volume = settings.GetOption("tts_volume")
-
-        voice_name = settings.GetOption('tts_voice')
-        selected_voice = self.get_voice_by_name(voice_name)
-        if selected_voice is None:
-            print("No voice selected or does not exist. Using default voice 'af_heart'.")
-            voice_name = "af_heart"
-            selected_voice = self.get_voice_by_name(voice_name)
-        ref_voice = selected_voice["voice_filename"]
-
         tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
 
-        voice_tensor = torch.load(ref_voice, weights_only=True)
+        voice_name = settings.GetOption('tts_voice') or "af_heart"
+        voice_tensor = self._get_voice_tensor(voice_name)
+
         generator = self.pipeline(
             text, voice=voice_tensor,
-            speed=tts_speed, split_pattern=r'\n+'
+            speed=tts_speed, split_pattern=self.split_patterns['fast']
         )
 
         audio_chunks = []
         for i, (gs, ps, audio) in enumerate(generator):
-            #with self.stop_flag_lock:
-            #    if self.stop_flag:
-            #        break
-            # change volume
             if tts_volume != 1.0:
                 audio = audio_tools.change_volume(audio, tts_volume)
             audio_chunks.append(audio)
@@ -758,7 +767,6 @@ class KokoroTTS(metaclass=SingletonMeta):
 
     def tts_streaming(self, text, ref_audio=None):
         print("TTS requested Kokoro TTS (Streaming)")
-        self.set_compute_device(settings.GetOption('tts_ai_device'))
 
         lang = self.special_settings["language"]
         self.load(lang)
@@ -766,31 +774,21 @@ class KokoroTTS(metaclass=SingletonMeta):
         self.init_audio_stream_playback()
 
         tts_volume = settings.GetOption("tts_volume")
-
-        voice_name = settings.GetOption('tts_voice')
-        selected_voice = self.get_voice_by_name(voice_name)
-        if selected_voice is None:
-            print("No voice selected or does not exist. Using default voice 'af_heart'.")
-            voice_name = "af_heart"
-            selected_voice = self.get_voice_by_name(voice_name)
-        ref_voice = selected_voice["voice_filename"]
-
         tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
 
-        voice_tensor = torch.load(ref_voice, weights_only=True)
+
+        voice_name = settings.GetOption('tts_voice') or "af_heart"
+        voice_tensor = self._get_voice_tensor(voice_name)
+
         generator = self.pipeline(
             text, voice=voice_tensor,
-            speed=tts_speed, split_pattern=r'(?:\.(?=[ \n])|[\n?!。])+'
+            speed=tts_speed, split_pattern=self.split_patterns['fast']
         )
 
         audio_chunks = []
         for i, (gs, ps, audio) in enumerate(generator):
             if self.audio_streamer is None:
                 break
-            #with self.stop_flag_lock:
-            #    if self.stop_flag:
-            #        break
-            # change volume
             if tts_volume != 1.0:
                 audio = audio_tools.change_volume(audio, tts_volume)
 
