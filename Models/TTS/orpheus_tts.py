@@ -132,7 +132,7 @@ class OrpheusTTS(metaclass=SingletonMeta):
     download_state = {"is_downloading": False}
 
     def __init__(self):
-        self.compute_device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+        self.set_compute_device(settings.GetOption("tts_ai_device"))
 
         if not self.snac_model:
             self.download_model("snac_24khz")
@@ -185,8 +185,8 @@ class OrpheusTTS(metaclass=SingletonMeta):
         all_padded_tensors = torch.cat(all_padded_tensors, dim=0)
         all_attention_masks = torch.cat(all_attention_masks, dim=0)
 
-        input_ids = all_padded_tensors.to("cuda")
-        attention_mask = all_attention_masks.to("cuda")
+        input_ids = all_padded_tensors.to(self.compute_device)
+        attention_mask = all_attention_masks.to(self.compute_device)
 
         return input_ids, attention_mask
 
@@ -349,6 +349,7 @@ class OrpheusTTS(metaclass=SingletonMeta):
                                                               )
             #self.model.cuda()
             #self.model.to('cuda')
+            self.model.to(self.compute_device)
             self.tokenizer = AutoTokenizer.from_pretrained(str(Path(cache_path / model).resolve()))
             self.last_model = model
         pass
