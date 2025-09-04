@@ -1,5 +1,7 @@
+import gc
 import io
 import os
+import re
 import threading
 from pathlib import Path
 
@@ -27,20 +29,6 @@ from Models.TTS.zonos.utils import DEFAULT_DEVICE
 
 failed = False
 
-speed_mapping = {
-    "": 15.0,        # Default speed when empty
-    "x-slow": 5.0,  # Extra slow speed
-    "slow": 10.0,   # Slow speed
-    "medium": 15.0,  # Medium speed (default)
-    "fast": 20.0,   # Fast speed
-    "x-fast": 30.0   # Extra fast speed
-}
-
-model_list = {
-    "Default": ["v0.1-transformer"],
-}
-
-
 # patching EspeakWrapper of phonemizer library.
 # See https://github.com/open-mmlab/Amphion/issues/323#issuecomment-2646709006
 
@@ -59,6 +47,19 @@ TTS_MODEL_LINKS = {
             "model.safetensors": "4ac68319d6b8c1b29b94b8801ca41a93a5fc458f4b1d4bbbe5045b2ee77efcf0"
         },
         "path": "v0.1-transformer",
+    },
+    "zonos-v0.1-hybrid": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/zonos-tts/v0.1-hybrid.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/zonos-tts/v0.1-hybrid.zip",
+            "https://s3.libs.space:9000/ai-models/zonos-tts/v0.1-hybrid.zip",
+        ],
+        "checksum": "97db208e751a2098185879c85a39d96658d9693a54f9596b31aa859df2f12d99",
+        "file_checksums": {
+            "config.json": "d5b6a161bbf036267f0ba4ad3228d006b151bc2804f6117bc76aad73fb7cfd64",
+            "model.safetensors": "04e02e5542dd6968ad79942b014e317623efc671ea54b57069d3016e7aa3cceb"
+        },
+        "path": "v0.1-hybrid",
     },
     # espeak
     "eSpeak-NG": {
@@ -557,6 +558,18 @@ TTS_MODEL_LINKS = {
     },
 }
 
+speed_mapping = {
+    "": 15.0,        # Default speed when empty
+    "x-slow": 5.0,  # Extra slow speed
+    "slow": 10.0,   # Slow speed
+    "medium": 15.0,  # Medium speed (default)
+    "fast": 20.0,   # Fast speed
+    "x-fast": 30.0   # Extra fast speed
+}
+
+model_list = {
+    "Default": ["v0.1-transformer", "v0.1-hybrid"],
+}
 
 class ZonosTTS(metaclass=SingletonMeta):
     model = None
@@ -594,30 +607,31 @@ class ZonosTTS(metaclass=SingletonMeta):
         self.compute_device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
         # model = Zonos.from_pretrained("Zyphra/Zonos-v0.1-hybrid", device=device)
         # self.model = Zonos.from_pretrained("Zyphra/Zonos-v0.1-transformer", device=DEFAULT_DEVICE)
-        model_type = "v0.1-transformer"
+        #model_type = "v0.1-transformer"
         #model_type = "v0.1-hybrid"
 
         if self.model is None:
-            self.download_model("eSpeak-NG")
-            self.download_model("dac_44khz")
-            self.download_model("zonos-"+model_type)
-            self.download_model("voices")
             #os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = "C:\Program Files\eSpeak NG\libespeak-ng.dll"
             os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = str(Path(cache_path / "eSpeak NG" / "libespeak-ng.dll").resolve())
             os.environ["PHONEMIZER_ESPEAK_PATH"] = str(Path(cache_path / "eSpeak NG").resolve())
             os.environ['PATH'] = ';'.join([str(Path(cache_path / "eSpeak NG").resolve())] + [os.environ['PATH']])
 
-            self.model = Zonos.from_local(
-                config_path=str(Path(cache_path / model_type / "config.json").resolve()),
-                model_path=str(Path(cache_path / model_type / "model.safetensors").resolve()),
-                dac_path=str(Path(cache_path / "dac_44khz").resolve()),
-                device=DEFAULT_DEVICE
-            )
-            self.target_sample_rate = self.model.autoencoder.sampling_rate
-
             if not self.voice_list:
                 self.update_voices()
         pass
+
+    def release_model(self):
+        if self.model is not None:
+            if hasattr(self.model, 'model'):
+                del self.model.model
+            if hasattr(self.model, 'feature_extractor'):
+                del self.model.feature_extractor
+            if hasattr(self.model, 'hf_tokenizer'):
+                del self.model.hf_tokenizer
+            del self.model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
 
     def stop(self):
         print("TTS Stop requested")
@@ -652,7 +666,49 @@ class ZonosTTS(metaclass=SingletonMeta):
         }, self.download_state)
         pass
 
+    def _get_model_name(self):
+        model = "v0.1-transformer"
+        if len(settings.GetOption('tts_model')) == 2:
+            #language = settings.GetOption('tts_model')[0]
+            model = settings.GetOption('tts_model')[1]
+            # remove language part from string example: " (en & zh)"
+            model = re.sub(r'\(.*?\)', '', model).strip()
+
+        if "custom" in model:
+            return model
+
+        if model == "" or model not in TTS_MODEL_LINKS:
+            model = "v0.1-transformer"
+
+        return model
+
     def load(self):
+        model = self._get_model_name()
+
+        self.set_compute_device(settings.GetOption('tts_ai_device'))
+
+        if "custom" not in model:
+            model_directory = Path(cache_path / TTS_MODEL_LINKS["zonos-"+model]["path"])
+        else:
+            model_directory = Path(cache_path / model)
+            os.makedirs(model_directory, exist_ok=True)
+        if "custom" not in model:
+            self.download_model("zonos-"+model)
+
+        self.download_model("eSpeak-NG")
+        self.download_model("dac_44khz")
+        self.download_model("voices")
+
+        self.release_model()
+
+        self.model = Zonos.from_local(
+            config_path=str(Path(model_directory / "config.json").resolve()),
+            model_path=str(Path(model_directory / "model.safetensors").resolve()),
+            dac_path=str(Path(cache_path / "dac_44khz").resolve()),
+            device=self.compute_device
+        )
+        self.target_sample_rate = self.model.autoencoder.sampling_rate
+
         pass
 
     def _get_voices(self):
