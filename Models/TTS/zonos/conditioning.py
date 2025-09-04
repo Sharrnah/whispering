@@ -190,7 +190,12 @@ def clean(texts: list[str], languages: list[str]) -> list[str]:
 def get_backend(language: str) -> "EspeakBackend":
     import logging
 
+    from phonemizer.backend.espeak.wrapper import EspeakWrapper
+    import espeakng_loader
     from phonemizer.backend import EspeakBackend
+
+    EspeakWrapper.set_library(espeakng_loader.get_library_path())
+    EspeakWrapper.set_data_path(espeakng_loader.get_data_path())
 
     logger = logging.getLogger("phonemizer")
     backend = EspeakBackend(
