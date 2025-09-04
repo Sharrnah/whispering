@@ -822,8 +822,16 @@ class ZonosTTS(metaclass=SingletonMeta):
         else:
             speaker = self.last_speaker_embedding
 
-        seed = self.generate_random_seed()
+        seed = self.special_settings["seed"]
+        # convert string to integer. If its invalid, default to -1
+        try:
+            seed = int(seed)
+        except ValueError:
+            seed = -1
+        if seed <= -1:
+            seed = self.generate_random_seed()
         torch.manual_seed(seed)
+        print("Using seed:", seed)
 
         tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
 
