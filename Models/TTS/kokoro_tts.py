@@ -726,7 +726,7 @@ class KokoroTTS(metaclass=SingletonMeta):
     def get_last_generation(self):
         return self.last_generation["audio"], self.last_generation["sample_rate"]
 
-    def tts(self, text, remove_silence=True, silence_after_segments=0.2, normalize=True):
+    def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         print("TTS requested Kokoro TTS")
 
         lang = self.special_settings["language"]
