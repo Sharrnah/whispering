@@ -178,6 +178,7 @@ class SettingsManager:
             "tts_streamed_chunk_size": 400,  # Chunk size of tts streaming.
             "tts_normalize": True,  # Normalize TTS audio
             "tts_setting_special": {},
+            "tts_queue_enabled": True,  # If enabled, TTS requests are queued and processed one at a time (no concurrent generation)
 
             # Plugins
             "plugins": {},  # active plugins

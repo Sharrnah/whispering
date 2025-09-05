@@ -4,6 +4,7 @@ import os
 import re
 import threading
 from pathlib import Path
+from collections import deque
 
 import numpy as np
 
@@ -581,6 +582,11 @@ class ZonosTTS(metaclass=SingletonMeta):
     last_speaker_embedding = None
     last_speaker_audio = None
 
+    split_patterns = {
+        'fast': r'(?:[\.?!。？！,，;；](?=[ \n])|[\n])+',
+        'slow': r'(?:\.(?=[ \n])|[\n?!。])+',
+    }
+
     compute_device = "cpu"
     download_state = {"is_downloading": False}
 
@@ -604,6 +610,14 @@ class ZonosTTS(metaclass=SingletonMeta):
     }
 
     def __init__(self):
+        # --- queue / concurrency management additions ---
+        self.request_queue = deque()
+        self.queue_lock = threading.Lock()
+        self.queue_worker: threading.Thread | None = None
+        self.queue_stop_event = threading.Event()
+        self.gen_lock = threading.Lock()  # hard lock to prevent parallel generation even without queue
+        self.streaming_lock = threading.Lock()  # NEW: serialize streaming generation to avoid duplicate chunks
+        # -------------------------------------------------
         self.compute_device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
         # model = Zonos.from_pretrained("Zyphra/Zonos-v0.1-hybrid", device=device)
         # self.model = Zonos.from_pretrained("Zyphra/Zonos-v0.1-transformer", device=DEFAULT_DEVICE)
@@ -620,6 +634,57 @@ class ZonosTTS(metaclass=SingletonMeta):
                 self.update_voices()
         pass
 
+    def _start_queue_worker_if_needed(self):
+        if self.queue_worker is None or not self.queue_worker.is_alive():
+            self.queue_stop_event.clear()
+            self.queue_worker = threading.Thread(target=self._process_queue, daemon=True)
+            self.queue_worker.start()
+
+    def _process_queue(self):
+        while not self.queue_stop_event.is_set():
+            with self.queue_lock:
+                if not self.request_queue:
+                    # nothing left -> stop worker
+                    self.queue_worker = None
+                    return
+                item = self.request_queue.popleft()
+            try:
+                text = item["text"]
+                streaming = item["streaming"]
+                ref_audio = item.get("ref_audio")
+                if streaming and hasattr(self, "tts_streaming"):
+                    self.tts_streaming(text, ref_audio=ref_audio)
+                else:
+                    tts_wav, sr = self.tts(text, ref_audio=ref_audio)
+                    # automatic playback (mirrors external caller behaviour)
+                    self.play_audio(tts_wav, settings.GetOption("device_out_index"))
+            except Exception as e:
+                print(f"TTS queue item failed: {e}")
+            finally:
+                # proactive memory cleanup
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+
+    def enqueue_tts(self, text: str, streaming: bool = False, ref_audio=None):
+        """Queue a TTS request if queue mode enabled; otherwise run immediately.
+        This keeps compatibility with existing synchronous behaviour when disabled."""
+        if not settings.GetOption("tts_queue_enabled"):
+            if streaming and hasattr(self, "tts_streaming"):
+                return self.tts_streaming(text, ref_audio=ref_audio)
+            else:
+                result = self.tts(text, ref_audio=ref_audio)
+                return result
+        # queue enabled
+        with self.queue_lock:
+            self.request_queue.append({"text": text, "streaming": streaming, "ref_audio": ref_audio})
+        self._start_queue_worker_if_needed()
+        return None  # async
+
+    def clear_queue(self):
+        with self.queue_lock:
+            self.request_queue.clear()
+
     def release_model(self):
         if self.model is not None:
             if hasattr(self.model, 'model'):
@@ -635,9 +700,20 @@ class ZonosTTS(metaclass=SingletonMeta):
 
     def stop(self):
         print("TTS Stop requested")
+        # clear playback/streaming
         if self.audio_streamer is not None:
             self.audio_streamer.stop()
             self.audio_streamer = None
+        # stop queue worker & clear queue
+        self.queue_stop_event.set()
+        self.clear_queue()
+        # do not join if daemon but attempt gentle join
+        if self.queue_worker and self.queue_worker.is_alive():
+            try:
+                self.queue_worker.join(timeout=0.2)
+            except Exception:
+                pass
+        self.queue_worker = None
 
     def set_compute_device(self, device):
         self.compute_device_str = device
@@ -754,208 +830,276 @@ class ZonosTTS(metaclass=SingletonMeta):
     def set_special_setting(self, special_settings):
         self.special_settings = special_settings
 
+    def split_text(self, text: str, mode: str = 'fast'):
+        """Split input text into sentence-like segments based on configured regex patterns.
+        Falls back to 'fast' pattern if requested mode not found. Keeps delimiters attached
+        to preceding segment. Consecutive delimiters/newlines are grouped by the regex.
+        Empty / whitespace-only segments are removed.
+        """
+        if not text:
+            return []
+        pattern = self.split_patterns.get(mode, self.split_patterns['fast'])
+        segments = []
+        last_idx = 0
+        for m in re.finditer(pattern, text):
+            end = m.end()
+            segment = text[last_idx:end].strip()
+            if segment:
+                segments.append(segment)
+            last_idx = end
+        # Remainder
+        if last_idx < len(text):
+            tail = text[last_idx:].strip()
+            if tail:
+                segments.append(tail)
+        # If splitting produced nothing (e.g. text shorter than pattern), return original
+        if not segments:
+            return [text.strip()]
+        return segments
+
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         #with self.stop_flag_lock:
         #    self.stop_flag = False
         print("TTS requested Zonos TTS")
-
-        self.set_compute_device(settings.GetOption('tts_ai_device'))
-
-        tts_volume = settings.GetOption("tts_volume")
-        tts_normalize = settings.GetOption("tts_normalize")
-
-        if ref_audio is None:
-            voice_name = settings.GetOption('tts_voice')
-            selected_voice = self.get_voice_by_name(voice_name)
-            if selected_voice is None:
-                print("No voice selected or does not exist. Using default voice 'en_1'.")
-                voice_name = "en_1"
-                selected_voice = self.get_voice_by_name(voice_name)
-            ref_audio = selected_voice["audio_filename"]
-
-        # reuse speaker embedding
-        if self.last_speaker_audio != ref_audio or self.last_speaker_embedding is None:
-            wav, sampling_rate = torchaudio.load(ref_audio)
-            speaker = self.model.make_speaker_embedding(wav, sampling_rate)
-            self.last_speaker_audio = ref_audio
-            self.last_speaker_embedding = speaker
+        # queue guard if someone calls directly while already generating and queue mode disabled: block until free
+        if not settings.GetOption("tts_queue_enabled"):
+            self.gen_lock.acquire()
         else:
-            speaker = self.last_speaker_embedding
-
-        seed = self.special_settings["seed"]
-        # convert string to integer. If its invalid, default to -1
+            # in queue worker we expect serialized execution already
+            pass
         try:
-            seed = int(seed)
-        except ValueError:
-            seed = -1
-        if seed <= -1:
-            seed = self.generate_random_seed()
-        torch.manual_seed(seed)
+            self.set_compute_device(settings.GetOption('tts_ai_device'))
 
-        print("Using seed:", seed)
+            tts_volume = settings.GetOption("tts_volume")
+            tts_normalize = settings.GetOption("tts_normalize")
 
-        tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
-
-        language = self.special_settings["language"]
-        emotion = [
-            self.special_settings["happiness"],
-            self.special_settings["sadness"],
-            self.special_settings["disgust"],
-            self.special_settings["fear"],
-            self.special_settings["surprise"],
-            self.special_settings["anger"],
-            self.special_settings["other"],
-            self.special_settings["neutral"],
-        ]
-
-        # fix if all emotions are either set to 1.0 or 0.0, or all non-zero emotions are set to 1.0
-        if all(emotion_value == 0.0 for emotion_value in emotion) or all(emotion_value == 1.0 for emotion_value in emotion):
-            emotion = [0.0001 if emotion_value == 0.0 else 0.9999 for emotion_value in emotion]
-        elif all(emotion_value in (0.0, 1.0) for emotion_value in emotion) and any(emotion_value == 1.0 for emotion_value in emotion):
-            emotion = [0.9999 if emotion_value == 1.0 else 0.0001 for emotion_value in emotion]
-
-        unconditional_keys = self.special_settings["ignore_list"]
-
-        cond_dict = make_cond_dict(text=text, speaker=speaker, language=language, emotion=emotion, speaking_rate=tts_speed, unconditional_keys=unconditional_keys, device=self.compute_device)
-        conditioning = self.model.prepare_conditioning(cond_dict)
-
-        codes = self.model.generate(conditioning, batch_size=1, disable_torch_compile=True) # €todo with torch_compile Not yet supported. Probably when updating to pytorch 2.6.0 which does not support Direct-ML (yet)
-        wavs = self.model.autoencoder.decode(codes).cpu()
-
-        final_wave = wavs[0]
-
-        if tts_normalize:
-            final_wave, _ = audio_tools.normalize_audio_lufs(
-                final_wave, self.sample_rate, -24.0, -16.0,
-                1.3, verbose=True
-            )
-
-        # change volume
-        if tts_volume != 1.0:
-            final_wave = audio_tools.change_volume(wavs[0], tts_volume)
-
-        # call custom plugin event method
-        plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': final_wave, 'sample_rate': self.sample_rate})
-        if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
-            final_wave = plugin_audio['audio']
-
-        final_wave = final_wave.unsqueeze(0)
-        # save last generation in memory
-        self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
-
-        print("TTS generation finished")
-
-        return final_wave, self.sample_rate
-
-    def tts_streaming(self, text, ref_audio=None, normalize=True):
-        #self.stop_flag = False
-        print("TTS requested Zonos TTS (Streaming)")
-        self.load()
-        self.set_compute_device(settings.GetOption('tts_ai_device'))
-
-        chunk_size = settings.GetOption("tts_streamed_chunk_size")
-
-        self.init_audio_stream_playback()
-
-        tts_volume = settings.GetOption("tts_volume")
-        tts_normalize = settings.GetOption("tts_normalize")
-
-        if ref_audio is None:
-            voice_name = settings.GetOption('tts_voice')
-            selected_voice = self.get_voice_by_name(voice_name)
-            if selected_voice is None:
-                print("No voice selected or does not exist. Using default voice 'en_1'.")
-                voice_name = "en_1"
+            if ref_audio is None:
+                voice_name = settings.GetOption('tts_voice')
                 selected_voice = self.get_voice_by_name(voice_name)
-            ref_audio = selected_voice["audio_filename"]
+                if selected_voice is None:
+                    print("No voice selected or does not exist. Using default voice 'en_1'.")
+                    voice_name = "en_1"
+                    selected_voice = self.get_voice_by_name(voice_name)
+                ref_audio = selected_voice["audio_filename"]
 
-        # reuse speaker embedding
-        if self.last_speaker_audio != ref_audio or self.last_speaker_embedding is None:
-            wav, sampling_rate = torchaudio.load(ref_audio)
-            speaker = self.model.make_speaker_embedding(wav, sampling_rate)
-            self.last_speaker_audio = ref_audio
-            self.last_speaker_embedding = speaker
-        else:
-            speaker = self.last_speaker_embedding
+            # reuse speaker embedding
+            if self.last_speaker_audio != ref_audio or self.last_speaker_embedding is None:
+                wav, sampling_rate = torchaudio.load(ref_audio)
+                speaker = self.model.make_speaker_embedding(wav, sampling_rate)
+                self.last_speaker_audio = ref_audio
+                self.last_speaker_embedding = speaker
+            else:
+                speaker = self.last_speaker_embedding
 
-        seed = self.special_settings["seed"]
-        # convert string to integer. If its invalid, default to -1
-        try:
-            seed = int(seed)
-        except ValueError:
-            seed = -1
-        if seed <= -1:
-            seed = self.generate_random_seed()
-        torch.manual_seed(seed)
-        print("Using seed:", seed)
+            seed = self.special_settings["seed"]
+            try:
+                seed = int(seed)
+            except ValueError:
+                seed = -1
+            if seed <= -1:
+                seed = self.generate_random_seed()
+            torch.manual_seed(seed)
 
-        tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
+            print("Using seed:", seed)
 
-        language = self.special_settings["language"]
-        emotion = [
-            self.special_settings["happiness"],
-            self.special_settings["sadness"],
-            self.special_settings["disgust"],
-            self.special_settings["fear"],
-            self.special_settings["surprise"],
-            self.special_settings["anger"],
-            self.special_settings["other"],
-            self.special_settings["neutral"],
-        ]
+            tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
 
-        # fix if all emotions are either set to 1.0 or 0.0, or all non-zero emotions are set to 1.0
-        if all(emotion_value == 0.0 for emotion_value in emotion) or all(emotion_value == 1.0 for emotion_value in emotion):
-            emotion = [0.0001 if emotion_value == 0.0 else 0.9999 for emotion_value in emotion]
-        elif all(emotion_value in (0.0, 1.0) for emotion_value in emotion) and any(emotion_value == 1.0 for emotion_value in emotion):
-            emotion = [0.9999 if emotion_value == 1.0 else 0.0001 for emotion_value in emotion]
+            language = self.special_settings["language"]
+            emotion = [
+                self.special_settings["happiness"],
+                self.special_settings["sadness"],
+                self.special_settings["disgust"],
+                self.special_settings["fear"],
+                self.special_settings["surprise"],
+                self.special_settings["anger"],
+                self.special_settings["other"],
+                self.special_settings["neutral"],
+            ]
 
-        unconditional_keys = self.special_settings["ignore_list"]
+            if all(ev == 0.0 for ev in emotion) or all(ev == 1.0 for ev in emotion):
+                emotion = [0.0001 if ev == 0.0 else 0.9999 for ev in emotion]
+            elif all(ev in (0.0, 1.0) for ev in emotion) and any(ev == 1.0 for ev in emotion):
+                emotion = [0.9999 if ev == 1.0 else 0.0001 for ev in emotion]
 
-        cond_dict = make_cond_dict(text=text, speaker=speaker, language=language, emotion=emotion, speaking_rate=tts_speed, unconditional_keys=unconditional_keys, device=self.compute_device)
-        conditioning = self.model.prepare_conditioning(cond_dict)
+            unconditional_keys = self.special_settings["ignore_list"]
 
-        stream_generator = self.model.stream(
-            prefix_conditioning=conditioning,
-            audio_prefix_codes=None,
-            chunk_size=chunk_size,
-            batch_size=1,
-            disable_torch_compile=True,
-        )
+            # --- NEW: Split text into segments using fast pattern ---
+            segments = self.split_text(text, mode='fast')
+            segment_waves = []
+            with torch.inference_mode():
+                for idx, segment in enumerate(segments):
+                    if not segment.strip():
+                        continue
+                    cond_dict = make_cond_dict(text=segment, speaker=speaker, language=language, emotion=emotion,
+                                               speaking_rate=tts_speed, unconditional_keys=unconditional_keys, device=self.compute_device)
+                    conditioning = self.model.prepare_conditioning(cond_dict)
+                    codes = self.model.generate(conditioning, batch_size=1, disable_torch_compile=True)
+                    wavs = self.model.autoencoder.decode(codes).cpu()
+                    seg_wave = wavs[0]
+                    segment_waves.append(seg_wave)
 
-        audio_chunks = []
-        for sr_out, codes_chunk in stream_generator:
-            if self.audio_streamer is None:
-                break
-            audio_chunk = self.model.autoencoder.decode(codes_chunk).cpu()
-            return_audio_chunk = audio_chunk[0]
+            if not segment_waves:
+                print("No audio generated (no valid segments). Returning silence.")
+                final_wave = torch.zeros(1, self.sample_rate // 10)  # 0.1s silence fallback
+                self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
+                return final_wave, self.sample_rate
+
+            # Concatenate all segment waves
+            final_wave = torch.cat(segment_waves, dim=-1)
+            # proactively free segment_waves list after concat
+            segment_waves.clear()
 
             if tts_normalize:
-                return_audio_chunk, _ = audio_tools.normalize_audio_lufs(
-                    return_audio_chunk, self.sample_rate, -24.0, -16.0,
-                    1.3, verbose=False
+                final_wave, _ = audio_tools.normalize_audio_lufs(
+                    final_wave, self.sample_rate, -24.0, -16.0,
+                    1.3, verbose=True
                 )
 
-            # change volume
             if tts_volume != 1.0:
-                return_audio_chunk = audio_tools.change_volume(return_audio_chunk, tts_volume)
+                final_wave = audio_tools.change_volume(final_wave, tts_volume)
 
-            audio_chunks.append(return_audio_chunk)
-            # torch tensor to pcm bytes
-            wav_bytes = self.return_pcm_audio(return_audio_chunk)
-            if self.audio_streamer is not None:
-                self.audio_streamer.add_audio_chunk(wav_bytes)
+            # call custom plugin event method
+            plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': final_wave, 'sample_rate': self.sample_rate})
+            if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
+                final_wave = plugin_audio['audio']
 
-        full_audio = np.concatenate(audio_chunks, axis=-1)
-        # numpy array to torch.Tensor
-        full_audio = torch.from_numpy(full_audio).float()
-        full_audio = full_audio.unsqueeze(0)
+            final_wave = final_wave.unsqueeze(0)
+            # save last generation in memory
+            self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
 
-        self.last_generation = {"audio": full_audio, "sample_rate": self.sample_rate}
+            print("TTS generation finished")
 
-        print("TTS generation finished")
+            return final_wave, self.sample_rate
+        finally:
+            if not settings.GetOption("tts_queue_enabled") and self.gen_lock.locked():
+                self.gen_lock.release()
+            # memory cleanup
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
 
-        return full_audio, self.sample_rate
+    def tts_streaming(self, text, ref_audio=None, normalize=True):
+        print("TTS requested Zonos TTS (Streaming)")
+        # Acquire generation lock (for non-queue mode) first, then streaming lock to serialize streaming sessions
+        acquired_gen_lock = False
+        if not settings.GetOption("tts_queue_enabled"):
+            self.gen_lock.acquire()
+            acquired_gen_lock = True
+        # Always serialize streaming to prevent overlapping chunk playback
+        self.streaming_lock.acquire()
+        try:
+            self.set_compute_device(settings.GetOption('tts_ai_device'))
+            chunk_size = settings.GetOption("tts_streamed_chunk_size")
+            self.init_audio_stream_playback()
+            tts_volume = settings.GetOption("tts_volume")
+            tts_normalize = settings.GetOption("tts_normalize")
 
+            if ref_audio is None:
+                voice_name = settings.GetOption('tts_voice')
+                selected_voice = self.get_voice_by_name(voice_name)
+                if selected_voice is None:
+                    print("No voice selected or does not exist. Using default voice 'en_1'.")
+                    voice_name = "en_1"
+                    selected_voice = self.get_voice_by_name(voice_name)
+                ref_audio = selected_voice["audio_filename"]
+
+            if self.last_speaker_audio != ref_audio or self.last_speaker_embedding is None:
+                wav, sampling_rate = torchaudio.load(ref_audio)
+                speaker = self.model.make_speaker_embedding(wav, sampling_rate)
+                self.last_speaker_audio = ref_audio
+                self.last_speaker_embedding = speaker
+            else:
+                speaker = self.last_speaker_embedding
+
+            seed = self.special_settings["seed"]
+            try:
+                seed = int(seed)
+            except ValueError:
+                seed = -1
+            if seed <= -1:
+                seed = self.generate_random_seed()
+            torch.manual_seed(seed)
+            print("Using seed:", seed)
+
+            tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
+
+            language = self.special_settings["language"]
+            emotion = [
+                self.special_settings["happiness"],
+                self.special_settings["sadness"],
+                self.special_settings["disgust"],
+                self.special_settings["fear"],
+                self.special_settings["surprise"],
+                self.special_settings["anger"],
+                self.special_settings["other"],
+                self.special_settings["neutral"],
+            ]
+
+            if all(ev == 0.0 for ev in emotion) or all(ev == 1.0 for ev in emotion):
+                emotion = [0.0001 if ev == 0.0 else 0.9999 for ev in emotion]
+            elif all(ev in (0.0, 1.0) for ev in emotion) and any(ev == 1.0 for ev in emotion):
+                emotion = [0.9999 if ev == 1.0 else 0.0001 for ev in emotion]
+
+            unconditional_keys = self.special_settings["ignore_list"]
+
+            # --- Split text for streaming ---
+            segments = self.split_text(text, mode='fast')
+            audio_chunks = []
+
+            for seg_idx, segment in enumerate(segments):
+                if not segment.strip():
+                    continue
+                cond_dict = make_cond_dict(text=segment, speaker=speaker, language=language, emotion=emotion,
+                                           speaking_rate=tts_speed, unconditional_keys=unconditional_keys, device=self.compute_device)
+                conditioning = self.model.prepare_conditioning(cond_dict)
+
+                stream_generator = self.model.stream(
+                    prefix_conditioning=conditioning,
+                    audio_prefix_codes=None,
+                    chunk_size=chunk_size,
+                    batch_size=1,
+                    disable_torch_compile=True,
+                )
+
+                with torch.inference_mode():
+                    for sr_out, codes_chunk in stream_generator:
+                        if self.audio_streamer is None:
+                            break
+                        audio_chunk = self.model.autoencoder.decode(codes_chunk).cpu()
+                        return_audio_chunk = audio_chunk[0]
+
+                        if tts_normalize:
+                            return_audio_chunk, _ = audio_tools.normalize_audio_lufs(
+                                return_audio_chunk, self.sample_rate, -24.0, -16.0,
+                                1.3, verbose=False
+                            )
+
+                        if tts_volume != 1.0:
+                            return_audio_chunk = audio_tools.change_volume(return_audio_chunk, tts_volume)
+
+                        audio_chunks.append(return_audio_chunk)
+                        wav_bytes = self.return_pcm_audio(return_audio_chunk)
+                        if self.audio_streamer is not None:
+                            self.audio_streamer.add_audio_chunk(wav_bytes)
+            if not audio_chunks:
+                print("No audio generated (no valid segments). Returning silence.")
+                full_audio = torch.zeros(1, self.sample_rate // 10)
+                self.last_generation = {"audio": full_audio, "sample_rate": self.sample_rate}
+                return full_audio, self.sample_rate
+            full_audio_np = np.concatenate([c.detach().cpu().numpy() for c in audio_chunks], axis=-1)
+            full_audio = torch.from_numpy(full_audio_np).float().unsqueeze(0)
+            self.last_generation = {"audio": full_audio, "sample_rate": self.sample_rate}
+            print("TTS generation finished")
+            return full_audio, self.sample_rate
+        finally:
+            # Release locks in reverse order
+            if self.streaming_lock.locked():
+                self.streaming_lock.release()
+            if acquired_gen_lock and self.gen_lock.locked():
+                self.gen_lock.release()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
 
     def init_audio_stream_playback(self):
         audio_device = settings.GetOption("device_out_index")

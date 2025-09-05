@@ -57,11 +57,13 @@ def InstallLanguages():
                 compute_type=settings.GetOption("txt_translator_precision"),
                 device=settings.GetOption("txt_translator_device")
             )
+            txt_translator_instance.load_model()
         case "voxtral":
             txt_translator_instance = Voxtral(
                 compute_type=settings.GetOption("txt_translator_precision"),
                 device=settings.GetOption("txt_translator_device")
             )
+            txt_translator_instance.load_model()
 
 
 def GetInstalledLanguageNames():
