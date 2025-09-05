@@ -375,36 +375,39 @@ class Phi4(metaclass=SingletonMeta):
         # https://huggingface.co/microsoft/Phi-4-multimodal-instruct#speech-language-format
 
         separator = settings.GetOption('txt_second_translation_wrap')
-        separator = separator.strip(' ')
+        if separator is None:
+            separator = '\n'
+        separator = separator.strip()
 
         language_code = ""
         language_name = ""
-        if task == 'translate' or task == 'transcribe_translate' or task == 'text_translate':
-            if language in supported_text_languages.keys():
+        if task in ['translate', 'transcribe_translate', 'text_translate']:
+            if language in supported_text_languages:
                 language_code = language
                 language_name = supported_text_languages[language]
 
         tools_definition = ""
         tools_definitions_list = []
         if task == 'function_calling':
-            # function call definition event call
             plugin_function_registration_result_list = Plugins.plugin_custom_event_call_all('plugin_llm_function_registration', {'model': 'phi4', 'task': task})
-            if plugin_function_registration_result_list is not None and plugin_function_registration_result_list:
+            if plugin_function_registration_result_list:
                 for plugin_function_registration_result in plugin_function_registration_result_list:
-                    if plugin_function_registration_result is not None:
+                    if plugin_function_registration_result and 'tool_definition' in plugin_function_registration_result:
                         tools_definitions_list.append(json.dumps(plugin_function_registration_result['tool_definition']))
                 if tools_definitions_list:
                     tools_definition = '<|tool|>[' + ','.join(tools_definitions_list) + ']<|/tool|>'
 
-        prompt = self.prompt_types['transcribe']
-        if task in self.prompt_types.keys():
-            prompt = self.prompt_types[task].format(language_code=language_code, language_name=language_name, chat_message=chat_message, system_prompt=system_prompt, tools_definition=tools_definition)
+        prompt = self.prompt_types.get(task, self.prompt_types['transcribe']).format(
+            language_code=language_code,
+            language_name=language_name,
+            chat_message=chat_message,
+            system_prompt=system_prompt,
+            tools_definition=tools_definition
+        )
 
         if audio_sample is None:
-            # remove the <|audio_*|> from the prompt if no audio sample is provided
             prompt = re.sub(r'<\|audio_\d+\|>', '', prompt)
         if image_sample is None:
-            # remove the <|image_*|> from the prompt if no image is provided
             prompt = re.sub(r'<\|image_\d+\|>', '', prompt)
 
         response_dict = {
@@ -421,9 +424,8 @@ class Phi4(metaclass=SingletonMeta):
             else:
                 inputs = self.processor(text=prompt, return_tensors='pt').to(self.compute_device_str)
 
-            # fix error = TypeError: bad operand type for unary -: 'NoneType' (possibly due to wrong flash-attn version)
             inputs["num_logits_to_keep"] = torch.tensor([50], device=self.compute_device_str)
-            inputs = {k: v for k, v in inputs.items() if v is not None and v.numel() > 0}
+            inputs = {k: v for k, v in inputs.items() if v is not None and (not hasattr(v, 'numel') or v.numel() > 0)}
 
             generate_ids = self.model.generate(
                 **inputs,
@@ -432,7 +434,8 @@ class Phi4(metaclass=SingletonMeta):
                 num_beams=1
             )
 
-            generate_ids = generate_ids[:, inputs['input_ids'].shape[1] :]
+            if 'input_ids' in inputs:
+                generate_ids = generate_ids[:, inputs['input_ids'].shape[1]:]
 
             response = self.processor.batch_decode(
                 generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -441,78 +444,63 @@ class Phi4(metaclass=SingletonMeta):
             transcript = None
             translation = None
 
-            if task == 'transcribe_translate':
-                if "<sep>" in response:
-                    # split the response by <sep>
-                    response_parts = response.split("<sep>")
-                    transcript = response_parts[0].strip()
-                    translation = response_parts[1].strip()
+            if task == 'transcribe_translate' and "<sep>" in response:
+                response_parts = response.split("<sep>")
+                transcript = response_parts[0].strip()
+                translation = response_parts[1].strip() if len(response_parts) > 1 else ''
 
             response = response.replace("<sep>", separator)
 
             response_dict = {
-                'text': response,
+                'text': transcript if transcript is not None else response,
                 'type': task,
-                'language': language_code
+                'language': '' if transcript is not None else language_code
             }
 
             if translation is not None:
                 response_dict["txt_translation"] = translation
                 response_dict["txt_translation_target"] = language_code
-            if transcript is not None:
-                response_dict["text"] = transcript
-                response_dict["language"] = ''
 
-
-            if task == 'question_answering' or task == 'chat' or task == 'function_calling':
+            if task in ['question_answering', 'chat', 'function_calling']:
                 response_dict['llm_answer'] = response
                 response_dict['text'] = response
                 response_dict['type'] = 'llm_answer'
 
-            # function event call
-            if tools_definition != "" and response is not None:
-                response = re.sub(r'<\|tool_call\|>', '', response)
-                if response == "":
-                    return response_dict
-                try :
-                    tool_call = json.loads(response)[0]
-                except :
+            if tools_definition and response:
+                tool_json_text = re.sub(r'<\|tool_call\|>', '', response).strip()
+                if tool_json_text:
+                    tool_call = None
                     try:
-                        json_part = re.search(r'\[.*]|\{.*}', response, re.DOTALL).group(0)
-                        tool_call = json.loads(json_part)
-                        if isinstance(tool_call, list):
-                            tool_call = tool_call[0]
-                    except :
-                        print("Invalid tool call response 1: " + str(response))
-                        return response_dict
-
-                if "name" not in tool_call or ("arguments" not in tool_call and "parameters" not in tool_call):
-                    print("Invalid tool call response 2: " + str(response))
-                    return response_dict
-
-                function_name = tool_call["name"]
-                if "arguments" not in tool_call:
-                    if "parameters" in tool_call:
-                        tool_call["arguments"] = tool_call["parameters"]
-                    else:
-                        print("Invalid tool call response 3: " + str(response))
-                        return response_dict
-
-                arguments = tool_call["arguments"]
-
-                plugin_function_call_result = Plugins.plugin_custom_event_call('plugin_llm_function_process_'+function_name, {
-                    'model': 'phi4', 'task': task, 'response': response, 'function_name': function_name, 'arguments': arguments
-                })
-                if plugin_function_call_result is not None:
-                    # send function call result back to LLM to get the final answer
-                    if 'function_calling_reply' in self.prompt_types.keys() and 'reply_prompt' in plugin_function_call_result:
-                        function_reply_prompt = plugin_function_call_result["reply_prompt"]
-                        function_call_reply_obj = self.transcribe(audio_sample, 'function_calling_reply', language=language, chat_message=chat_message, image_sample=image_sample, system_prompt=function_reply_prompt,)
-                        plugin_function_call_result["text"] = function_call_reply_obj['text']
-                        plugin_function_call_result["llm_answer"] = function_call_reply_obj['text']
-
-                    response_dict = plugin_function_call_result
-
+                        maybe_list = json.loads(tool_json_text)
+                        if isinstance(maybe_list, list):
+                            tool_call = maybe_list[0]
+                        elif isinstance(maybe_list, dict):
+                            tool_call = maybe_list
+                    except Exception:
+                        try:
+                            json_part = re.search(r'\[.*?\]|\{.*?\}', tool_json_text, re.DOTALL).group(0)
+                            maybe_list = json.loads(json_part)
+                            if isinstance(maybe_list, list):
+                                tool_call = maybe_list[0]
+                            elif isinstance(maybe_list, dict):
+                                tool_call = maybe_list
+                        except Exception:
+                            tool_call = None
+                    if tool_call and 'name' in tool_call and ('arguments' in tool_call or 'parameters' in tool_call):
+                        if 'arguments' not in tool_call:
+                            tool_call['arguments'] = tool_call.get('parameters', {})
+                        function_name = tool_call['name']
+                        arguments = tool_call['arguments']
+                        plugin_function_call_result = Plugins.plugin_custom_event_call('plugin_llm_function_process_'+function_name, {
+                            'model': 'phi4', 'task': task, 'response': response, 'function_name': function_name, 'arguments': arguments
+                        })
+                        if plugin_function_call_result:
+                            if 'function_calling_reply' in self.prompt_types and 'reply_prompt' in plugin_function_call_result:
+                                function_reply_prompt = plugin_function_call_result['reply_prompt']
+                                function_call_reply_obj = self.transcribe(audio_sample, 'function_calling_reply', language=language, chat_message=chat_message, image_sample=image_sample, system_prompt=function_reply_prompt)
+                                plugin_function_call_result['text'] = function_call_reply_obj['text']
+                                plugin_function_call_result['llm_answer'] = function_call_reply_obj['text']
+                            response_dict = plugin_function_call_result
         return response_dict
 
     def run_image_processing_from_image(self, image_src, src_languages=None):
