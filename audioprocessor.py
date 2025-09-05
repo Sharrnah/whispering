@@ -446,11 +446,15 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
         streamed_playback = settings.GetOption("tts_streamed_playback")
         if settings.GetOption("tts_answer") and predicted_text != "" and tts.init():
             try:
-                if streamed_playback and hasattr(tts.tts, "tts_streaming"):
-                    tts.tts.tts_streaming(predicted_text)
+                if settings.GetOption("tts_queue_enabled") and hasattr(tts.tts, 'enqueue_tts'):
+                    # Queue mode handles both streaming and non-streaming inside enqueue
+                    tts.tts.enqueue_tts(predicted_text, streaming=streamed_playback)
                 else:
-                    tts_wav, sample_rate = tts.tts.tts(predicted_text)
-                    tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
+                    if streamed_playback and hasattr(tts.tts, "tts_streaming"):
+                        tts.tts.tts_streaming(predicted_text)
+                    else:
+                        tts_wav, sample_rate = tts.tts.tts(predicted_text)
+                        tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
             except Exception as e:
                 print("Error while playing TTS audio: " + str(e))
 
