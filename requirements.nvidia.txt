@@ -14,10 +14,10 @@
 
 
 
---extra-index-url https://download.pytorch.org/whl/nightly/cu128
-torch==2.7.0.dev20250311
-torchvision==0.22.0.dev20250312
-torchaudio==2.6.0.dev20250312
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.7.0
+torchvision==0.22.0
+torchaudio==2.6.0
 flash-attn @ https://github.com/Sharrnah/flash-attention-win/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu128+torch2.7.0-cp311-cp311-win_amd64.whl
 
 
