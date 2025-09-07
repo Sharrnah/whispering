@@ -36,7 +36,7 @@ failed = False
 
 TTS_MODEL_LINKS = {
     # Models
-    "zonos-v0.1-transformer": {
+    "v0.1-transformer": {
         "urls": [
             "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/zonos-tts/v0.1-transformer.zip",
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/zonos-tts/v0.1-transformer.zip",
@@ -49,7 +49,7 @@ TTS_MODEL_LINKS = {
         },
         "path": "v0.1-transformer",
     },
-    "zonos-v0.1-hybrid": {
+    "v0.1-hybrid": {
         "urls": [
             "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/zonos-tts/v0.1-hybrid.zip",
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/zonos-tts/v0.1-hybrid.zip",
@@ -764,18 +764,20 @@ class ZonosTTS(metaclass=SingletonMeta):
         self.set_compute_device(settings.GetOption('tts_ai_device'))
 
         if "custom" not in model:
-            model_directory = Path(cache_path / TTS_MODEL_LINKS["zonos-"+model]["path"])
+            model_directory = Path(cache_path / TTS_MODEL_LINKS[model]["path"])
         else:
             model_directory = Path(cache_path / model)
             os.makedirs(model_directory, exist_ok=True)
         if "custom" not in model:
-            self.download_model("zonos-"+model)
+            self.download_model(model)
 
         self.download_model("eSpeak-NG")
         self.download_model("dac_44khz")
         self.download_model("voices")
 
         self.release_model()
+
+        print(f"Loading Zonos TTS model {model} on device {self.compute_device}")
 
         self.model = Zonos.from_local(
             config_path=str(Path(model_directory / "config.json").resolve()),
