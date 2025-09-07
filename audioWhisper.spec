@@ -4,38 +4,33 @@ from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.utils.hooks import collect_all
 from PyInstaller.utils.hooks import copy_metadata
 from PyInstaller.utils.hooks import collect_dynamic_libs
+import os
 import sys ; sys.setrecursionlimit(sys.getrecursionlimit() * 5)
 
 datas = []
 binaries = []
 # Collect dynamic libraries from onnxruntime
 binaries= collect_dynamic_libs('onnxruntime', destdir='onnxruntime/capi')
+try:
+    binaries += collect_dynamic_libs('torch')
+except Exception:
+    pass
 
 hiddenimports = [
     'torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers', 'transformers.models.nllb', 'sentencepiece',
     'df.deepfilternet3', 'bitsandbytes', 'faiss', 'faiss-cpu', 'praat-parselmouth', 'parselmouth', 'pyworld', 'torchcrepe',
     'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio',
     'pyannote.pipeline', 'pyloudnorm', 'future', 'noisereduce', 'frozendict', 'torch_directml', 'x_transformers', 'inflect', 'backoff',
-    'language_tags', 'spacy', 'en-core-web-sm', 'en_core_web_sm', 'misaki', 'fugashi', 'mojimoji', 'unidic', 'unidic-lite', 'ordered_set', 'phonemizer', 'triton', 'mistral_common', 'snac',
-    'espeakng_loader', 'unidic_lite', 'mamba_ssm'
+    'language_tags', 'spacy', 'en_core_web_sm', 'misaki', 'fugashi', 'mojimoji', 'unidic', 'unidic-lite', 'ordered_set', 'phonemizer',
+    'flash_attn', 'mistral_common', 'snac',
+    'espeakng_loader', 'unidic_lite', 'mamba_ssm', 'audiotools'
 ]
-datas += collect_data_files('torch', include_py_files=True)
 datas += collect_data_files('whisper')
 datas += collect_data_files('pykakasi')
 datas += collect_data_files('lightning_fabric')
-datas += collect_data_files('transformers', include_py_files=True)
-datas += collect_data_files('x_transformers', include_py_files=True)
-datas += collect_data_files('inflect', include_py_files=True)
-datas += collect_data_files('language_tags', include_py_files=True)
-datas += collect_data_files('spacy', include_py_files=True)
-datas += collect_data_files('en-core-web-sm', include_py_files=True)
-datas += collect_data_files('en_core_web_sm', include_py_files=True)
-datas += collect_data_files('misaki', include_py_files=True)
 datas += collect_data_files('phonemizer')
 datas += collect_data_files('backoff')
-datas += collect_data_files('triton')
 datas += collect_data_files('mistral_common')
-datas += collect_data_files('snac', include_py_files=True)
 datas += copy_metadata('rich')
 datas += copy_metadata('torch')
 datas += copy_metadata('tqdm')
@@ -55,117 +50,28 @@ datas += copy_metadata('future')
 datas += copy_metadata('nltk')
 datas += copy_metadata('noisereduce')
 datas += copy_metadata('spacy')
-datas += copy_metadata('en-core-web-sm')
 datas += copy_metadata('en_core_web_sm')
 datas += copy_metadata('misaki')
 datas += copy_metadata('backoff')
-hiddenimports += collect_submodules('fairseq')
-tmp_ret = collect_all('easyocr')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('winsdk')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('ctranslate2')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('torchaudio')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('scipy')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('lazy_loader')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('decorator')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('librosa')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('torchlibrosa')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('sentencepiece')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('transformers')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('df')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('nltk')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('fairseq')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('bitsandbytes')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('faiss')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('faiss-cpu')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('faiss_cpu')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('praat-parselmouth')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('praat_parselmouth')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('parselmouth')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('pyworld')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('torchcrepe')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('grpcio')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('grpc')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('annotated_types')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('Cython')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('nemo_toolkit')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('nemo-toolkit')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('lightning_fabric')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('lightning')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('nemo')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('speechbrain')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('pyannote')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('pyannote.audio')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('pyannote.pipeline')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('noisereduce')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('frozendict')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('torch_directml')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('inflect')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('language_tags')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('spacy')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('en-core-web-sm')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('en_core_web_sm')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('misaki')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('unidic')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('unidic-lite')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('backoff')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('triton')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('mistral_common')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('espeakng_loader')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('unidic_lite')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('mamba_ssm')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
+# ---- Bundle these as real modules (code + extensions) ----
+for pkg in [
+    'easyocr', 'winsdk', 'ctranslate2', 'torchaudio', 'scipy', 'lazy_loader',
+    'decorator', 'librosa', 'torchlibrosa', 'sentencepiece', 'transformers',
+    'df', 'nltk', 'fairseq', 'bitsandbytes', 'faiss', 'faiss-cpu', 'faiss_cpu',
+    'praat-parselmouth', 'praat_parselmouth', 'parselmouth', 'pyworld',
+    'torchcrepe', 'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit',
+    'nemo-toolkit', 'lightning_fabric', 'lightning', 'nemo', 'speechbrain',
+    'pyannote', 'pyannote.audio', 'pyannote.pipeline', 'noisereduce',
+    'frozendict', 'torch_directml', 'inflect', 'language_tags', 'spacy',
+    'en_core_web_sm', 'misaki', 'unidic', 'unidic-lite', 'backoff',
+    'flash_attn', 'mistral_common', 'espeakng_loader', 'unidic_lite',
+    'mamba_ssm', 'audiotools', 'x_transformers', 'snac'
+]:
+    d, b, h = collect_all(pkg)
+    datas += d
+    binaries += b
+    hiddenimports += h
 
 workdir = os.environ.get('WORKDIR_WIN', r'\drone\src')
 workdir = "C:" + workdir  # Now workdir = "C:\drone\src"
@@ -207,8 +113,19 @@ for path_option in corpora_path_options:
 #datas.append((r'./Models/TTS/F5TTS', r'Models.TTS.F5TTS'))
 #datas.append((r'./Models/TTS/zonos', r'Models.TTS.zonos'))
 
+# add warmed triton cache
+datas.append((r'C:\src\triton_cache_warm', 'triton_cache'))
+
 block_cipher = None
 
+# ---- Runtime hook to set TRITON_CACHE_DIR (very important for first-run JIT) ----
+runtime_hooks = [
+    'rthooks/rt_mamba_triton_shim.py',
+    'rthooks/rt_disable_triton_backend.py',
+    'rthooks/rt_fix_flash_attn_spec.py',
+    'rthooks/rt_inspect_fallback.py',
+    'rthooks/rt_triton_env.py'
+]
 
 a = Analysis(
     ['audioWhisper.py'],
@@ -218,7 +135,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=runtime_hooks,
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
