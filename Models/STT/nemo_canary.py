@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import signal
@@ -195,7 +196,7 @@ class NemoCanary(metaclass=SingletonMeta):
             yaml.dump(data, file, default_flow_style=False)
 
     def transcribe(self, audio_sample, task, source_lang=None, target_lang='en',
-                   return_timestamps=False, **kwargs) -> dict:
+                   without_timestamps=False, **kwargs) -> dict:
 
         model = "canary-1b"
         if "model" in kwargs:
@@ -253,12 +254,14 @@ class NemoCanary(metaclass=SingletonMeta):
                 "pnc": "yes",
                 #"answer": "na",
                 "answer": "predict",
-                "timestamp": "no",
+                "timestamps": "no" if without_timestamps else "yes",
             }
 
         result_text = ""
 
         compute_type = self._str_to_dtype_dict(self.compute_type).get('dtype', torch.float32)
+
+        segment_list = []
 
         if model.startswith("canary-"):
             # Transcribe using the model
@@ -269,8 +272,14 @@ class NemoCanary(metaclass=SingletonMeta):
                 with torch.cuda.amp.autocast(dtype=compute_type):
                     with torch.no_grad():
                         predicted_text = self.model.transcribe([audio_sample], batch_size=16, verbose=False, **config_kwargs)
-            print(predicted_text)
+
             result_text = predicted_text[0].text
+
+            if not without_timestamps:
+                timestamp = predicted_text[0].timestamp
+                segments = timestamp['segment']
+                for single_segment in segments:
+                    segment_list.append({'text': single_segment['segment'], 'start': single_segment['start'], 'end': single_segment['end']})
 
         elif model.startswith("parakeet-"):
             with torch.no_grad():
@@ -283,5 +292,87 @@ class NemoCanary(metaclass=SingletonMeta):
             'language': source_lang,
             'target_lang': target_lang
         }
+        # add segments if they exist
+        if len(segment_list) > 0:
+            result['segments'] = segment_list
 
         return result
+
+    # https://github.com/NVIDIA/NeMo/blob/main/examples/asr/asr_chunked_inference/aed/speech_to_text_aed_chunked_infer.py
+    def long_form_transcribe(self, audio_sample, task, source_lang=None, target_lang='en',
+                                 without_timestamps=False, **kwargs):
+        filepaths = audio_sample
+
+        from omegaconf import OmegaConf
+        from nemo.collections.asr.parts.utils.streaming_utils import FrameBatchMultiTaskAED
+        from nemo.collections.asr.parts.utils.transcribe_utils import (
+            compute_output_filename,
+            get_buffered_pred_feat_multitaskAED,
+            setup_model,
+            write_transcription,
+        )
+
+        cfg = self.model.cfg
+        cfg.chunk_len_in_secs = 10.0
+        torch.set_grad_enabled(False)
+
+        # setup GPU
+        torch.set_float32_matmul_precision(cfg.matmul_precision)
+        if cfg.cuda is None:
+            if torch.cuda.is_available():
+                device = [0]  # use 0th CUDA device
+                accelerator = 'gpu'
+            else:
+                device = 1
+                accelerator = 'cpu'
+        else:
+            device = [cfg.cuda]
+            accelerator = 'gpu'
+        map_location = torch.device('cuda:{}'.format(device[0]) if accelerator == 'gpu' else 'cpu')
+
+        asr_model, model_name = setup_model(cfg, map_location)
+        model_cfg = copy.deepcopy(asr_model._cfg)
+
+        OmegaConf.set_struct(model_cfg.preprocessor, False)
+        # some changes for streaming scenario
+        model_cfg.preprocessor.dither = 0.0
+        model_cfg.preprocessor.pad_to = 0
+
+        # Disable config overwriting
+        OmegaConf.set_struct(model_cfg.preprocessor, True)
+
+        # Compute output filename
+        cfg = compute_output_filename(cfg, model_name)
+
+        asr_model.change_decoding_strategy(cfg.decoding)
+
+        asr_model.eval()
+        asr_model = asr_model.to(asr_model.device)
+
+        feature_stride = model_cfg.preprocessor['window_stride']
+        model_stride_in_secs = feature_stride * cfg.model_stride
+
+        frame_asr = FrameBatchMultiTaskAED(
+            asr_model=asr_model,
+            frame_len=cfg.chunk_len_in_secs,
+            total_buffer=cfg.chunk_len_in_secs,
+            batch_size=cfg.batch_size,
+        )
+
+        amp_dtype = torch.float16 if cfg.amp_dtype == "float16" else torch.bfloat16
+
+        manifest = cfg.dataset_manifest
+
+        with torch.amp.autocast(asr_model.device.type, enabled=cfg.amp, dtype=amp_dtype):
+            with torch.no_grad():
+                hyps = get_buffered_pred_feat_multitaskAED(
+                    frame_asr,
+                    model_cfg.preprocessor,
+                    model_stride_in_secs,
+                    asr_model.device,
+                    manifest,
+                    filepaths,
+                    timestamps=cfg.timestamps,
+                )
+        print("hyps")
+        print(hyps)
