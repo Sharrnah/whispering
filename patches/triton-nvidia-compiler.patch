@@ -1,0 +1,22 @@
+Index: dist/audioWhisper/_internal/triton/backends/nvidia/compiler.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/dist/audioWhisper/_internal/triton/backends/nvidia/compiler.py b/dist/audioWhisper/_internal/triton/backends/nvidia/compiler.py
+--- a/dist/audioWhisper/_internal/triton/backends/nvidia/compiler.py
++++ b/dist/audioWhisper/_internal/triton/backends/nvidia/compiler.py	(date 1757369549902)
+@@ -69,7 +69,12 @@
+     mock_ver = os.environ.get('TRITON_MOCK_PTX_VERSION')
+     if mock_ver is not None:
+         return mock_ver  # This is not really a version of ptxas, but it is good enough for testing
+-    version = subprocess.check_output([get_ptxas(arch)[0], "--version"]).decode("utf-8")
++    exe = get_ptxas(arch)[0]
++    out = subprocess.run([exe, "--version"],
++                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
++                         stdin=subprocess.DEVNULL, close_fds=False,
++                         creationflags=0x08000000)
++    version = out.stdout.decode("utf-8", "ignore")
+     return version
+ 
+ 

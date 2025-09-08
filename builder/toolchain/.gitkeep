@@ -1,0 +1,12 @@
+# This folder contains the toolchain files for release builds.
+# Stripped down for reduction of size.
+
+Tools included:
+clang
+ffmpeg
+llvm
+msvc
+ucrt
+
+You can find the full toolchain with licenses under this url:
+https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:projects/toolchain.zip
