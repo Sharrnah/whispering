@@ -79,7 +79,7 @@ Go to the [GitHub Releases Page](https://github.com/Sharrnah/whispering/releases
 
 _(because of the 2 GB Limit, no direct release files on GitHub)_
 
-- [Install CUDA for GPU Acceleration](https://developer.nvidia.com/cuda-downloads) (recommended)
+- [Install CUDA for GPU Acceleration](https://developer.nvidia.com/cuda-12-8-1-download-archive) (recommended)
 - Extract the Files on a Drive with enough free Space.
   - _(After download of medium Whisper Model + medium NLLB-200 Translation model, it can take up to 20 GB)_
 - Run only using the *.bat files. Edit or copy an existing `start-*.bat` file and edit the parameters in any text editor for your own command-line flags.
