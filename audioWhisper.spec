@@ -30,6 +30,7 @@ datas += collect_data_files('pykakasi')
 datas += collect_data_files('lightning_fabric')
 datas += collect_data_files('phonemizer')
 datas += collect_data_files('backoff')
+datas += collect_data_files('triton')
 datas += collect_data_files('mistral_common')
 datas += copy_metadata('rich')
 datas += copy_metadata('torch')
@@ -64,7 +65,7 @@ for pkg in [
     'nemo-toolkit', 'lightning_fabric', 'lightning', 'nemo', 'speechbrain',
     'pyannote', 'pyannote.audio', 'pyannote.pipeline', 'noisereduce',
     'frozendict', 'torch_directml', 'inflect', 'language_tags', 'spacy',
-    'en_core_web_sm', 'misaki', 'unidic', 'unidic-lite', 'backoff',
+    'en_core_web_sm', 'misaki', 'unidic', 'unidic-lite', 'backoff', 'triton',
     'flash_attn', 'mistral_common', 'espeakng_loader', 'unidic_lite',
     'mamba_ssm', 'audiotools', 'x_transformers', 'snac'
 ]:
@@ -116,12 +117,17 @@ for path_option in corpora_path_options:
 # add warmed triton cache
 datas.append((r'C:\src\triton_cache_warm', 'triton_cache'))
 
+# add python libs for jit compiler
+datas.append((r'./builder/python-lib/include', 'include'))
+datas.append((r'./builder/python-lib/libs', 'libs'))
+
 block_cipher = None
 
 # ---- Runtime hook to set TRITON_CACHE_DIR (very important for first-run JIT) ----
 runtime_hooks = [
-    'rthooks/rt_mamba_triton_shim.py',
-    'rthooks/rt_disable_triton_backend.py',
+#    'rthooks/rt_mamba_triton_shim.py',
+#    'rthooks/rt_disable_triton_backend.py',
+    'rthooks/patch_triton_ptxas.py',
     'rthooks/rt_fix_flash_attn_spec.py',
     'rthooks/rt_inspect_fallback.py',
     'rthooks/rt_triton_env.py'
