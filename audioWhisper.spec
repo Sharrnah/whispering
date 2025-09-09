@@ -115,7 +115,7 @@ for path_option in corpora_path_options:
 #datas.append((r'./Models/TTS/zonos', r'Models.TTS.zonos'))
 
 # add warmed triton cache
-datas.append((r'C:\src\triton_cache_warm', 'triton_cache'))
+datas.append((r'C:\src\triton_cache_warm', '../triton_cache'))
 
 # add python libs for jit compiler
 datas.append((r'./builder/python-lib/include', 'include'))
