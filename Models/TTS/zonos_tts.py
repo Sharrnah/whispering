@@ -609,6 +609,13 @@ class ZonosTTS(metaclass=SingletonMeta):
         "seed": -1,
     }
 
+    # Configurable chunking parameters
+    chunk_goal_length = 130
+    chunk_max_length = 170
+    chunk_jitter = 0
+    chunk_custom_split_chars = ","
+    chunk_valid_ending_chars = ".;!?\n\""
+
     def __init__(self):
         # --- queue / concurrency management additions ---
         self.request_queue = deque()
@@ -832,32 +839,146 @@ class ZonosTTS(metaclass=SingletonMeta):
     def set_special_setting(self, special_settings):
         self.special_settings = special_settings
 
-    def split_text(self, text: str, mode: str = 'fast'):
-        """Split input text into sentence-like segments based on configured regex patterns.
-        Falls back to 'fast' pattern if requested mode not found. Keeps delimiters attached
-        to preceding segment. Consecutive delimiters/newlines are grouped by the regex.
-        Empty / whitespace-only segments are removed.
-        """
-        if not text:
-            return []
-        pattern = self.split_patterns.get(mode, self.split_patterns['fast'])
+    def _split_segment(self, segment, goal_length, custom_chars, valid_ending_chars):
+        # Improved splitting for segments that are too long
         segments = []
-        last_idx = 0
-        for m in re.finditer(pattern, text):
-            end = m.end()
-            segment = text[last_idx:end].strip()
-            if segment:
-                segments.append(segment)
-            last_idx = end
-        # Remainder
-        if last_idx < len(text):
-            tail = text[last_idx:].strip()
-            if tail:
-                segments.append(tail)
-        # If splitting produced nothing (e.g. text shorter than pattern), return original
-        if not segments:
-            return [text.strip()]
+        while len(segment) > goal_length:
+            split_point = -1
+            # Try custom split chars first
+            if custom_chars:
+                split_points = [segment.rfind(char, 0, goal_length) for char in custom_chars]
+                split_points = [p for p in split_points if p != -1]
+                if split_points:
+                    split_point = max(split_points) + 1
+            # Fallback to space
+            if split_point == -1:
+                split_point = segment.rfind(' ', 0, goal_length)
+                if split_point == -1:
+                    split_point = goal_length
+            new_segment = segment[:split_point].strip()
+            segment = segment[split_point:].strip()
+            if new_segment:
+                segments.append(new_segment)
+        if segment:
+            segments.append(segment)
         return segments
+
+    def chunk_up_text(self, text, goal_length=None, max_length=None, jitter=None, custom_split_chars=None):
+        # Bark-inspired chunking, improved for Zonos
+        if goal_length is None:
+            goal_length = self.chunk_goal_length
+        if max_length is None:
+            max_length = self.chunk_max_length
+        if jitter is None:
+            jitter = self.chunk_jitter
+        if custom_split_chars is None:
+            custom_split_chars = self.chunk_custom_split_chars
+        valid_ending_chars = self.chunk_valid_ending_chars + custom_split_chars
+
+        if jitter > 0:
+            import random
+            goal_length = random.randint(goal_length - jitter, goal_length + jitter)
+            max_length = random.randint(max_length - jitter, max_length + jitter)
+
+        # Normalize text
+        import re
+        text = re.sub(r"\n\n+", "\n", text)
+        text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"[“”]", '"', text)
+
+        # Bark's split_general_purpose logic
+        rv = []
+        in_quote = False
+        current = ""
+        split_pos = []
+        pos = -1
+        end_pos = len(text) - 1
+
+        def seek(delta):
+            nonlocal pos, in_quote, current
+            is_neg = delta < 0
+            for _ in range(abs(delta)):
+                if is_neg:
+                    pos -= 1
+                    current = current[:-1]
+                else:
+                    pos += 1
+                    current += text[pos]
+                if text[pos] == '"':
+                    in_quote = not in_quote
+            return text[pos]
+
+        def peek(delta):
+            p = pos + delta
+            return text[p] if p < end_pos and p >= 0 else ""
+
+        def commit():
+            nonlocal rv, current, split_pos
+            rv.append(current)
+            current = ""
+            split_pos = []
+
+        while pos < end_pos:
+            c = seek(1)
+            # force split if too long
+            if len(current) >= max_length:
+                if len(split_pos) > 0 and len(current) > (goal_length / 2):
+                    d = pos - split_pos[-1]
+                    seek(-d)
+                else:
+                    while c not in ";!?.\n " and pos > 0 and len(current) > goal_length:
+                        c = seek(-1)
+                commit()
+            # sentence boundaries
+            elif not in_quote and (c in ";!?\n" or (c == "." and peek(1) in "\n ")):
+                while (
+                        pos < len(text) - 1 and len(current) < max_length and peek(1) in "!?."
+                ):
+                    c = seek(1)
+                split_pos.append(pos)
+                if len(current) >= goal_length:
+                    commit()
+            elif in_quote and peek(1) == '"' and peek(2) in "\n ":
+                seek(2)
+                split_pos.append(pos)
+        rv.append(current)
+
+        # Clean up
+        rv = [s.strip() for s in rv]
+        rv = [s for s in rv if len(s) > 0 and not re.match(r"^[\s\.,;:!?]*$", s)]
+
+        # Post-process: merge/split segments as needed
+        i = 0
+        while i < len(rv):
+            if not rv[i][-1] in valid_ending_chars:
+                if any(char in custom_split_chars for char in rv[i]) and custom_split_chars:
+                    if i < len(rv) - 1:
+                        rv[i] += ' ' + rv[i + 1]
+                        rv.pop(i + 1)
+                    continue
+            i += 1
+
+        final_segments = []
+        i = 0
+        while i < len(rv):
+            current_segment = rv[i]
+            if i < len(rv) - 1 and current_segment[-1] not in valid_ending_chars:
+                next_segment = rv[i + 1]
+                combined_segment = current_segment + " " + next_segment
+                if len(combined_segment) <= max_length:
+                    rv[i] = combined_segment
+                    rv.pop(i + 1)
+                    continue
+                else:
+                    if len(current_segment) > max_length:
+                        current_segment = self._split_segment(current_segment, goal_length, custom_split_chars, valid_ending_chars)
+            elif len(current_segment) > max_length:
+                current_segment = self._split_segment(current_segment, goal_length, custom_split_chars, valid_ending_chars)
+            if current_segment:
+                final_segments.extend(current_segment if isinstance(current_segment, list) else [current_segment])
+            i += 1
+
+        return final_segments
 
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         #with self.stop_flag_lock:
@@ -925,8 +1046,14 @@ class ZonosTTS(metaclass=SingletonMeta):
 
             unconditional_keys = self.special_settings["ignore_list"]
 
-            # --- NEW: Split text into segments using fast pattern ---
-            segments = self.split_text(text, mode='fast')
+            # --- NEW: Split text into segments using improved chunking ---
+            segments = self.chunk_up_text(
+                text,
+                goal_length=self.chunk_goal_length,
+                max_length=self.chunk_max_length,
+                jitter=self.chunk_jitter,
+                custom_split_chars=self.chunk_custom_split_chars
+            )
             segment_waves = []
             with torch.inference_mode():
                 for idx, segment in enumerate(segments):
@@ -1044,8 +1171,14 @@ class ZonosTTS(metaclass=SingletonMeta):
 
             unconditional_keys = self.special_settings["ignore_list"]
 
-            # --- Split text for streaming ---
-            segments = self.split_text(text, mode='fast')
+            # --- Split text for streaming using improved chunking ---
+            segments = self.chunk_up_text(
+                text,
+                goal_length=self.chunk_goal_length,
+                max_length=self.chunk_max_length,
+                jitter=self.chunk_jitter,
+                custom_split_chars=self.chunk_custom_split_chars
+            )
             audio_chunks = []
 
             for seg_idx, segment in enumerate(segments):

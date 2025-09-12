@@ -35,6 +35,7 @@ if USE_TRT_BACKENDS:
     except ImportError:
         pass
 else:
+    print("Triton is not available or CUDA toolkit is not properly installed on Windows. Triton-based backbones are disabled.")
     import warnings
     warnings.warn("Triton is not available or CUDA toolkit is not properly installed on Windows. Triton-based backbones are disabled.", ImportWarning)
 
