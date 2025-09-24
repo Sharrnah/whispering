@@ -458,6 +458,9 @@ class Phi4(metaclass=SingletonMeta):
             }
 
             if translation is not None:
+                # remove " if translation starts and ends with it
+                if translation.startswith('"') and translation.endswith('"'):
+                    translation = translation[1:-1].strip()
                 response_dict["txt_translation"] = translation
                 response_dict["txt_translation_target"] = language_code
 
