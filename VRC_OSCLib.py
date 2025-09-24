@@ -12,6 +12,7 @@ from pythonosc.osc_message_builder import OscMessageBuilder
 from unidecode import unidecode
 import threading
 import queue
+import re
 
 # Variables and locks for thread safety and message queuing
 send_message_lock = threading.Lock()
@@ -228,6 +229,69 @@ def split_words(text, chunk_size):
     return chunks
 
 
+# preserve original whitespace (including line breaks) when chunking
+def split_words_preserve_whitespace(text, chunk_size, reserved_overhead=8):
+    """
+    Split text into chunks preserving all original whitespace (line breaks, multiple spaces, tabs).
+    reserved_overhead: max characters reserved for added continuation markers ('... ' prefix + ' ...' suffix).
+    """
+    if chunk_size <= reserved_overhead + 1:
+        return [text]
+
+    tokens = re.split(r'(\s+)', text)  # keeps whitespace tokens
+    chunks = []
+    current = ""
+    limit = chunk_size - reserved_overhead  # usable payload size per chunk (safe for middle chunks)
+
+    def flush():
+        nonlocal current
+        if current:
+            chunks.append(current)
+            current = ""
+
+    for tok in tokens:
+        if tok == "":
+            continue
+
+        # If token is a long non-whitespace block, split it hard
+        if not tok.isspace() and count_utf16_code_units(tok) > limit:
+            flush()
+            start = 0
+            while start < len(tok):
+                part = tok[start:start + (limit)]
+                chunks.append(part)
+                start += (limit)
+            continue
+
+        # Normal accumulation
+        if count_utf16_code_units(current + tok) <= limit:
+            current += tok
+        else:
+            flush()
+            # If token itself still too big (rare after above), hard split
+            if count_utf16_code_units(tok) > limit and not tok.isspace():
+                start = 0
+                while start < len(tok):
+                    part = tok[start:start + (limit)]
+                    chunks.append(part)
+                    start += (limit)
+            else:
+                current = tok
+
+    flush()
+
+    # Allow last chunk to use full size (no suffix), so we could merge trailing small chunk if safe
+    if len(chunks) >= 2:
+        last = chunks[-1]
+        second_last = chunks[-2]
+        if (count_utf16_code_units(second_last) + count_utf16_code_units(last)) <= (chunk_size - reserved_overhead):
+            # merge to reduce fragmentation
+            merged = second_last + last
+            chunks = chunks[:-2] + [merged]
+
+    return [c for c in chunks if c]
+
+
 def sleep_while_checking_stop_flag(delay):
     start_time = time.time()
     while time.time() - start_time < delay:
@@ -303,7 +367,8 @@ def send_chunks_v2(text, chunk_size=144, delay=1., initial_delay=1., nofify=True
         Chat(text, send=True, nofify=nofify, address=address, IP=ip, PORT=port, convert_ascii=convert_ascii)
         return
 
-    chunks = split_words(text, chunk_size)
+    chunks = split_words_preserve_whitespace(text, chunk_size)  # keeps line breaks
+
     for i, chunk in enumerate(chunks):
         if stop_flag:
             break
@@ -355,4 +420,3 @@ def send_scrolling_chunks(text, chunk_size=144, delay=1., initial_delay=1., scro
             sleep_while_checking_stop_flag(initial_delay)
         else:
             sleep_while_checking_stop_flag(delay)
-
