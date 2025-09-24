@@ -17,7 +17,7 @@ NON_PERSISTENT_SETTINGS = [
     "transl_result_textarea_savetts_voice", "transl_result_textarea_sendtts_download",
     "plugin_timer_stopped", "plugin_current_timer", "websocket_final_messages",
     "device_default_in_index", "device_default_out_index", "ui_download",
-    "audio_processor_caller",
+    "audio_processor_caller", "osc_force_activity_indication"
     "tts_setting_special",
 ]
 
@@ -151,6 +151,7 @@ class SettingsManager:
             "osc_delay_until_audio_playback": False,  # if enabled, OSC messages will be delayed until audio playback starts. (if no TTS is used, this will prevent messages from being send.)
             "osc_delay_until_audio_playback_tag": "tts",  # defines the tag used for detecting audio playback. (only used when osc_delay_until_audio_playback is enabled. Set empty to detect any audio playback)
             "osc_delay_timeout": 10,  # defines the timeout for delayed OSC messages. (only used when osc_delay_until_audio_playback is enabled)
+            "osc_force_activity_indication": False,  # if enabled, forces activity indication in VRChat OSC even if osc_auto_processing_enabled is disabled. (not saved)
 
             "osc_server_ip": "127.0.0.1",  # OSC server IP address. set to "0" to disable.
             "osc_server_port": 9001,
