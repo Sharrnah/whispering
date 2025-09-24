@@ -1,7 +1,7 @@
 BACKBONES = {}
 
 def _has_cuda_toolkit_on_windows() -> bool:
-    import os, sys
+    import os, sys, torch
     if sys.platform != "win32":
         return True  # not our concern here
     cuda_path = os.environ.get("CUDA_PATH") or os.environ.get("CUDA_HOME")
@@ -10,7 +10,7 @@ def _has_cuda_toolkit_on_windows() -> bool:
     if cuda_path:
         lib_ok = os.path.exists(os.path.join(cuda_path, "lib", "x64", "cuda.lib"))
         inc_ok = os.path.exists(os.path.join(cuda_path, "include", "cuda.h"))
-    return bool(lib_ok and inc_ok)
+    return bool(lib_ok and inc_ok and torch.cuda.is_available())
 
 TRITON_AVAILABLE = False
 try:
