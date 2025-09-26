@@ -603,7 +603,7 @@ class KokoroTTS(metaclass=SingletonMeta):
     _voice_cache = {}  # voice_name -> torch.Tensor
 
     split_patterns = {
-        'fast': r'(?:[\.?!。？！,，;；](?=[ \n])|[\n])+',
+        'fast': r'(?:[。？！、，；;,.?!]+|[\r\n]+)',
         'slow': r'(?:\.(?=[ \n])|[\n?!。])+',
     }
 
