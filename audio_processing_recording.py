@@ -194,10 +194,10 @@ class AudioProcessor:
                         self.default_mic_audio_streamer = audio_tools.AudioStreamer(default_mic_audio_device,
                                                                                     min_buffer_play_time=0.5,
                                                                                     start_playback_timeout=0.5,
-                                                                                    source_sample_rate=44100,
+                                                                                    source_sample_rate=default_sample_rate,
                                                                                     playback_channels=2,
                                                                                     buffer_size=2048,
-                                                                                    input_channels=2,
+                                                                                    input_channels=channels,
                                                                                     dtype="int16",
                                                                                     tag="tts",
                                                                                     )
@@ -221,14 +221,14 @@ class AudioProcessor:
 
                         energy = self.settings.GetOption("energy")
                         confidence_threshold = float(self.settings.GetOption("vad_confidence_threshold"))
-                        test_audio_chunk = audio_tools.resample_audio(in_data, self.recorded_sample_rate,
+                        resampled_audio_chunk = audio_tools.resample_audio(in_data, self.recorded_sample_rate,
                                                                       self.default_sample_rate, target_channels=1,
                                                                       input_channels=self.input_channel_num).tobytes()
-                        new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.default_sample_rate,
+                        new_confidence, peak_amplitude = process_audio_chunk(resampled_audio_chunk, self.default_sample_rate,
                                                                              self.vad_model)
                         if self.should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold,
                                                        keyboard_key=self.push_to_talk_key):
-                            self.default_mic_audio_streamer.add_audio_chunk(in_data)
+                            self.default_mic_audio_streamer.add_audio_chunk(resampled_audio_chunk)
 
 
         self.mic_passthrough_thread = threading.Thread(target=mic_passthrough_thread_func)
