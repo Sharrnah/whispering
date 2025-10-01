@@ -323,7 +323,7 @@ class SeamlessM4T(metaclass=SingletonMeta):
 
     def text_translate(self, text, source_lang='eng', target_lang='eng', beam_size=5, generate_speech=False) -> tuple:
         if source_lang == "auto":
-            source_lang = languageClassification.classify(text)
+            source_lang, _ = languageClassification.classify(text)
 
         inputs = self.processor(text=text, src_lang=source_lang, sampling_rate=16000, return_tensors="pt")
         inputs = {name: tensor.to(self.device) for name, tensor in inputs.items()}

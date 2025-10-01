@@ -6,6 +6,9 @@ from pathlib import Path
 
 import websocket
 
+from Utilities.iso_converter import LanguageCodeConverter
+from Models.TextTranslation.texttranslateNLLB200_CTranslate2 import LANGUAGES
+
 ct_model_path = Path(Path.cwd() / ".cache" / "lid")
 os.makedirs(ct_model_path, exist_ok=True)
 
@@ -22,6 +25,7 @@ MODEL_LINKS = {
 
 model = None
 
+code_converter = LanguageCodeConverter()
 
 def download_model():
     pretrained_lang_model_file = Path(ct_model_path / "lid218e.bin")
@@ -30,7 +34,7 @@ def download_model():
         downloader.download_extract(MODEL_LINKS["lid218e"]["urls"], str(ct_model_path.resolve()), MODEL_LINKS["lid218e"]["checksum"], "language identification")
 
 
-def classify(text):
+def classify(text, to_code='nllb'):
     global model
     pretrained_lang_model_file = Path(ct_model_path / "lid218e.bin")
     if not pretrained_lang_model_file.is_file():
@@ -47,4 +51,12 @@ def classify(text):
     text = text.replace("\n", " ")
     predictions = model.predict(text, k=1)
 
-    return predictions[0][0].replace('__label__', '')
+    predicted_label = predictions[0][0]
+    predicted_label = predicted_label.replace('__label__', '')
+    predicted_probability = predictions[1][0]
+
+    # convert to other language code if needed
+    if to_code != 'nllb':
+        predicted_label = code_converter.convert(predicted_label, to_code)
+
+    return predicted_label, predicted_probability

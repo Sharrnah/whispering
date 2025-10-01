@@ -1177,6 +1177,7 @@ class FasterWhisper(metaclass=SingletonMeta):
             'text': transcription,
             'type': task,
             'language': audio_info.language,
+            'language_probability': audio_info.language_probability,
             'segments': segment_list,
         }
 

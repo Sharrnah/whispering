@@ -516,7 +516,7 @@ def translate_language(text, from_code, to_code, as_iso1=False):
         to_code = LANGUAGES_ISO1_TO_ISO3[to_code][0]
 
     if from_code == "auto":
-        from_code = languageClassification.classify(text)
+        from_code, _ = languageClassification.classify(text)
 
     language_unsupported = False
     if from_code not in SUPPORTED_LANGUAGES:
