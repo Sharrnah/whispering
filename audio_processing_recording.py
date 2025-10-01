@@ -17,6 +17,7 @@ from whisper import audio as whisper_audio
 import wave
 import Utilities
 import Models.STS.SpeakerDiarization as speaker_diarization
+import queue
 
 SAMPLE_RATE = whisper_audio.SAMPLE_RATE
 CHUNK = int(SAMPLE_RATE / 10)
@@ -178,6 +179,61 @@ class AudioProcessor:
         self.before_recording_running_callback_func = before_recording_running_callback_func
 
         self.audio_filter_buffer = None
+
+        self.default_mic_audio_streamer = None
+        self.mic_passthrough_queue = queue.Queue(maxsize=20)
+        def mic_passthrough_thread_func():
+            while True:
+                # initialize the audio streamer for mic passthrough
+                if self.settings.GetOption("mic_passthrough_routing") and self.default_mic_audio_streamer is None:
+                    try:
+                        print("initializing default mic audio streamer for mic passthrough")
+                        default_mic_audio_device = self.settings.GetOption("device_out_index")
+                        if default_mic_audio_device is None or default_mic_audio_device == -1:
+                            default_mic_audio_device = self.settings.GetOption("device_default_out_index")
+                        self.default_mic_audio_streamer = audio_tools.AudioStreamer(default_mic_audio_device,
+                                                                                    min_buffer_play_time=0.5,
+                                                                                    start_playback_timeout=0.5,
+                                                                                    source_sample_rate=44100,
+                                                                                    playback_channels=2,
+                                                                                    buffer_size=2048,
+                                                                                    input_channels=2,
+                                                                                    dtype="int16",
+                                                                                    tag="tts",
+                                                                                    )
+                    except Exception as e:
+                        print("mic_passthrough_routing error:", e)
+
+                in_data = None
+                try:
+                    in_data = self.mic_passthrough_queue.get()
+                except queue.Empty:
+                    continue
+                except queue.Full:
+                    continue
+                if in_data is None or len(in_data) == 0:
+                    continue
+
+                self.mic_passthrough_queue.task_done()
+
+                if self.settings.GetOption("mic_passthrough_routing") and self.default_mic_audio_streamer is not None:
+                    if self.default_mic_audio_streamer is not None:
+
+                        energy = self.settings.GetOption("energy")
+                        confidence_threshold = float(self.settings.GetOption("vad_confidence_threshold"))
+                        test_audio_chunk = audio_tools.resample_audio(in_data, self.recorded_sample_rate,
+                                                                      self.default_sample_rate, target_channels=1,
+                                                                      input_channels=self.input_channel_num).tobytes()
+                        new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.default_sample_rate,
+                                                                             self.vad_model)
+                        if self.should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold,
+                                                       keyboard_key=self.push_to_talk_key):
+                            self.default_mic_audio_streamer.add_audio_chunk(in_data)
+
+
+        self.mic_passthrough_thread = threading.Thread(target=mic_passthrough_thread_func)
+        self.mic_passthrough_thread.start()
+
         # run callback after timeout even if no audio was detected (and such callback not called by pyAudio)
         # self.timer_reset_event = threading.Event()
         # self.timer_thread = threading.Thread(target=self.timer_expired)
@@ -219,6 +275,10 @@ class AudioProcessor:
         # self.timer_reset_event.set()
         if self.before_callback_called_func is not None and callable(self.before_callback_called_func):
             self.before_callback_called_func(self)
+
+        if self.settings.GetOption("mic_passthrough_routing") and self.default_mic_audio_streamer is not None:
+            if in_data is not None and len(in_data) > 0:
+                self.mic_passthrough_queue.put(in_data)
 
         if not self.settings.GetOption("stt_enabled"):
             return None, pyaudio.paContinue

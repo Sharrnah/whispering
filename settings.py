@@ -181,6 +181,9 @@ class SettingsManager:
             "tts_setting_special": {},
             "tts_queue_enabled": True,  # If enabled, TTS requests are queued and processed one at a time (no concurrent generation)
 
+            # others
+            "mic_passthrough_routing" : False,  # if enabled, microphone audio is routed to output device
+
             # Plugins
             "plugins": {},  # active plugins
             "plugin_settings": {},  # plugin settings
