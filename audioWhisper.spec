@@ -25,6 +25,11 @@ hiddenimports = [
     'flash_attn', 'mistral_common', 'snac',
     'espeakng_loader', 'unidic_lite', 'mamba_ssm', 'audiotools'
 ]
+hiddenimports += [
+    *collect_submodules('triton.backends'),
+    *collect_submodules('triton.runtime'),
+    'triton.backends.nvidia'  # at minimum for CUDA
+]
 datas += collect_data_files('whisper')
 datas += collect_data_files('pykakasi')
 datas += collect_data_files('lightning_fabric')
@@ -115,7 +120,7 @@ for path_option in corpora_path_options:
 #datas.append((r'./Models/TTS/zonos', r'Models.TTS.zonos'))
 
 # add warmed triton cache
-datas.append((r'C:\src\triton_cache_warm', '../triton_cache'))
+#datas.append((r'C:\src\triton_cache_warm', '../triton_cache'))
 
 # add python libs for jit compiler
 datas.append((r'./builder/python-lib/include', 'include'))
