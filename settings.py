@@ -17,8 +17,7 @@ NON_PERSISTENT_SETTINGS = [
     "transl_result_textarea_savetts_voice", "transl_result_textarea_sendtts_download",
     "plugin_timer_stopped", "plugin_current_timer", "websocket_final_messages",
     "device_default_in_index", "device_default_out_index", "ui_download",
-    "audio_processor_caller", "osc_force_activity_indication"
-    "tts_setting_special",
+    "audio_processor_caller", "osc_force_activity_indication",
 ]
 
 
@@ -178,11 +177,11 @@ class SettingsManager:
             "tts_streamed_playback": False,  # Use streamed playback if TTS supports it
             "tts_streamed_chunk_size": 400,  # Chunk size of tts streaming.
             "tts_normalize": True,  # Normalize TTS audio
-            "tts_setting_special": {},
             "tts_queue_enabled": True,  # If enabled, TTS requests are queued and processed one at a time (no concurrent generation)
 
             # others
             "mic_passthrough_routing" : False,  # if enabled, microphone audio is routed to output device
+            "special_settings": {},  # for special settings like tts special settings
 
             # Plugins
             "plugins": {},  # active plugins
@@ -195,13 +194,16 @@ class SettingsManager:
         self._save_timer = None
 
     def set_option(self, setting, value):
+        prev = self.translate_settings.get(setting, None)
+        changed = True
         if setting in self.translate_settings:
-            if self.translate_settings[setting] != value:
-                self.translate_settings[setting] = value
-                # Save settings
-                if setting not in NON_PERSISTENT_SETTINGS and (self.settings_path is not None and not self.immutable):
-                    self.debounced_save_yaml(self.settings_path)
-        else:
+            # Treat in-place mutations of mutable types as a change
+            if isinstance(prev, (dict, list, set)):
+                changed = (prev is value) or (prev != value)
+            else:
+                changed = prev != value
+
+        if changed:
             self.translate_settings[setting] = value
             # Save settings
             if setting not in NON_PERSISTENT_SETTINGS and (self.settings_path is not None and not self.immutable):

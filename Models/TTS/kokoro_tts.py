@@ -729,6 +729,9 @@ class KokoroTTS(metaclass=SingletonMeta):
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         print("TTS requested Kokoro TTS")
 
+        if "kokoro_tts" in settings.GetOption("special_settings"):
+            self.special_settings = settings.GetOption("special_settings")["kokoro_tts"]
+
         lang = self.special_settings["language"]
         self.load(lang)
 
@@ -767,6 +770,9 @@ class KokoroTTS(metaclass=SingletonMeta):
 
     def tts_streaming(self, text, ref_audio=None):
         print("TTS requested Kokoro TTS (Streaming)")
+
+        if "tts_kokoro" in settings.GetOption("special_settings"):
+            self.special_settings = settings.GetOption("special_settings")["tts_kokoro"]
 
         lang = self.special_settings["language"]
         self.load(lang)

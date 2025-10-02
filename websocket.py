@@ -550,10 +550,18 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
         translate_thread = threading.Thread(target=chat_request, args=(msg_obj, websocket))
         translate_thread.start()
 
-    if msg_obj["type"] == "tts_setting_special":
+    if msg_obj["type"] == "special_settings":
         if "value" in msg_obj:
-            if tts.init() and hasattr(tts.tts, 'set_special_setting'):
-                tts.tts.set_special_setting(msg_obj["value"])
+            try:
+                name = msg_obj["name"]
+                value = msg_obj["value"]
+                # Avoid mutating the original dict in-place
+                current = settings.GetOption("special_settings") or {}
+                special_settings = dict(current)
+                special_settings[name] = value
+                settings.SetOption("special_settings", special_settings)
+            except Exception as e:
+                print("Failed to set special setting:", e)
 
     if msg_obj["type"] == "audio_stop":
         tag = None

@@ -984,6 +984,10 @@ class ZonosTTS(metaclass=SingletonMeta):
         #with self.stop_flag_lock:
         #    self.stop_flag = False
         print("TTS requested Zonos TTS")
+
+        if "tts_zonos" in settings.GetOption("special_settings"):
+            self.special_settings = settings.GetOption("special_settings")["tts_zonos"]
+
         # queue guard if someone calls directly while already generating and queue mode disabled: block until free
         if not settings.GetOption("tts_queue_enabled"):
             self.gen_lock.acquire()
@@ -1109,6 +1113,9 @@ class ZonosTTS(metaclass=SingletonMeta):
 
     def tts_streaming(self, text, ref_audio=None, normalize=True):
         print("TTS requested Zonos TTS (Streaming)")
+        if "tts_zonos" in settings.GetOption("special_settings"):
+            self.special_settings = settings.GetOption("special_settings")["tts_zonos"]
+
         # Acquire generation lock (for non-queue mode) first, then streaming lock to serialize streaming sessions
         acquired_gen_lock = False
         if not settings.GetOption("tts_queue_enabled"):
