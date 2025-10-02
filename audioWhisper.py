@@ -12,6 +12,7 @@ if __name__ == '__main__':
 
     import processmanager
     import atexit
+    import psutil
 
     # set environment variable CT2_CUDA_ALLOW_FP16 to 1 (before ctranslate2 is imported)
     # to allow using FP16 computation on GPU even if the device does not have efficient FP16 support.
@@ -39,6 +40,17 @@ if __name__ == '__main__':
 
 
     sys.excepthook = handle_exception
+
+    @atexit.register
+    def kill_descendants():
+        try:
+            parent = psutil.Process(os.getpid())
+            for c in parent.children(recursive=True):
+                if c.is_running():
+                    c.terminate()
+            psutil.wait_procs(parent.children(recursive=True), timeout=5)
+        except Exception:
+            pass
 
     if False:  # set to True for debugging environment issues
         # Print environment variables for debugging
