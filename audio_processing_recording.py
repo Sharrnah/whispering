@@ -195,9 +195,9 @@ class AudioProcessor:
                                                                                     min_buffer_play_time=0.5,
                                                                                     start_playback_timeout=0.5,
                                                                                     source_sample_rate=default_sample_rate,
-                                                                                    playback_channels=2,
+                                                                                    playback_channels=self.input_channel_num,
                                                                                     buffer_size=2048,
-                                                                                    input_channels=channels,
+                                                                                    input_channels=1,
                                                                                     dtype="int16",
                                                                                     tag="tts",
                                                                                     )
