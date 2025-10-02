@@ -1345,7 +1345,8 @@ class AudioStreamer:
                 if (self.playback_thread, self.tag) in audio_threads:
                     audio_threads.remove((self.playback_thread, self.tag))
             self.playback_thread = None
-            print("Playback thread finished")
+            if self.verbose:
+                print("Playback thread finished")
 
         if self.verbose:
             print("Starting playback thread")
