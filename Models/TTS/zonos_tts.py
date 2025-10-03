@@ -839,6 +839,20 @@ class ZonosTTS(metaclass=SingletonMeta):
     def set_special_setting(self, special_settings):
         self.special_settings = special_settings
 
+    def _ensure_special_settings(self):
+        # ensure special settings are in global settings
+        special_settings = settings.GetOption("special_settings")
+        if not isinstance(special_settings, dict):
+            special_settings = {}
+
+        tts_zonos_cfg = special_settings.get("tts_zonos")
+        if isinstance(tts_zonos_cfg, dict):
+            self.special_settings = tts_zonos_cfg
+        else:
+            # add without dropping other keys
+            special_settings["tts_zonos"] = self.special_settings
+            settings.SetOption("special_settings", special_settings)
+
     def _split_segment(self, segment, goal_length, custom_chars, valid_ending_chars):
         # Improved splitting for segments that are too long
         segments = []
@@ -985,8 +999,7 @@ class ZonosTTS(metaclass=SingletonMeta):
         #    self.stop_flag = False
         print("TTS requested Zonos TTS")
 
-        if "tts_zonos" in settings.GetOption("special_settings"):
-            self.special_settings = settings.GetOption("special_settings")["tts_zonos"]
+        self._ensure_special_settings()
 
         # queue guard if someone calls directly while already generating and queue mode disabled: block until free
         if not settings.GetOption("tts_queue_enabled"):
@@ -1113,8 +1126,8 @@ class ZonosTTS(metaclass=SingletonMeta):
 
     def tts_streaming(self, text, ref_audio=None, normalize=True):
         print("TTS requested Zonos TTS (Streaming)")
-        if "tts_zonos" in settings.GetOption("special_settings"):
-            self.special_settings = settings.GetOption("special_settings")["tts_zonos"]
+
+        self._ensure_special_settings()
 
         # Acquire generation lock (for non-queue mode) first, then streaming lock to serialize streaming sessions
         acquired_gen_lock = False
@@ -1254,8 +1267,10 @@ class ZonosTTS(metaclass=SingletonMeta):
         #    self.audio_streamer = None
         #else:
         if self.audio_streamer is None:
+            start_delay = 0.3
             self.audio_streamer = audio_tools.AudioStreamer(audio_device,
                                                             source_sample_rate=self.sample_rate,
+                                                            min_buffer_play_time=start_delay,
                                                             playback_channels=2,
                                                             buffer_size=chunk_size,
                                                             input_channels=1,

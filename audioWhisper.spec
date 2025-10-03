@@ -132,7 +132,7 @@ block_cipher = None
 runtime_hooks = [
 #    'rthooks/rt_mamba_triton_shim.py',
 #    'rthooks/rt_disable_triton_backend.py',
-    'rthooks/patch_triton_ptxas.py',
+#    'rthooks/patch_triton_ptxas.py',
     'rthooks/rt_fix_flash_attn_spec.py',
     'rthooks/rt_inspect_fallback.py',
     'rthooks/rt_triton_env.py'

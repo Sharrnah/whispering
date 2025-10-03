@@ -42,7 +42,8 @@ git+https://github.com/openai/whisper.git
 #triton @ https://s3.libs.space:9000/projects/wheels/triton-2.1.0-cp311-cp311-win_amd64.whl
 #triton @ https://github.com/woct0rdho/triton-windows/releases/download/v3.2.0-windows.post9/triton-3.2.0-cp311-cp311-win_amd64.whl
 # https://github.com/woct0rdho/triton-windows
-triton-windows<3.4
+#triton-windows<3.5
+triton-windows==3.4.0.post20
 soundfile==0.12.1
 python-osc>=1.8.0
 websockets>=10.4

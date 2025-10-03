@@ -654,6 +654,20 @@ class KokoroTTS(metaclass=SingletonMeta):
     def set_special_setting(self, special_settings):
         self.special_settings = special_settings
 
+    def _ensure_special_settings(self):
+        # ensure special settings are in global settings
+        special_settings = settings.GetOption("special_settings")
+        if not isinstance(special_settings, dict):
+            special_settings = {}
+
+        tts_kokoro_cfg = special_settings.get("tts_kokoro")
+        if isinstance(tts_kokoro_cfg, dict):
+            self.special_settings = tts_kokoro_cfg
+        else:
+            # add without dropping other keys
+            special_settings["tts_kokoro"] = self.special_settings
+            settings.SetOption("special_settings", special_settings)
+
     def stop(self):
         print("TTS Stop requested")
         if self.audio_streamer is not None:
@@ -729,8 +743,7 @@ class KokoroTTS(metaclass=SingletonMeta):
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         print("TTS requested Kokoro TTS")
 
-        if "kokoro_tts" in settings.GetOption("special_settings"):
-            self.special_settings = settings.GetOption("special_settings")["kokoro_tts"]
+        self._ensure_special_settings()
 
         lang = self.special_settings["language"]
         self.load(lang)
@@ -771,8 +784,8 @@ class KokoroTTS(metaclass=SingletonMeta):
     def tts_streaming(self, text, ref_audio=None):
         print("TTS requested Kokoro TTS (Streaming)")
 
-        if "tts_kokoro" in settings.GetOption("special_settings"):
-            self.special_settings = settings.GetOption("special_settings")["tts_kokoro"]
+        # ensure special settings are in global settings
+        self._ensure_special_settings()
 
         lang = self.special_settings["language"]
         self.load(lang)
