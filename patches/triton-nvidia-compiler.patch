@@ -1,17 +1,17 @@
-Index: dist/audioWhisper/_internal/triton/backends/nvidia/compiler.py
+Index: venv/Lib/site-packages/triton/backends/nvidia/compiler.py
 IDEA additional info:
 Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
 <+>UTF-8
 ===================================================================
-diff --git a/dist/audioWhisper/_internal/triton/backends/nvidia/compiler.py b/dist/audioWhisper/_internal/triton/backends/nvidia/compiler.py
---- a/dist/audioWhisper/_internal/triton/backends/nvidia/compiler.py
-+++ b/dist/audioWhisper/_internal/triton/backends/nvidia/compiler.py	(date 1757369549902)
-@@ -69,7 +69,12 @@
-     mock_ver = os.environ.get('TRITON_MOCK_PTX_VERSION')
+diff --git a/venv/Lib/site-packages/triton/backends/nvidia/compiler.py b/venv/Lib/site-packages/triton/backends/nvidia/compiler.py
+--- a/venv/Lib/site-packages/triton/backends/nvidia/compiler.py
++++ b/venv/Lib/site-packages/triton/backends/nvidia/compiler.py	(date 1759518891932)
+@@ -39,7 +39,12 @@
+     mock_ver = knobs.nvidia.mock_ptx_version
      if mock_ver is not None:
          return mock_ver  # This is not really a version of ptxas, but it is good enough for testing
--    version = subprocess.check_output([get_ptxas(arch)[0], "--version"]).decode("utf-8")
-+    exe = get_ptxas(arch)[0]
+-    version = subprocess.check_output([get_ptxas().path, "--version"]).decode("utf-8")
++    exe = get_ptxas().path
 +    out = subprocess.run([exe, "--version"],
 +                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
 +                         stdin=subprocess.DEVNULL, close_fds=False,
