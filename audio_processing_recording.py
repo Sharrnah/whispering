@@ -181,7 +181,7 @@ class AudioProcessor:
         self.audio_filter_buffer = None
 
         self.default_mic_audio_streamer = None
-        self.mic_passthrough_queue = queue.Queue(maxsize=20)
+        self.mic_passthrough_queue = queue.Queue(maxsize=100)
         def mic_passthrough_thread_func():
             while True:
                 # initialize the audio streamer for mic passthrough
@@ -289,7 +289,16 @@ class AudioProcessor:
                 try:
                     self.mic_passthrough_queue.put_nowait(in_data)
                 except queue.Full:
-                    pass
+                    # Drop oldest to keep the newest audio, then retry once
+                    try:
+                        _ = self.mic_passthrough_queue.get_nowait()
+                        self.mic_passthrough_queue.task_done()
+                    except queue.Empty:
+                        pass
+                    try:
+                        self.mic_passthrough_queue.put_nowait(in_data)
+                    except queue.Full:
+                        pass  # If still full, proceed without returning early
 
         if not self.settings.GetOption("stt_enabled"):
             return None, pyaudio.paContinue
