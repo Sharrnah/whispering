@@ -1168,9 +1168,9 @@ class AudioStreamer:
             float(start_playback_timeout) if start_playback_timeout else None
         )
 
-        frame_channels = self.input_channels or self.playback_channels
+        self._source_channels = int(self.input_channels) if self.input_channels is not None else 1
         self._bytes_per_second = (
-                self.source_sample_rate * frame_channels * np.dtype(self.dtype).itemsize
+                self.source_sample_rate * self._source_channels * np.dtype(self.dtype).itemsize
         )
 
         self._start_timer: threading.Timer | None = None
@@ -1218,6 +1218,20 @@ class AudioStreamer:
         """Append audio data and decide whether/when to start playback."""
         if self.verbose:
             print("adding audio chunk of size:", len(chunk))
+
+        # On the very first chunk, if input_channels wasn't specified, try to infer
+        # whether mono vs stereo gives an integral frame count; if not, keep mono.
+        if not self._first_chunk_seen and self.input_channels is None:
+            width = np.dtype(self.dtype).itemsize
+            # prefer mono unless stereo divides cleanly and mono does not
+            mono_ok = (len(chunk) % (width * 1) == 0)
+            stereo_ok = (len(chunk) % (width * 2) == 0)
+            inferred = 2 if (stereo_ok and not mono_ok) else 1
+            if inferred != self._source_channels:
+                self._source_channels = inferred
+                self._bytes_per_second = self.source_sample_rate * self._source_channels * width
+                if self.verbose:
+                    print(f"Inferred source channels: {self._source_channels}")
 
         # ── track that at least one real chunk has arrived ──
         self._first_chunk_seen = True
