@@ -556,13 +556,14 @@ class OrpheusTTS(metaclass=SingletonMeta):
         #    self.audio_streamer = None
         #else:
         if self.audio_streamer is None:
+            min_play_time = float(settings.GetOption("tts_streamed_min_play_time"))
             self.audio_streamer = audio_tools.AudioStreamer(audio_device,
                                                             source_sample_rate=int(self.sample_rate),
                                                             playback_channels=2,
                                                             buffer_size=chunk_size,
                                                             input_channels=1,
-                                                            min_buffer_play_time=1,
-                                                            start_playback_timeout=1.5,
+                                                            min_buffer_play_time=min_play_time,
+                                                            start_playback_timeout=1.0,
                                                             dtype="float32",
                                                             tag="tts",
                                                             )

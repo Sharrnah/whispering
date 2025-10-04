@@ -176,6 +176,7 @@ class SettingsManager:
             "tts_volume": 1.0,  # change volume of played audio. lower than 1 reduces volume, higher increases volume.
             "tts_streamed_playback": False,  # Use streamed playback if TTS supports it
             "tts_streamed_chunk_size": 400,  # Chunk size of tts streaming.
+            "tts_streamed_min_play_time": 0.3,  # minimum play-time of audio to prevent initial stuttering
             "tts_normalize": True,  # Normalize TTS audio
             "tts_queue_enabled": True,  # If enabled, TTS requests are queued and processed one at a time (no concurrent generation)
 

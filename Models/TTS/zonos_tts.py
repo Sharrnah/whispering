@@ -1267,10 +1267,11 @@ class ZonosTTS(metaclass=SingletonMeta):
         #    self.audio_streamer = None
         #else:
         if self.audio_streamer is None:
-            start_delay = 0.3
+            min_play_time = float(settings.GetOption("tts_streamed_min_play_time"))
             self.audio_streamer = audio_tools.AudioStreamer(audio_device,
                                                             source_sample_rate=self.sample_rate,
-                                                            min_buffer_play_time=start_delay,
+                                                            start_playback_timeout=1.0,
+                                                            min_buffer_play_time=min_play_time,
                                                             playback_channels=2,
                                                             buffer_size=chunk_size,
                                                             input_channels=1,
