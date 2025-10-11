@@ -606,6 +606,24 @@ def convert_audio(audio_bytes: bytes):
 
     return np.frombuffer(audio_clip.get_array_of_samples(), np.int16).flatten().astype(np.float32) / 32768.0
 
+def convert_numpy_to_audio_bytes(audio_data_numpy: np.ndarray, sample_rate: int = 16000) -> bytes:
+    # Convert the NumPy array to int16 format
+    audio_data_int16 = (audio_data_numpy * 32768).astype(np.int16)
+
+    # Create an AudioSegment from the NumPy array
+    audio_clip = AudioSegment(
+        audio_data_int16.tobytes(),
+        frame_rate=sample_rate,
+        sample_width=audio_data_int16.dtype.itemsize,
+        channels=1
+    )
+
+    # Export the AudioSegment to a byte stream
+    audio_bytes_io = io.BytesIO()
+    audio_clip.export(audio_bytes_io, format="wav")
+    audio_bytes_io.seek(0)
+
+    return audio_bytes_io.read()
 
 def whisper_result_thread(result, audio_timestamp, final_audio, settings, plugins):
     whisper_result_handling(result, audio_timestamp, final_audio, settings, plugins)

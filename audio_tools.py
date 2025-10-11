@@ -902,6 +902,27 @@ def split_audio_with_padding(audio_bytes, chunk_size, bytes_per_sample = 2, merg
     return audio_frames
 
 
+def pad_audio_with_silence(audio_bytes, silence_length_samples, bytes_per_sample = 2):
+    """
+    Args:
+        audio_bytes:
+        silence_length_samples:
+        bytes_per_sample: 1 byte for 8-bit audio, 2 bytes for 16-bit, 3 bytes for 24-bit
+
+    Returns:
+
+    """
+    # Convert silence length to bytes
+    silence_length_bytes = silence_length_samples * bytes_per_sample
+
+    # Initialize the silence bytes
+    silence_bytes = b'\x00' * silence_length_bytes
+
+    # Append the silence bytes to the end of the audio bytes
+    audio_with_silence = audio_bytes + silence_bytes
+
+    return audio_with_silence
+
 def change_volume(audio_data, volume_factor=1, dtype=None):
     """
     Adjusts the volume of the audio data.
