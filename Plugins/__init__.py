@@ -243,6 +243,62 @@ def get_plugin(class_name):
             return plugin_inst  # return plugin instance
     return None
 
+# Add a new plugin at runtime and check if it is not already added.
+# Check the provided className if given, otherwise add the first class found that inherits from Base. And check if className is provided if it is already added.
+def add_plugin(plugin_file, className=None):
+    global plugins
+    plugin_file_path_obj = Path(plugin_path / plugin_file)
+    if not plugin_file_path_obj.exists() or not plugin_file_path_obj.is_file():
+        print(f"Plugin file {plugin_file} does not exist.")
+        return
+    plugin_file_path = str(plugin_file_path_obj.resolve())
+    try:
+        # Check if className is already added
+        if className is not None:
+            existing_plugin = get_plugin(className)
+            if existing_plugin is not None:
+                print(f"Plugin {className} is already added.")
+                return
+
+        # Only load the module if className not provided or not already added
+        module = None
+        if className is None or get_plugin(className) is None:
+            module = load_module(plugin_file_path)
+        else:
+            print(f"Plugin {className} is already loaded.")
+            return
+
+        # If className is provided, try to load that specific class
+        if className is not None:
+            plugin_class = getattr(module, className, None)
+            if plugin_class is None:
+                print(f"Class {className} not found in {plugin_file_path}.")
+                return
+            if not issubclass(plugin_class, Base):
+                print(f"Class {className} does not inherit from Base.")
+                return
+
+            plugin_instance = plugin_class(init_settings=settings.SETTINGS)
+            plugins.append(plugin_instance)
+            print(f"Plugin {className} added successfully.")
+            return
+
+        # Otherwise, add the first class found that inherits from Base
+        for attr_name in dir(module):
+            attr = getattr(module, attr_name)
+            if isinstance(attr, type) and issubclass(attr, Base) and attr is not Base:
+                if get_plugin(attr.__name__) is None:
+                    plugin_instance = attr(init_settings=settings.SETTINGS)
+                    plugins.append(plugin_instance)
+                    print(f"Plugin {attr.__name__} added successfully.")
+                    break
+                else:
+                    print(f"Plugin {attr.__name__} is already added.")
+                    break
+
+    except Exception as e:
+        print(f"Error loading plugin from {plugin_file_path}: {e}")
+        traceback.print_exc()
 
 def internal_plugin_custom_event_call(plugins_list, event_name, data_obj):
     plugin_event_name = event_name

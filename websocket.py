@@ -528,6 +528,22 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
                                 print(f"Plugin init failed for {plugin_name}:", e)
                                 traceback.print_exc()
 
+    if msg_obj["type"] == "plugin_install":
+        if msg_obj["name"] == "plugin":
+            plugin_name = msg_obj["value"]["name"]
+            plugin_file = msg_obj["value"]["file"]
+            try:
+                Plugins.add_plugin(plugin_file, plugin_name)
+            except Exception as e:
+                print(f"Plugin install failed for {plugin_name}:", e)
+                traceback.print_exc()
+                return
+            try:
+                Plugins.get_plugin(plugin_name).init()
+            except Exception as e:
+                print(f"Plugin init on install failed for {plugin_name}:", e)
+                traceback.print_exc()
+
     if msg_obj["type"] == "setting_update_req":
         server_instance.answer_message(websocket, json.dumps(
             {"type": "translate_settings", "data": settings.SETTINGS.get_all_settings()}))
