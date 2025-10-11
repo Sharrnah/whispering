@@ -72,7 +72,8 @@ for pkg in [
     'frozendict', 'torch_directml', 'inflect', 'language_tags', 'spacy',
     'en_core_web_sm', 'misaki', 'unidic', 'unidic-lite', 'backoff', 'triton',
     'flash_attn', 'mistral_common', 'espeakng_loader', 'unidic_lite',
-    'mamba_ssm', 'audiotools', 'x_transformers', 'snac'
+    'mamba_ssm', 'audiotools', 'x_transformers', 'snac',
+    'triton.runtime.jit', 'triton.runtime.autotuner', 'triton.runtime.driver'
 ]:
     d, b, h = collect_all(pkg)
     datas += d
