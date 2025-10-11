@@ -46,6 +46,8 @@ class TransformerWhisper(metaclass=SingletonMeta):
     def _str_to_dtype_dict(self, dtype_str):
         if dtype_str == "float16":
             return {'dtype': torch.float16, '4bit': False, '8bit': False}
+        if dtype_str == "bfloat16":
+            return {'dtype': torch.bfloat16, '4bit': False, '8bit': False}
         elif dtype_str == "float32":
             return {'dtype': torch.float32, '4bit': False, '8bit': False}
         elif dtype_str == "4bit":
@@ -135,12 +137,13 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 self.previous_model = model
                 self.release_model()
                 attention_type = "sdpa"
-                if transformers.utils.is_flash_attn_2_available():
-                    attention_type = "flash_attention_2"
 
                 # build quantization configuration
                 quantization_config = None
                 if self.compute_device_str.startswith("cuda"):
+                    if transformers.utils.is_flash_attn_2_available() and (compute_type == "float16" or compute_type == "bfloat16"):
+                        attention_type = "flash_attention_2"
+
                     if self.compute_type == "4bit" or self.compute_type == "8bit":
                         quantization_config = BitsAndBytesConfig(
                             load_in_4bit=self._str_to_dtype_dict(self.compute_type)['4bit'],
