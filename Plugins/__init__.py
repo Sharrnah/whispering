@@ -263,7 +263,8 @@ def call_internal_custom_event_with_plugins(plugins_list, event_name, data_obj):
 def plugin_custom_event_call(event_name, data_obj):
     # Return the first item from the generator
     for result in internal_plugin_custom_event_call(plugins, event_name, data_obj):
-        return result
+        if result is not None:
+            return result
     return None
 
 def plugin_custom_event_call_all(event_name, data_obj):
