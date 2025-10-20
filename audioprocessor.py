@@ -390,6 +390,40 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
                 result_obj["txt_translation"] += second_translation_wrap + text
                 result_obj["txt_translation_target"] += "|"+lang
 
+        # Send to Websocket
+        if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and websocket_ip != "" and final_audio:
+            websocket.BroadcastMessage(json.dumps(result_obj))
+            # threading.Thread(
+            #    target=websocket.BroadcastMessage,
+            #    args=(json.dumps(result_obj),)
+            # ).start()
+
+        # Send to TTS on final audio
+        if final_audio:
+            streamed_playback = settings.GetOption("tts_streamed_playback")
+            if settings.GetOption("tts_answer") and predicted_text != "" and tts.init():
+                try:
+                    if settings.GetOption("tts_queue_enabled") and hasattr(tts.tts, 'enqueue_tts'):
+                        # Queue mode handles both streaming and non-streaming inside enqueue
+                        tts.tts.enqueue_tts(predicted_text, streaming=streamed_playback)
+                    else:
+                        if streamed_playback and hasattr(tts.tts, "tts_streaming"):
+                            #tts.tts.tts_streaming(predicted_text)
+                            threading.Thread(
+                               target=tts.tts.tts_streaming,
+                               args=(predicted_text,)
+                            ).start()
+                        else:
+                            def play_tts_audio(tts_text):
+                                tts_wav, sample_rate = tts.tts.tts(tts_text)
+                                tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
+                            threading.Thread(
+                                target=play_tts_audio,
+                                args=(predicted_text,)
+                            ).start()
+                except Exception as e:
+                    print("Error while playing TTS audio: " + str(e))
+
         # delay sending message if it is the final audio and until TTS starts playing
         if final_audio and settings.GetOption("osc_delay_until_audio_playback"):
             # wait until is_audio_playing is True or timeout is reached
@@ -432,31 +466,6 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
                                                  convert_ascii=settings.GetOption("osc_convert_ascii"))
 
         settings.SetOption("plugin_timer_stopped", True)
-
-    # Send to Websocket
-    if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and websocket_ip != "" and final_audio:
-        websocket.BroadcastMessage(json.dumps(result_obj))
-        # threading.Thread(
-        #    target=websocket.BroadcastMessage,
-        #    args=(json.dumps(result_obj),)
-        # ).start()
-
-    # Send to TTS on final audio
-    if final_audio:
-        streamed_playback = settings.GetOption("tts_streamed_playback")
-        if settings.GetOption("tts_answer") and predicted_text != "" and tts.init():
-            try:
-                if settings.GetOption("tts_queue_enabled") and hasattr(tts.tts, 'enqueue_tts'):
-                    # Queue mode handles both streaming and non-streaming inside enqueue
-                    tts.tts.enqueue_tts(predicted_text, streaming=streamed_playback)
-                else:
-                    if streamed_playback and hasattr(tts.tts, "tts_streaming"):
-                        tts.tts.tts_streaming(predicted_text)
-                    else:
-                        tts_wav, sample_rate = tts.tts.tts(predicted_text)
-                        tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
-            except Exception as e:
-                print("Error while playing TTS audio: " + str(e))
 
 
 def load_whisper(model, ai_device):
