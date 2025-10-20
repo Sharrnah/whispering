@@ -307,7 +307,7 @@ class SettingsManager:
             "model": self.get_available_models(),
             "whisper_task": ["transcribe", "translate"],
             "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "medusa_whisper", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", "phi4", "voxtral", ""],
-            "tts_type": ["silero", "f5_e2", "zonos", "kokoro", "orpheus", ""],
+            "tts_type": ["silero", "f5_e2", "zonos", "kokoro", "orpheus", "chatterbox", ""],
             "tts_ai_device": ["cuda", "cpu"],
             "txt_translator_device": ["cuda", "cpu"],
             "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "seamless_m4t", "phi4"],

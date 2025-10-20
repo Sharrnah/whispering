@@ -1,7 +1,7 @@
 import csv
 import threading
 from datetime import datetime
-
+from .iso_converter import LanguageCodeConverter
 
 def safe_decode(data):
     encodings = ['utf-8', 'utf-16', 'gbk', 'iso-8859-1', 'iso-8859-5', 'iso-8859-6', 'big5', 'shift_jis', 'euc-kr', 'euc-jp', 'windows-1252', 'windows-1251', 'windows-1256']

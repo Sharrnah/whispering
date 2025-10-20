@@ -4,6 +4,7 @@ from Models.TTS.silero import Silero
 from Models.TTS.f5_tts import F5TTS
 from Models.TTS.zonos_tts import ZonosTTS
 from Models.TTS.kokoro_tts import KokoroTTS
+from Models.TTS.chatterbox_tts import Chatterbox
 
 tts = None
 failed = None
@@ -37,6 +38,12 @@ def init():
                 return False
         case "orpheus":
             tts = OrpheusTTS()
+            if not failed:
+                return True
+            else:
+                return False
+        case "chatterbox":
+            tts = Chatterbox()
             if not failed:
                 return True
             else:
