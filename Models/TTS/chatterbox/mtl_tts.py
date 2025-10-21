@@ -109,8 +109,15 @@ class Conditionals:
     t3: T3Cond
     gen: dict
 
-    def to(self, device):
-        self.t3 = self.t3.to(device=device)
+    def to(self, device=None, dtype=None):
+        """Move conditionals to device and (optionally) cast floating tensors to dtype.
+        Integer/long tensors (e.g., token IDs) keep their dtype.
+        NOTE: We deliberately avoid changing dtypes for the S3Gen reference dict to
+        preserve voice identity, which was getting degraded in fp16.
+        """
+        # T3 conditionals know how to handle dtype selectively.
+        self.t3 = self.t3.to(device=device, dtype=dtype)
+        # Move tensors in S3Gen ref dict to device only; DO NOT cast dtype here.
         for k, v in self.gen.items():
             if torch.is_tensor(v):
                 self.gen[k] = v.to(device=device)
@@ -156,27 +163,38 @@ class ChatterboxMultilingualTTS:
         return SUPPORTED_LANGUAGES.copy()
 
     @classmethod
-    def from_local(cls, ckpt_dir, device) -> 'ChatterboxMultilingualTTS':
+    def from_local(cls, ckpt_dir, device, dtype = torch.float16) -> 'ChatterboxMultilingualTTS':
         ckpt_dir = Path(ckpt_dir)
 
         ve = VoiceEncoder()
         ve.load_state_dict(
             torch.load(ckpt_dir / "ve.pt", weights_only=True)
         )
-        ve.to(device).eval()
+        ve.to(device)
+        # Keep VE in float32 for numerical stability/voice identity
+        # if device in ["cuda"]:
+        #     ve.to(dtype)
+        ve.eval()
 
         t3 = T3(T3Config.multilingual())
         t3_state = load_safetensors(ckpt_dir / "t3_mtl23ls_v2.safetensors")
         if "model" in t3_state.keys():
             t3_state = t3_state["model"][0]
         t3.load_state_dict(t3_state)
-        t3.to(device).eval()
+        t3.to(device)
+        if device in ["cuda"]:
+            t3.to(dtype)
+        t3.eval()
 
         s3gen = S3Gen()
         s3gen.load_state_dict(
             torch.load(ckpt_dir / "s3gen.pt", weights_only=True)
         )
-        s3gen.to(device).eval()
+        s3gen.to(device)
+        # Keep S3Gen stack in float32 to preserve ref embedding quality
+        # if device in ["cuda"]:
+        #     s3gen.to(dtype)
+        s3gen.eval()
 
         tokenizer = MTLTokenizer(
             str(ckpt_dir / "grapheme_mtl_merged_expanded_v1.json")
@@ -184,12 +202,12 @@ class ChatterboxMultilingualTTS:
 
         conds = None
         if (builtin_voice := ckpt_dir / "conds.pt").exists():
-            conds = Conditionals.load(builtin_voice).to(device)
+            conds = Conditionals.load(builtin_voice).to(device=device, dtype=(dtype if device in ["cuda"] else None))
 
         return cls(t3, s3gen, ve, tokenizer, device, conds=conds)
 
     @classmethod
-    def from_pretrained(cls, device: torch.device) -> 'ChatterboxMultilingualTTS':
+    def from_pretrained(cls, device: torch.device, dtype = torch.float16) -> 'ChatterboxMultilingualTTS':
         ckpt_dir = Path(
             snapshot_download(
                 repo_id=REPO_ID,
@@ -199,7 +217,7 @@ class ChatterboxMultilingualTTS:
                 token=os.getenv("HF_TOKEN"),
             )
         )
-        return cls.from_local(ckpt_dir, device)
+        return cls.from_local(ckpt_dir, device, dtype=dtype)
     
     def prepare_conditionals(self, wav_fpath, exaggeration=0.5):
         ## Load reference wav
@@ -207,6 +225,9 @@ class ChatterboxMultilingualTTS:
 
         ref_16k_wav = librosa.resample(s3gen_ref_wav, orig_sr=S3GEN_SR, target_sr=S3_SR)
 
+        # convert ref wav for s3gen to torch tensor (embed_ref also accepts np, this just avoids type warnings)
+        if not torch.is_tensor(s3gen_ref_wav):
+            s3gen_ref_wav = torch.from_numpy(s3gen_ref_wav).float()
         s3gen_ref_wav = s3gen_ref_wav[:self.DEC_COND_LEN]
         s3gen_ref_dict = self.s3gen.embed_ref(s3gen_ref_wav, S3GEN_SR, device=self.device)
 
@@ -219,7 +240,7 @@ class ChatterboxMultilingualTTS:
 
         # Voice-encoder speaker embedding
         ve_embed = torch.from_numpy(self.ve.embeds_from_wavs([ref_16k_wav], sample_rate=S3_SR))
-        ve_embed = ve_embed.mean(axis=0, keepdim=True).to(self.device)
+        ve_embed = ve_embed.mean(dim=0, keepdim=True).to(self.device)
 
         t3_cond = T3Cond(
             speaker_emb=ve_embed,
@@ -227,6 +248,15 @@ class ChatterboxMultilingualTTS:
             emotion_adv=exaggeration * torch.ones(1, 1, 1),
         ).to(device=self.device)
         self.conds = Conditionals(t3_cond, s3gen_ref_dict)
+        # Align T3 conds dtype to model dtype on CUDA; keep S3Gen refs in native dtype
+        try:
+            model_dtype = next(self.t3.parameters()).dtype
+        except StopIteration:
+            model_dtype = None
+        if self.device == "cuda" and model_dtype is not None:
+            self.conds.to(device=self.device, dtype=model_dtype)
+        else:
+            self.conds.to(device=self.device)
 
     def generate(
         self,
@@ -260,7 +290,16 @@ class ChatterboxMultilingualTTS:
                 speaker_emb=_cond.speaker_emb,
                 cond_prompt_speech_tokens=_cond.cond_prompt_speech_tokens,
                 emotion_adv=exaggeration * torch.ones(1, 1, 1),
-            ).to(device=self.device)
+            )
+            # align to device/dtype
+            try:
+                model_dtype = next(self.t3.parameters()).dtype
+            except StopIteration:
+                model_dtype = None
+            if self.device == "cuda" and model_dtype is not None:
+                self.conds.t3 = self.conds.t3.to(device=self.device, dtype=model_dtype)
+            else:
+                self.conds.t3 = self.conds.t3.to(device=self.device)
 
         # Norm and tokenize text
         text = punc_norm(text)
@@ -295,4 +334,4 @@ class ChatterboxMultilingualTTS:
                 ref_dict=self.conds.gen,
             )
             wav = wav.squeeze(0).detach().cpu().numpy()
-        return torch.from_numpy(wav).unsqueeze(0)
+        return torch.from_numpy(wav).unsqueeze(0).float()

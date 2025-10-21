@@ -34,7 +34,7 @@ class ChatterboxVC:
             }
 
     @classmethod
-    def from_local(cls, ckpt_dir, device) -> 'ChatterboxVC':
+    def from_local(cls, ckpt_dir, device, dtype = torch.float16) -> 'ChatterboxVC':
         ckpt_dir = Path(ckpt_dir)
         
         # Always load to CPU first for non-CUDA devices to handle CUDA-saved models
@@ -53,14 +53,15 @@ class ChatterboxVC:
             load_file(ckpt_dir / "s3gen.safetensors"), strict=False
         )
         s3gen.to(device)
-        if device in ["cuda"]:
-            s3gen.to(torch.float16)
+        # Keep S3Gen in float32 to preserve ref embedding quality
+        # if device in ["cuda"]:
+        #     s3gen.to(dtype)
         s3gen.eval()
 
         return cls(s3gen, device, ref_dict=ref_dict)
 
     @classmethod
-    def from_pretrained(cls, device) -> 'ChatterboxVC':
+    def from_pretrained(cls, device, dtype = torch.float16) -> 'ChatterboxVC':
         # Check if MPS is available on macOS
         if device == "mps" and not torch.backends.mps.is_available():
             if not torch.backends.mps.is_built():
@@ -72,7 +73,7 @@ class ChatterboxVC:
         for fpath in ["s3gen.safetensors", "conds.pt"]:
             local_path = hf_hub_download(repo_id=REPO_ID, filename=fpath)
 
-        return cls.from_local(Path(local_path).parent, device)
+        return cls.from_local(Path(local_path).parent, device, dtype=dtype)
 
     def set_target_voice(self, wav_fpath):
         ## Load reference wav
@@ -101,4 +102,4 @@ class ChatterboxVC:
                 ref_dict=self.ref_dict,
             )
             wav = wav.squeeze(0).detach().cpu().numpy()
-        return torch.from_numpy(wav).unsqueeze(0)
+        return torch.from_numpy(wav).unsqueeze(0).float()

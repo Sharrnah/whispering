@@ -307,7 +307,7 @@ class Chatterbox(metaclass=SingletonMeta):
         self.release_model()
         if self.model is None:
             print(f"Loading Chatterbox TTS model {model} on device {self.compute_device_str}")
-            self.model = ChatterboxMultilingualTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str)
+            self.model = ChatterboxMultilingualTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=torch.float32)
             self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str)
 
     def list_models(self):
@@ -749,22 +749,80 @@ class Chatterbox(metaclass=SingletonMeta):
                                )
 
     def return_wav_file_binary(self, audio, sample_rate=sample_rate):
-        # convert pytorch tensor to numpy array
-        np_arr = audio.detach().cpu().numpy()
+        """
+        audio: PyTorch tensor shaped (T,) for mono or (C, T)/(T, C) for multi-channel.
+        sample_rate: int
+        Returns: bytes of a WAV file (float32, IEEE float)
+        """
+        # Convert input to NumPy float32
+        if isinstance(audio, torch.Tensor):
+            np_arr = audio.detach().cpu().float().numpy()
+        elif isinstance(audio, np.ndarray):
+            np_arr = audio.astype(np.float32, copy=False)
+        else:
+            # Accept lists/tuples; fall back to NumPy conversion
+            np_arr = np.asarray(audio, dtype=np.float32)
 
-        # convert numpy array to wav file
+        # Ensure shape is (samples,) mono or (samples, channels)
+        if np_arr.ndim == 1:
+            pass  # (T,)
+        elif np_arr.ndim == 2:
+            # If (C, T) with small C, transpose to (T, C)
+            if np_arr.shape[0] <= 32 and np_arr.shape[1] > np_arr.shape[0]:
+                np_arr = np_arr.T
+        else:
+            raise ValueError(
+                f"Expected audio with 1D or 2D shape (T,) or (C,T)/(T,C), got {np_arr.shape}"
+            )
+
+        # Clip to valid float range for audio
+        np_arr = np.clip(np_arr, -1.0, 1.0)
+
+        # Write WAV into memory
         buff = io.BytesIO()
-        write_wav(buff, sample_rate, np_arr)
-
-        return buff.read()
+        write_wav(buff, int(sample_rate), np_arr)
+        return buff.getvalue()
 
     def return_pcm_audio(self, audio):
-        # convert pytorch tensor to numpy array
-        np_arr = audio.detach().cpu().numpy()
+        """Return raw PCM bytes (float32) suitable for AudioStreamer(dtype="float32").
+        Accepts torch.Tensor, numpy.ndarray, list. Produces mono 1-D float32 stream.
+        """
+        # Convert input to NumPy float32
+        if isinstance(audio, torch.Tensor):
+            np_arr = audio.detach().cpu().float().numpy()
+        elif isinstance(audio, np.ndarray):
+            np_arr = audio.astype(np.float32, copy=False)
+        else:
+            np_arr = np.asarray(audio, dtype=np.float32)
 
-        # convert numpy array to raw PCM bytes
+        # Normalize/reshape to mono 1-D (samples,)
+        if np_arr.ndim == 1:
+            pass
+        elif np_arr.ndim == 2:
+            # Determine orientation; treat as (C, T) if channels dimension likely first
+            if np_arr.shape[0] <= 32 and np_arr.shape[1] > np_arr.shape[0]:
+                # (C, T) -> average channels to mono
+                if np_arr.shape[0] > 1:
+                    np_arr = np_arr.mean(axis=0)
+                else:
+                    np_arr = np_arr[0]
+            else:
+                # (T, C) -> average channels to mono
+                if np_arr.shape[1] > 1:
+                    np_arr = np_arr.mean(axis=1)
+                else:
+                    np_arr = np_arr[:, 0]
+        else:
+            # Unexpected shapes: flatten after averaging over non-time dims
+            np_arr = np_arr.reshape(-1).astype(np.float32, copy=False)
+
+        # Clip to float range and ensure contiguous
+        np_arr = np.clip(np_arr, -1.0, 1.0).astype(np.float32, copy=False)
+        if not np_arr.flags['C_CONTIGUOUS']:
+            np_arr = np.ascontiguousarray(np_arr)
+
+        # Convert numpy array to raw PCM bytes (float32 little-endian)
         pcm_bytes = np_arr.tobytes()
-
         return pcm_bytes
 
     @staticmethod

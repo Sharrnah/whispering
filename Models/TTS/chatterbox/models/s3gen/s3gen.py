@@ -148,6 +148,12 @@ class S3Token2Mel(torch.nn.Module):
             ref_speech_tokens = ref_speech_tokens[:, :ref_mels_24.shape[1] // 2]
             ref_speech_token_lens[0] = ref_speech_tokens.shape[1]
 
+        # Align float tensors to flow dtype (important if running in fp16)
+        flow_dtype = next(self.flow.parameters()).dtype
+        ref_mels_24 = ref_mels_24.to(dtype=flow_dtype)
+        if torch.is_tensor(ref_x_vector) and ref_x_vector.dtype.is_floating_point:
+            ref_x_vector = ref_x_vector.to(dtype=flow_dtype)
+
         return dict(
             prompt_token=ref_speech_tokens.to(device),
             prompt_token_len=ref_speech_token_lens,
@@ -193,6 +199,11 @@ class S3Token2Mel(torch.nn.Module):
                     ref_dict[rk] = torch.from_numpy(ref_dict[rk])
                 if torch.is_tensor(ref_dict[rk]):
                     ref_dict[rk] = ref_dict[rk].to(self.device)
+            # ensure float tensors match flow dtype
+            flow_dtype = next(self.flow.parameters()).dtype
+            for rk, rv in list(ref_dict.items()):
+                if torch.is_tensor(rv) and rv.dtype.is_floating_point and rv.dtype != flow_dtype:
+                    ref_dict[rk] = rv.to(dtype=flow_dtype)
 
         if len(speech_tokens.shape) == 1:
             speech_tokens = speech_tokens.unsqueeze(0)
@@ -259,6 +270,10 @@ class S3Token2Wav(S3Token2Mel):
                 if n > 0:
                     output_wavs[:, :n] *= self.trim_fade[:n]
 
+        # Ensure playback-friendly dtype
+        if output_wavs is not None:
+            output_wavs = output_wavs.to(torch.float32)
+
         return output_wavs
 
     @torch.inference_mode()
@@ -282,7 +297,10 @@ class S3Token2Wav(S3Token2Mel):
         if speech_feat is None or speech_feat.numel() == 0 or speech_feat.shape[-1] == 0:
             empty_wav = torch.zeros(1, 0, device=self.device)
             return empty_wav, cache_source
-        return self.mel2wav.inference(speech_feat=speech_feat, cache_source=cache_source)
+        output_wavs, cache_source = self.mel2wav.inference(speech_feat=speech_feat, cache_source=cache_source)
+        if output_wavs is not None:
+            output_wavs = output_wavs.to(torch.float32)
+        return output_wavs, cache_source
 
     @torch.inference_mode()
     def inference(
@@ -304,5 +322,8 @@ class S3Token2Wav(S3Token2Mel):
             n = min(output_wavs.shape[1], len(self.trim_fade))
             if n > 0:
                 output_wavs[:, :n] *= self.trim_fade[:n]
+
+        if output_wavs is not None:
+            output_wavs = output_wavs.to(torch.float32)
 
         return output_wavs, output_sources
