@@ -518,6 +518,23 @@ class Chatterbox(metaclass=SingletonMeta):
         # proactively free segment_waves list after concat
         audio_chunks.clear()
 
+        # @todo possible onnx implementation
+        # from .chatterbox.onnx import run_inference
+        # exaggeration = self.special_settings["exaggeration"]
+        # temperature = self.special_settings["temperature"]
+        # cfg_weight = self.special_settings["cfg_weight"]
+        # run_inference(
+        #     text=text,
+        #     language_id=language,
+        #     exaggeration=exaggeration,
+        #     temperature=temperature,
+        #     cfg_weight=cfg_weight,
+        #     output_dir=Path(cache_path / "chatterbox-multilingual-onnx"),
+        #     model_dir=str(Path(cache_path / "chatterbox-multilingual-onnx").resolve()),
+        #     target_voice_path=ref_audio,
+        #     output_file_name="output.wav",
+        # )
+
         self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
 
         return final_wave, self.sample_rate
