@@ -442,6 +442,9 @@ class Chatterbox(metaclass=SingletonMeta):
 
             exaggeration = self.special_settings["exaggeration"]
             temperature = self.special_settings["temperature"]
+            if self._loaded_precision_dtype == torch.float16 and temperature < 0.55:
+                temperature = 0.55  # avoid cuda error in fp16 at low temps
+
             cfg_weight = self.special_settings["cfg_weight"]
 
             with torch.inference_mode():
@@ -592,6 +595,8 @@ class Chatterbox(metaclass=SingletonMeta):
 
         exaggeration = self.special_settings["exaggeration"]
         temperature = self.special_settings["temperature"]
+        if self._loaded_precision_dtype == torch.float16 and temperature < 0.55:
+            temperature = 0.55  # avoid cuda error in fp16 at low temps
         cfg_weight = self.special_settings["cfg_weight"]
         self.set_seed()
 
