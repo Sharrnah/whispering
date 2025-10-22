@@ -168,7 +168,7 @@ class ChatterboxMultilingualTTS:
 
         ve = VoiceEncoder()
         ve.load_state_dict(
-            torch.load(ckpt_dir / "ve.pt", weights_only=True)
+            load_safetensors(ckpt_dir / "ve.safetensors")
         )
         ve.to(device)
         # Keep VE in float32 for numerical stability/voice identity
@@ -188,7 +188,7 @@ class ChatterboxMultilingualTTS:
 
         s3gen = S3Gen()
         s3gen.load_state_dict(
-            torch.load(ckpt_dir / "s3gen.pt", weights_only=True)
+            load_safetensors(ckpt_dir / "s3gen.safetensors"), strict=False
         )
         s3gen.to(device)
         # Keep S3Gen stack in float32 to preserve ref embedding quality
@@ -213,7 +213,7 @@ class ChatterboxMultilingualTTS:
                 repo_id=REPO_ID,
                 repo_type="model",
                 revision="main", 
-                allow_patterns=["ve.pt", "t3_mtl23ls_v2.safetensors", "s3gen.pt", "grapheme_mtl_merged_expanded_v1.json", "conds.pt", "Cangjie5_TC.json"],
+                allow_patterns=["ve.safetensors", "t3_mtl23ls_v2.safetensors", "s3gen.safetensors", "grapheme_mtl_merged_expanded_v1.json", "conds.pt", "Cangjie5_TC.json"],
                 token=os.getenv("HF_TOKEN"),
             )
         )

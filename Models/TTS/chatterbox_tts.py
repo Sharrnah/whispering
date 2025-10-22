@@ -65,6 +65,7 @@ class Chatterbox(metaclass=SingletonMeta):
     download_state = {"is_downloading": False}
     compute_device = "cpu"
     special_settings = {
+        "precision": "float32",  # can be "float16" or "float32"
         "language": "en",
         "streaming_mode": "segment", # can be "segment" or "token"
 
@@ -77,6 +78,8 @@ class Chatterbox(metaclass=SingletonMeta):
     # Cache for prepared voice conditionals: key -> Conditionals
     voice_conds_cache = {}
     _last_device_str = None
+    # Track last loaded precision dtype to conditionally reload
+    _loaded_precision_dtype = None
 
     def __init__(self):
         self.set_compute_device(settings.GetOption("tts_ai_device"))
@@ -287,11 +290,44 @@ class Chatterbox(metaclass=SingletonMeta):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         gc.collect()
+        # Reset precision tracker on release
+        self._loaded_precision_dtype = None
 
     def load(self, lang='en'):
         self.load_model(lang)
 
-    def load_model(self, lang='en'):
+    def _precision_string_to_dtype(self, precision: str):
+        """Map a user precision string to a torch.dtype, with device-aware fallback."""
+        if not isinstance(precision, str):
+            precision = "float32"
+        p = precision.strip().lower()
+        dtype = None
+        if p in ("fp16", "float16", "half", "16"):
+            dtype = torch.float16
+        elif p in ("bf16", "bfloat16"):
+            dtype = torch.bfloat16
+        elif p in ("fp32", "float32", "32", "single", "full"):
+            dtype = torch.float32
+        else:
+            # Default based on device: prefer fp16 on CUDA, otherwise fp32
+            dtype = torch.float16 if self.compute_device_str == "cuda" else torch.float32
+
+        # Device-aware fallback: if not CUDA, stick to float32 for safety
+        if self.compute_device_str != "cuda" and dtype != torch.float32:
+            print(f"Precision '{precision}' not supported/performance-safe on {self.compute_device_str}; using float32.")
+            dtype = torch.float32
+        return dtype
+
+    def _ensure_model_for_precision(self):
+        """Ensure model is loaded in the precision requested by special_settings."""
+        desired_precision = self.special_settings.get("precision", "float32")
+        desired_dtype = self._precision_string_to_dtype(desired_precision)
+        # If model not loaded or precision changed, (re)load
+        if self.model is None or self._loaded_precision_dtype != desired_dtype:
+            # Reload in new precision
+            self.load_model(lang=self.special_settings.get("language", "en"), dtype=desired_dtype)
+
+    def load_model(self, lang='en', dtype=None):
         model = "chatterbox-multilingual"
         self.set_compute_device(settings.GetOption('tts_ai_device'))
         #
@@ -304,11 +340,18 @@ class Chatterbox(metaclass=SingletonMeta):
         #     self.download_model(model)
         model_directory = Path(cache_path / "chatterbox-multilingual")
 
+        # Determine dtype: from arg or special settings
+        if dtype is None:
+            desired_precision = self.special_settings.get("precision", "float32")
+            dtype = self._precision_string_to_dtype(desired_precision)
+
+        # If device cannot handle selected precision, fallback handled in helper
         self.release_model()
         if self.model is None:
-            print(f"Loading Chatterbox TTS model {model} on device {self.compute_device_str}")
-            self.model = ChatterboxMultilingualTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=torch.float32)
-            self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str)
+            print(f"Loading Chatterbox TTS model {model} on device {self.compute_device_str} with precision {dtype}")
+            self.model = ChatterboxMultilingualTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
+            self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
+            self._loaded_precision_dtype = dtype
 
     def list_models(self):
         return model_list
@@ -379,6 +422,8 @@ class Chatterbox(metaclass=SingletonMeta):
 
         try:
             self.set_compute_device(settings.GetOption('tts_ai_device'))
+            # Ensure model precision matches current setting
+            self._ensure_model_for_precision()
 
             tts_volume = settings.GetOption("tts_volume")
             tts_normalize = settings.GetOption("tts_normalize")
@@ -517,6 +562,8 @@ class Chatterbox(metaclass=SingletonMeta):
     def tts_streaming_tokens(self, text, ref_audio=None):
         print("TTS requested Chatterbox TTS (Streaming)")
         self._ensure_special_settings()
+        # Ensure model precision matches current setting
+        self._ensure_model_for_precision()
 
         # Initialize audio streamer playback
         chunk_size = settings.GetOption("tts_streamed_chunk_size")
@@ -690,6 +737,9 @@ class Chatterbox(metaclass=SingletonMeta):
         return final_wave, self.sample_rate
 
     def voice_conversion(self, audio, target_voice_path):
+        # Ensure model precision matches current setting before VC
+        self._ensure_special_settings()
+        self._ensure_model_for_precision()
         wav = self.vc_model.generate(audio, target_voice_path=target_voice_path)
         return wav, self.sample_rate
 
@@ -839,7 +889,8 @@ class Chatterbox(metaclass=SingletonMeta):
                 if language not in SUPPORTED_LANGUAGES:
                     print(f"Detected language '{language}' not supported by Chatterbox TTS. Falling back to English.")
                     language = "en"
-            except Exception:
+            except Exception as e:
+                print(f"Language auto-detection error: {e}. Falling back to English.")
                 language = "en"
         return language
 
