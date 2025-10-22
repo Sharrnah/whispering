@@ -65,10 +65,11 @@ mss==7.0.1
 scipy==1.15.2
 num2words==0.5.13
 
-onnxruntime==1.21.0
+onnxruntime==1.23.1
+onnxruntime-gpu==1.23.2
 # pip install --pre onnxruntime-genai-cuda -U
 #onnxruntime-genai
-onnxruntime-genai-cuda
+onnxruntime-genai-cuda==0.10.0
 #onnxruntime-genai-directml
 
 requests==2.32.3
@@ -87,7 +88,8 @@ nltk==3.9
 # NVIDIA Nemo (Canary) dependency
 Cython==3.0.10
 youtokentome @ https://github.com/gburlet/YouTokenToMe/archive/refs/heads/dependencies.zip
-git+https://github.com/NVIDIA/NeMo.git@r2.3.0#egg=nemo_toolkit[asr]
+git+https://github.com/NVIDIA/NeMo.git@v2.4.1#egg=nemo_toolkit[asr]
+#git+https://github.com/NVIDIA/NeMo.git@v2.4.1#egg=nemo_toolkit[asr,tts]
 
 # plugin dependencies
 omegaconf==2.2.3
@@ -136,7 +138,6 @@ noisereduce
 # Whisper Medusa dependencies (https://github.com/aiola-lab/whisper-medusa, https://huggingface.co/aiola/whisper-medusa-v1)
 boto3==1.34.82
 #jiwer==3.0.3
-peft==0.6.2
 wandb==0.16.6
 #transformers==4.39.0
 # not windows compatible?
