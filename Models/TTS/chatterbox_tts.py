@@ -21,6 +21,7 @@ from .chatterbox.vc import ChatterboxVC
 from .chatterbox.models.s3tokenizer import SPEECH_VOCAB_SIZE
 from .. import languageClassification
 from ..Singleton import SingletonMeta
+import re
 
 cache_path = Path(Path.cwd() / ".cache" / "chatterbox-tts-cache")
 os.makedirs(cache_path, exist_ok=True)
@@ -51,7 +52,7 @@ class Chatterbox(metaclass=SingletonMeta):
     voice_list = []
     audio_streamer = None
     split_patterns = {
-        'fast': r'(?:[\.?!。？！,，;；](?=[ \n])|[\n])+',
+        'fast': r'(?:[\.?！。？！,，;；](?=[ \n])|[\n])+',
         'slow': r'(?:\.(?=[ \n])|[\n?!。])+',
     }
     language_code_converter = None
@@ -223,7 +224,7 @@ class Chatterbox(metaclass=SingletonMeta):
 
         # Clean up
         rv = [s.strip() for s in rv]
-        rv = [s for s in rv if len(s) > 0 and not re.match(r"^[\s\.,;:!?]*$", s)]
+        rv = [s for s in rv if len(s) > 0 and not re.match(r"^[\s.,;:!?]*$", s)]
 
         # Post-process: merge/split segments as needed
         i = 0
@@ -415,6 +416,71 @@ class Chatterbox(metaclass=SingletonMeta):
         # Cache currently prepared conds (already on the correct device)
         self.voice_conds_cache[key] = self.model.conds
 
+    # --- Voice-tag utilities ---
+    def _resolve_main_voice_audio(self, ref_audio):
+        """Resolve the audio file for the 'main' voice. Prefer explicit ref_audio, otherwise use settings."""
+        if ref_audio is not None:
+            return ref_audio
+        voice_name = settings.GetOption('tts_voice')
+        selected_voice = self.get_voice_by_name(voice_name)
+        if selected_voice is None:
+            selected_voice = self.get_voice_by_name("en_1")
+        if selected_voice is not None:
+            return selected_voice.get("audio_filename")
+        return None
+
+    def _build_voice_map(self, main_ref_audio):
+        """Build a map of voice name -> audio file path, including 'main'."""
+        voices_map = {v["name"]: v["audio_filename"] for v in self._get_voices()}
+        voices_map["main"] = self._resolve_main_voice_audio(main_ref_audio)
+        return voices_map
+
+    def _parse_voice_tagged_text(self, text):
+        """Parse text containing [voice_name] tags into ordered (voice, content) pairs.
+        Rules:
+        - Only tags at the start of a line (optionally preceded by spaces) are recognized.
+        - Inline [brackets] elsewhere are treated as normal text.
+        - Consecutive lines without a new tag continue the current voice segment.
+        - Leading text before the first tag belongs to 'main'.
+        """
+        if not isinstance(text, str) or text.strip() == "":
+            return []
+        # Normalize newlines to \n
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        lines = text.split("\n")
+        segments = []
+        current_voice = "main"
+        buf = []
+        # Support optional BOM/zero-width spaces before the tag
+        tag_re = re.compile(r'^[\ufeff\u200b\s]*\[([^\]]+)\]\s*(.*)$')
+
+        def flush():
+            nonlocal buf, current_voice
+            if buf:
+                content = "\n".join(buf).strip()
+                if content:
+                    segments.append((current_voice, content))
+                buf = []
+
+        for raw_line in lines:
+            # Strip leading BOM/zero-width spaces before matching
+            line = raw_line.lstrip('\ufeff\u200b')
+            m = tag_re.match(line)
+            if m:
+                # New voice tag at start of line: flush previous, switch voice
+                flush()
+                current_voice = m.group(1).strip()
+                rest = m.group(2)
+                if rest is not None and rest.strip():
+                    buf.append(rest.strip())
+            else:
+                # Continuation of current voice text
+                if line.strip():
+                    buf.append(line.strip())
+        # Flush remaining
+        flush()
+        return segments
+
     def tts_generator(self, text, ref_audio=None, language="en"):
         #with self.stop_flag_lock:
         #    self.stop_flag = False
@@ -445,7 +511,8 @@ class Chatterbox(metaclass=SingletonMeta):
             if self._loaded_precision_dtype == torch.float16 and temperature < 0.55:
                 temperature = 0.55  # avoid cuda error in fp16 at low temps
 
-            cfg_weight = self.special_settings["cfg_weight"]
+            # Backward-compatible cfg weight lookup
+            cfg_weight = self.special_settings.get("cfg_weight", self.special_settings.get("cfg", 0.5))
 
             with torch.inference_mode():
                 # Prepare/reuse voice conditionals once instead of per segment
@@ -492,20 +559,38 @@ class Chatterbox(metaclass=SingletonMeta):
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         print("TTS requested Chatterbox TTS")
         language = self._use_language(text)
-        segments = self.chunk_up_text(
-            text,
-            goal_length=self.chunk_goal_length,
-            max_length=self.chunk_max_length,
-            jitter=self.chunk_jitter,
-            custom_split_chars=self.chunk_custom_split_chars
-        )
-        audio_chunks = []
-        for idx, segment in enumerate(segments):
-            if not segment.strip():
-                continue
-            wav, sample_rate = self.tts_generator(segment, ref_audio, language=language)
+        # Voice-tag parsing: split by [voice_name] and then chunk each section
+        voices_map = self._build_voice_map(ref_audio)
+        voice_sections = self._parse_voice_tagged_text(text)
+        # Determine if there are any line-start tags present at all
+        has_any_tags = re.search(r'(?m)^[\ufeff\u200b\s]*\[[^\]]+\]', text) is not None
+        # If no tags found, fall back to normal chunking with 'main'
+        if not voice_sections:
+            if has_any_tags:
+                print("Found voice tags but no content associated; skipping tags and returning silence.")
+                return torch.zeros(1, 0), self.sample_rate
+            voice_sections = [("main", text)]
 
-            audio_chunks.append(wav)
+        audio_chunks = []
+        for voice_name, voice_text in voice_sections:
+            # Resolve voice audio, fallback to main if missing
+            voice_audio = voices_map.get(voice_name)
+            if voice_audio is None:
+                print(f"Voice '{voice_name}' not found. Using 'main' voice.")
+                voice_audio = voices_map.get("main")
+            # Chunk the text for this voice
+            segments = self.chunk_up_text(
+                voice_text,
+                goal_length=self.chunk_goal_length,
+                max_length=self.chunk_max_length,
+                jitter=self.chunk_jitter,
+                custom_split_chars=self.chunk_custom_split_chars
+            )
+            for segment in segments:
+                if not segment.strip():
+                    continue
+                wav, sample_rate = self.tts_generator(segment, voice_audio, language=language)
+                audio_chunks.append(wav)
 
         if not audio_chunks:
             print("No audio generated (no valid segments). Returning silence.")
@@ -517,23 +602,6 @@ class Chatterbox(metaclass=SingletonMeta):
         final_wave = torch.cat(audio_chunks, dim=-1)
         # proactively free segment_waves list after concat
         audio_chunks.clear()
-
-        # @todo possible onnx implementation
-        # from .chatterbox.onnx import run_inference
-        # exaggeration = self.special_settings["exaggeration"]
-        # temperature = self.special_settings["temperature"]
-        # cfg_weight = self.special_settings["cfg_weight"]
-        # run_inference(
-        #     text=text,
-        #     language_id=language,
-        #     exaggeration=exaggeration,
-        #     temperature=temperature,
-        #     cfg_weight=cfg_weight,
-        #     output_dir=Path(cache_path / "chatterbox-multilingual-onnx"),
-        #     model_dir=str(Path(cache_path / "chatterbox-multilingual-onnx").resolve()),
-        #     target_voice_path=ref_audio,
-        #     output_file_name="output.wav",
-        # )
 
         self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
 
@@ -556,24 +624,42 @@ class Chatterbox(metaclass=SingletonMeta):
         chunk_size = settings.GetOption("tts_streamed_chunk_size")
         self.init_audio_stream_playback()
 
-        segments = self.chunk_up_text(
-            text,
-            goal_length=self.chunk_goal_length,
-            max_length=self.chunk_max_length,
-            jitter=self.chunk_jitter,
-            custom_split_chars=self.chunk_custom_split_chars
-        )
-        audio_chunks = []
-        for idx, segment in enumerate(segments):
-            if not segment.strip():
-                continue
-            wav, sample_rate = self.tts_generator(segment, ref_audio, language=language)
-            audio_chunks.append(wav)
-            if self.audio_streamer is not None:
-                wav = self.return_pcm_audio(wav) # convert to PCM bytes
-                self.audio_streamer.add_audio_chunk(wav)
+        # Voice-tag parsing
+        voices_map = self._build_voice_map(ref_audio)
+        voice_sections = self._parse_voice_tagged_text(text)
+        has_any_tags = re.search(r'(?m)^[\ufeff\u200b\s]*\[[^\]]+\]', text) is not None
+        if not voice_sections:
+            if has_any_tags:
+                print("Found voice tags but no content associated; skipping streaming output.")
+                self.last_generation = {"audio": torch.zeros(1, 0), "sample_rate": self.sample_rate}
+                print("TTS generation finished")
+                return torch.zeros(1, 0), self.sample_rate
+            voice_sections = [("main", text)]
 
-        final_wave = torch.cat(audio_chunks, dim=-1)
+        audio_chunks = []
+        for voice_name, voice_text in voice_sections:
+            voice_audio = voices_map.get(voice_name)
+            if voice_audio is None:
+                print(f"Voice '{voice_name}' not found. Using 'main' voice.")
+                voice_audio = voices_map.get("main")
+
+            segments = self.chunk_up_text(
+                voice_text,
+                goal_length=self.chunk_goal_length,
+                max_length=self.chunk_max_length,
+                jitter=self.chunk_jitter,
+                custom_split_chars=self.chunk_custom_split_chars
+            )
+            for segment in segments:
+                if not segment.strip():
+                    continue
+                wav, sample_rate = self.tts_generator(segment, voice_audio, language=language)
+                audio_chunks.append(wav)
+                if self.audio_streamer is not None:
+                    wav_bytes = self.return_pcm_audio(wav)  # convert to PCM bytes
+                    self.audio_streamer.add_audio_chunk(wav_bytes)
+
+        final_wave = torch.cat(audio_chunks, dim=-1) if audio_chunks else torch.zeros(1, 0)
         self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
         print("TTS generation finished")
         return final_wave, self.sample_rate
@@ -599,154 +685,159 @@ class Chatterbox(metaclass=SingletonMeta):
         if min_start_tokens is None or min_start_tokens <= 0:
             min_start_tokens = 6  # ~240ms warm-up to avoid empty frames
 
-        # Determine reference audio (voice) if none provided
-        if ref_audio is None:
-            voice_name = settings.GetOption('tts_voice')
-            selected_voice = self.get_voice_by_name(voice_name)
-            if selected_voice is None:
-                print("No voice selected or does not exist. Using default voice 'en_1'.")
-                voice_name = "en_1"
-                selected_voice = self.get_voice_by_name(voice_name)
-            if selected_voice is not None:
-                ref_audio = selected_voice["audio_filename"]
-
         exaggeration = self.special_settings["exaggeration"]
         temperature = self.special_settings["temperature"]
         if self._loaded_precision_dtype == torch.float16 and temperature < 0.55:
             temperature = 0.55  # avoid cuda error in fp16 at low temps
-        cfg_weight = self.special_settings["cfg_weight"]
+        # Backward-compatible cfg weight lookup
+        cfg_weight = self.special_settings.get("cfg_weight", self.special_settings.get("cfg", 0.5))
         self.set_seed()
 
-        # Prepare model conditionals once per request (voice embedding / prompt tokens)
+        # Prepare voice map and parse voice-tagged sections
         language = self._use_language(text)
-        if ref_audio is not None:
-            try:
-                # Use cached conditionals if available
-                self._ensure_voice_conditionals(ref_audio, exaggeration=exaggeration)
-            except Exception:
-                pass
-
-        # Split text into sentence-like chunks (keep existing chunking behavior)
-        segments = self.chunk_up_text(
-            text,
-            goal_length=self.chunk_goal_length,
-            max_length=self.chunk_max_length,
-            jitter=self.chunk_jitter,
-            custom_split_chars=self.chunk_custom_split_chars
-        )
-
+        voices_map = self._build_voice_map(ref_audio)
+        voice_sections = self._parse_voice_tagged_text(text)
+        has_any_tags = re.search(r'(?m)^[\ufeff\u200b\s]*\[[^\]]+\]', text) is not None
+        if not voice_sections:
+            if has_any_tags:
+                print("Found voice tags but no content associated; skipping streaming output.")
+                self.last_generation = {"audio": torch.zeros(1, 0), "sample_rate": self.sample_rate}
+                print("TTS generation finished (streaming)")
+                return torch.zeros(1, 0), self.sample_rate
+            voice_sections = [("main", text)]
         # For final return, also build the full waveform as we stream
         segment_wavs = []
-
         # Streaming hyperparameters aligned with generate()
-        #cfg_weight = 0.5
-        #temperature = 0.8
         repetition_penalty = 2.0
         min_p = 0.05
         top_p = 1.0
 
-        for idx, segment in enumerate(segments):
-            if not segment.strip():
-                continue
+        last_voice_audio = None
+        for voice_name, voice_text in voice_sections:
+            voice_audio = voices_map.get(voice_name)
+            if voice_audio is None:
+                print(f"Voice '{voice_name}' not found. Using 'main' voice.")
+                voice_audio = voices_map.get("main")
 
-            # Text preprocessing and tokenization (match mtl_tts.generate logic)
-            seg_text = punc_norm(segment)
-            text_tokens = self.model.tokenizer.text_to_tokens(seg_text, language_id=language.lower()).to(self.model.device)
-            # CFG duplication
-            text_tokens = torch.cat([text_tokens, text_tokens], dim=0)
-            # Add SOT/EOT
-            sot = self.model.t3.hp.start_text_token
-            eot = self.model.t3.hp.stop_text_token
-            text_tokens = torch.nn.functional.pad(text_tokens, (1, 0), value=sot)
-            text_tokens = torch.nn.functional.pad(text_tokens, (0, 1), value=eot)
+            # Ensure conditionals for this voice (once per voice switch)
+            if voice_audio != last_voice_audio and voice_audio is not None:
+                try:
+                    self._ensure_voice_conditionals(voice_audio, exaggeration=exaggeration)
+                except Exception:
+                    pass
+                last_voice_audio = voice_audio
 
-            # Streaming decode for this text chunk
-            emitted_samples = 0
-            cache_source = torch.zeros(1, 1, 0, device=self.model.device)
-            token_stream = self.model.t3.inference_stream(
-                t3_cond=self.model.conds.t3,
-                text_tokens=text_tokens,
-                max_new_tokens=1000,
-                stop_on_eos=True,
-                do_sample=True,
-                temperature=temperature,
-                top_p=top_p,
-                min_p=min_p,
-                repetition_penalty=repetition_penalty,
-                cfg_weight=cfg_weight,
-                progress=False,
+            # Split text into sentence-like chunks for this voice
+            segments = self.chunk_up_text(
+                voice_text,
+                goal_length=self.chunk_goal_length,
+                max_length=self.chunk_max_length,
+                jitter=self.chunk_jitter,
+                custom_split_chars=self.chunk_custom_split_chars
             )
 
-            # Accumulate the synthesized audio for this segment
-            seg_audio = []
-            collected_tokens: list[int] = []
-            last_synth_tok_count = 0
-
-            for tid in token_stream:
-                # Skip SoS/EoS and out-of-range
-                if tid >= SPEECH_VOCAB_SIZE:
-                    continue
-                collected_tokens.append(int(tid))
-
-                # Warm-up: wait until we have a few tokens to avoid empty frames
-                if len(collected_tokens) < min_start_tokens:
+            for idx, segment in enumerate(segments):
+                if not segment.strip():
                     continue
 
-                # Synthesize only when we have a full batch of new tokens
-                if (len(collected_tokens) - last_synth_tok_count) < token_batch_size:
-                    continue
+                # Text preprocessing and tokenization (match mtl_tts.generate logic)
+                seg_text = punc_norm(segment)
+                text_tokens = self.model.tokenizer.text_to_tokens(seg_text, language_id=language.lower()).to(self.model.device)
+                # CFG duplication
+                text_tokens = torch.cat([text_tokens, text_tokens], dim=0)
+                # Add SOT/EOT
+                sot = self.model.t3.hp.start_text_token
+                eot = self.model.t3.hp.stop_text_token
+                text_tokens = torch.nn.functional.pad(text_tokens, (1, 0), value=sot)
+                text_tokens = torch.nn.functional.pad(text_tokens, (0, 1), value=eot)
 
-                # Run incremental synthesis for current tokens
-                stoks = torch.tensor(collected_tokens, dtype=torch.long, device=self.model.device).unsqueeze(0)
-
-                wav, cache_source = self.model.s3gen.inference(
-                    speech_tokens=stoks,
-                    ref_dict=self.model.conds.gen,
-                    cache_source=cache_source,
-                    finalize=False,
+                # Streaming decode for this text chunk
+                emitted_samples = 0
+                cache_source = torch.zeros(1, 1, 0, device=self.model.device)
+                token_stream = self.model.t3.inference_stream(
+                    t3_cond=self.model.conds.t3,
+                    text_tokens=text_tokens,
+                    max_new_tokens=1000,
+                    stop_on_eos=True,
+                    do_sample=True,
+                    temperature=temperature,
+                    top_p=top_p,
+                    min_p=min_p,
+                    repetition_penalty=repetition_penalty,
+                    cfg_weight=cfg_weight,
+                    progress=False,
                 )
-                wav = wav.squeeze(0).detach()
 
-                # Emit only the newly synthesized portion since last push
-                if wav.size(-1) > emitted_samples:
-                    new_chunk = wav[..., emitted_samples:]
-                    emitted_samples = wav.size(-1)
-                    if new_chunk.numel() > 0:
-                        if tts_volume != 1.0:
-                            new_chunk = new_chunk * float(tts_volume)
-                        seg_audio.append(new_chunk.cpu())
-                        if self.audio_streamer is not None:
-                            pcm_bytes = self.return_pcm_audio(new_chunk.unsqueeze(0))
-                            self.audio_streamer.add_audio_chunk(pcm_bytes)
+                # Accumulate the synthesized audio for this segment
+                seg_audio = []
+                collected_tokens: list[int] = []
+                last_synth_tok_count = 0
 
-                last_synth_tok_count = len(collected_tokens)
+                for tid in token_stream:
+                    # Skip SoS/EoS and out-of-range
+                    if tid >= SPEECH_VOCAB_SIZE:
+                        continue
+                    collected_tokens.append(int(tid))
 
-            # Finalize to flush the model tail for this segment
-            if len(collected_tokens) > 0:
-                stoks = torch.tensor(collected_tokens, dtype=torch.long, device=self.model.device).unsqueeze(0)
-                wav, _ = self.model.s3gen.inference(
-                    speech_tokens=stoks,
-                    ref_dict=self.model.conds.gen,
-                    cache_source=cache_source,
-                    finalize=True,
-                )
-                wav = wav.squeeze(0).detach()
-                if wav.size(-1) > emitted_samples:
-                    new_chunk = wav[..., emitted_samples:]
-                    if new_chunk.numel() > 0:
-                        if tts_volume != 1.0:
-                            new_chunk = new_chunk * float(tts_volume)
-                        seg_audio.append(new_chunk.cpu())
-                        if self.audio_streamer is not None:
-                            pcm_bytes = self.return_pcm_audio(new_chunk.unsqueeze(0))
-                            self.audio_streamer.add_audio_chunk(pcm_bytes)
+                    # Warm-up: wait until we have a few tokens to avoid empty frames
+                    if len(collected_tokens) < min_start_tokens:
+                        continue
 
-            # Concatenate the audio for this segment and collect for final output
-            if len(seg_audio) > 0:
-                seg_wave = torch.cat(seg_audio, dim=-1).unsqueeze(0)  # [1, N]
-            else:
-                seg_wave = torch.zeros(1, 0)
-            segment_wavs.append(seg_wave)
+                    # Synthesize only when we have a full batch of new tokens
+                    if (len(collected_tokens) - last_synth_tok_count) < token_batch_size:
+                        continue
+
+                    # Run incremental synthesis for current tokens
+                    stoks = torch.tensor(collected_tokens, dtype=torch.long, device=self.model.device).unsqueeze(0)
+
+                    wav, cache_source = self.model.s3gen.inference(
+                        speech_tokens=stoks,
+                        ref_dict=self.model.conds.gen,
+                        cache_source=cache_source,
+                        finalize=False,
+                    )
+                    wav = wav.squeeze(0).detach()
+
+                    # Emit only the newly synthesized portion since last push
+                    if wav.size(-1) > emitted_samples:
+                        new_chunk = wav[..., emitted_samples:]
+                        emitted_samples = wav.size(-1)
+                        if new_chunk.numel() > 0:
+                            if tts_volume != 1.0:
+                                new_chunk = new_chunk * float(tts_volume)
+                            seg_audio.append(new_chunk.cpu())
+                            if self.audio_streamer is not None:
+                                pcm_bytes = self.return_pcm_audio(new_chunk.unsqueeze(0))
+                                self.audio_streamer.add_audio_chunk(pcm_bytes)
+
+                    last_synth_tok_count = len(collected_tokens)
+
+                # Finalize to flush the model tail for this segment
+                if len(collected_tokens) > 0:
+                    stoks = torch.tensor(collected_tokens, dtype=torch.long, device=self.model.device).unsqueeze(0)
+                    wav, _ = self.model.s3gen.inference(
+                        speech_tokens=stoks,
+                        ref_dict=self.model.conds.gen,
+                        cache_source=cache_source,
+                        finalize=True,
+                    )
+                    wav = wav.squeeze(0).detach()
+                    if wav.size(-1) > emitted_samples:
+                        new_chunk = wav[..., emitted_samples:]
+                        if new_chunk.numel() > 0:
+                            if tts_volume != 1.0:
+                                new_chunk = new_chunk * float(tts_volume)
+                            seg_audio.append(new_chunk.cpu())
+                            if self.audio_streamer is not None:
+                                pcm_bytes = self.return_pcm_audio(new_chunk.unsqueeze(0))
+                                self.audio_streamer.add_audio_chunk(pcm_bytes)
+
+                # Concatenate the audio for this segment and collect for final output
+                if len(seg_audio) > 0:
+                    seg_wave = torch.cat(seg_audio, dim=-1).unsqueeze(0)  # [1, N]
+                else:
+                    seg_wave = torch.zeros(1, 0)
+                segment_wavs.append(seg_wave)
 
         # Build final waveform for return
         if len(segment_wavs) == 0:
