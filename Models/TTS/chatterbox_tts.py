@@ -294,6 +294,11 @@ class Chatterbox(metaclass=SingletonMeta):
         # Reset precision tracker on release
         self._loaded_precision_dtype = None
 
+    def garbage_collect(self):
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+
     def load(self, lang='en'):
         self.load_model(lang)
 
@@ -547,6 +552,8 @@ class Chatterbox(metaclass=SingletonMeta):
                 plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': wav, 'sample_rate': self.sample_rate})
                 if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
                     wav = plugin_audio['audio']
+
+                self.garbage_collect()
 
                 return wav, self.sample_rate
 
@@ -838,6 +845,8 @@ class Chatterbox(metaclass=SingletonMeta):
                 else:
                     seg_wave = torch.zeros(1, 0)
                 segment_wavs.append(seg_wave)
+
+                self.garbage_collect()
 
         # Build final waveform for return
         if len(segment_wavs) == 0:
