@@ -23,6 +23,17 @@ from .. import languageClassification
 from ..Singleton import SingletonMeta
 import re
 
+# ONNX helper imports (lazy-used inside methods to avoid hard dependency at import time)
+try:
+    # Use reusable engine class and constants; engine is instantiated lazily
+    from .chatterbox.onnx import (
+        ChatterboxOnnxTTS as OnnxEngine,
+        S3GEN_SR as ONNX_SAMPLE_RATE,
+    )
+except Exception:
+    OnnxEngine = None
+    ONNX_SAMPLE_RATE = 24000
+
 cache_path = Path(Path.cwd() / ".cache" / "chatterbox-tts-cache")
 os.makedirs(cache_path, exist_ok=True)
 voices_path = Path(cache_path / "voices")
@@ -69,6 +80,10 @@ class Chatterbox(metaclass=SingletonMeta):
         "precision": "float32",  # can be "float16" or "float32"
         "language": "en",
         "streaming_mode": "segment", # can be "segment" or "token"
+        # Backend selector: "transformer" (default) or "onnx"
+        "backend": "transformer",
+        # ONNX-specific knob
+        "onnx_max_new_tokens": 256,
 
         "seed": -1,
         "temperature": 0.8,
@@ -82,12 +97,19 @@ class Chatterbox(metaclass=SingletonMeta):
     # Track last loaded precision dtype to conditionally reload
     _loaded_precision_dtype = None
 
+    # ONNX runtime members (lazy)
+    _onnx_sessions = None  # dict of sessions (legacy)
+    _onnx_tokenizer = None
+    _onnx_tokenizer_dir = None
+    _onnx_model_dir = None
+    _onnx_mapping_path = None
+    _onnx_engine = None
+
     def __init__(self):
         self.set_compute_device(settings.GetOption("tts_ai_device"))
         if not self.voice_list:
             self.update_voices()
         self.language_code_converter = Utilities.LanguageCodeConverter()
-        #self.load_model()
 
     def set_compute_device(self, device):
         prev_device = getattr(self, 'compute_device_str', None)
@@ -112,7 +134,9 @@ class Chatterbox(metaclass=SingletonMeta):
 
         tts_cfg = special_settings.get("tts_chatterbox")
         if isinstance(tts_cfg, dict):
-            self.special_settings = tts_cfg
+            # Merge defaults to ensure new keys exist
+            merged = {**self.special_settings, **tts_cfg}
+            self.special_settings = merged
         else:
             # add without dropping other keys
             special_settings["tts_chatterbox"] = self.special_settings
@@ -288,6 +312,8 @@ class Chatterbox(metaclass=SingletonMeta):
             del self.model
         # Clear cached conditionals to avoid holding device tensors
         self.voice_conds_cache.clear()
+        # Tear down ONNX resources
+        self._release_onnx()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         gc.collect()
@@ -456,8 +482,8 @@ class Chatterbox(metaclass=SingletonMeta):
         segments = []
         current_voice = "main"
         buf = []
-        # Support optional BOM/zero-width spaces before the tag
-        tag_re = re.compile(r'^[\ufeff\u200b\s]*\[([^\]]+)\]\s*(.*)$')
+        # Support optional BOM/zero-width spaces before the tag; capture [voice] and trailing text
+        tag_re = re.compile(r'^[\ufeff\u200b\s]*\[([^]]+)\]\s*(.*)$')
 
         def flush():
             nonlocal buf, current_voice
@@ -486,10 +512,69 @@ class Chatterbox(metaclass=SingletonMeta):
         flush()
         return segments
 
+    def _ensure_onnx(self):
+        """Lazy-create ONNX TTS engine when backend is set to 'onnx'."""
+        if self._onnx_engine is not None:
+            return
+        # Dynamic import fallback if top-level import failed
+        Engine = None
+        try:
+            from .chatterbox.onnx import ChatterboxOnnxTTS as _Engine
+            Engine = _Engine
+        except Exception:
+            try:
+                import importlib
+                mod = importlib.import_module('.chatterbox.onnx', package=__package__)
+                Engine = getattr(mod, 'ChatterboxOnnxTTS', None)
+            except Exception:
+                Engine = None
+        if Engine is None:
+            # Last-resort: load by file path to avoid package import issues
+            try:
+                import importlib.util
+                module_path = Path(__file__).parent / 'chatterbox' / 'onnx.py'
+                spec = importlib.util.spec_from_file_location('chatterbox_onnx_dyn', str(module_path))
+                mod = importlib.util.module_from_spec(spec)
+                if spec and spec.loader:
+                    spec.loader.exec_module(mod)
+                    Engine = getattr(mod, 'ChatterboxOnnxTTS', None)
+            except Exception:
+                Engine = None
+        if Engine is None:
+            raise RuntimeError("ONNX backend selected but ONNX engine is not available.")
+        try:
+            import onnxruntime
+        except Exception as ex:
+            raise RuntimeError(f"ONNX backend dependency onnxruntime not available: {ex}")
+
+        model_dir = Path(cache_path / "chatterbox-multilingual-onnx").resolve()
+        # Select providers based on device
+        try:
+            avail = onnxruntime.get_available_providers()
+            if self.compute_device_str == "cuda" and "CUDAExecutionProvider" in avail:
+                providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+            else:
+                providers = ["CPUExecutionProvider"]
+        except Exception:
+            providers = None
+        self._onnx_engine = Engine(str(model_dir), providers=providers)
+
+    def _release_onnx(self):
+        self._onnx_sessions = None
+        self._onnx_tokenizer = None
+        self._onnx_tokenizer_dir = None
+        self._onnx_model_dir = None
+        self._onnx_mapping_path = None
+        self._onnx_engine = None
+
     def tts_generator(self, text, ref_audio=None, language="en"):
         #with self.stop_flag_lock:
         #    self.stop_flag = False
         self._ensure_special_settings()
+
+        backend = self.special_settings.get("backend", "transformer").lower()
+        if backend == "onnx":
+            return self._tts_generator_onnx(text, ref_audio=ref_audio, language=language)
 
         try:
             self.set_compute_device(settings.GetOption('tts_ai_device'))
@@ -563,6 +648,56 @@ class Chatterbox(metaclass=SingletonMeta):
             traceback.print_exc()
             return np.array([], dtype=np.float32), self.sample_rate
 
+    def _tts_generator_onnx(self, text, ref_audio=None, language="en"):
+        """Generate TTS audio using ONNX backend and return (torch.Tensor [1,N], sample_rate)."""
+        try:
+            self._ensure_onnx()
+            # Resolve voice audio path
+            if ref_audio is None:
+                ref_audio = self._resolve_main_voice_audio(None)
+            if ref_audio is None or not os.path.isfile(ref_audio):
+                raise FileNotFoundError("No valid reference voice audio found for ONNX TTS.")
+
+            # Runtime settings
+            tts_volume = settings.GetOption("tts_volume")
+            tts_normalize = settings.GetOption("tts_normalize")
+            exaggeration = float(self.special_settings.get("exaggeration", 0.5))
+            max_new_tokens = int(self.special_settings.get("onnx_max_new_tokens", 256))
+            repetition_penalty = 1.2
+
+            # Generate waveform via engine
+            wav_np = self._onnx_engine.generate(
+                text=text,
+                language_id=str(language).lower() if isinstance(language, str) else "en",
+                target_voice_path=ref_audio,
+                max_new_tokens=max_new_tokens,
+                exaggeration=exaggeration,
+                repetition_penalty=repetition_penalty,
+                progress=False,
+            )
+            # Convert to torch tensor [1, N]
+            wav_t = torch.from_numpy(wav_np).float().unsqueeze(0)
+
+            # Post-processing
+            if tts_normalize:
+                wav_t, _ = audio_tools.normalize_audio_lufs(
+                    wav_t, self.sample_rate, -24.0, -16.0,
+                    1.3, verbose=True
+                )
+            if tts_volume != 1.0:
+                wav_t = audio_tools.change_volume(wav_t, tts_volume)
+
+            plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': wav_t, 'sample_rate': self.sample_rate})
+            if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
+                wav_t = plugin_audio['audio']
+
+            self.garbage_collect()
+            return wav_t, self.sample_rate
+        except Exception as e:
+            print(f"ONNX TTS generation error: {e}")
+            traceback.print_exc()
+            return torch.zeros(1, 0), self.sample_rate
+
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         print("TTS requested Chatterbox TTS")
         language = self._use_language(text)
@@ -570,7 +705,7 @@ class Chatterbox(metaclass=SingletonMeta):
         voices_map = self._build_voice_map(ref_audio)
         voice_sections = self._parse_voice_tagged_text(text)
         # Determine if there are any line-start tags present at all
-        has_any_tags = re.search(r'(?m)^[\ufeff\u200b\s]*\[[^\]]+\]', text) is not None
+        has_any_tags = re.search(r'(?m)^[\ufeff\u200b\s]*\[[^]]+\]', text) is not None
         # If no tags found, fall back to normal chunking with 'main'
         if not voice_sections:
             if has_any_tags:
@@ -616,8 +751,11 @@ class Chatterbox(metaclass=SingletonMeta):
 
     def tts_streaming(self, text, ref_audio=None):
         self._ensure_special_settings()
+        backend = self.special_settings.get("backend", "transformer").lower()
         streaming_mode = self.special_settings.get("streaming_mode", "segment")
         if streaming_mode == "token":
+            if backend == "onnx":
+                return self.tts_streaming_tokens_onnx(text, ref_audio)
             return self.tts_streaming_tokens(text, ref_audio)
         else:
             return self.tts_streaming_segments(text, ref_audio)
@@ -634,7 +772,7 @@ class Chatterbox(metaclass=SingletonMeta):
         # Voice-tag parsing
         voices_map = self._build_voice_map(ref_audio)
         voice_sections = self._parse_voice_tagged_text(text)
-        has_any_tags = re.search(r'(?m)^[\ufeff\u200b\s]*\[[^\]]+\]', text) is not None
+        has_any_tags = re.search(r'(?m)^[\ufeff\u200b\s]*\[[^]]+\]', text) is not None
         if not voice_sections:
             if has_any_tags:
                 print("Found voice tags but no content associated; skipping streaming output.")
@@ -704,7 +842,7 @@ class Chatterbox(metaclass=SingletonMeta):
         language = self._use_language(text)
         voices_map = self._build_voice_map(ref_audio)
         voice_sections = self._parse_voice_tagged_text(text)
-        has_any_tags = re.search(r'(?m)^[\ufeff\u200b\s]*\[[^\]]+\]', text) is not None
+        has_any_tags = re.search(r'(?m)^[\ufeff\u200b\s]*\[[^]]+\]', text) is not None
         if not voice_sections:
             if has_any_tags:
                 print("Found voice tags but no content associated; skipping streaming output.")
@@ -858,6 +996,92 @@ class Chatterbox(metaclass=SingletonMeta):
         print("TTS generation finished (streaming)")
         return final_wave, self.sample_rate
 
+    def tts_streaming_tokens_onnx(self, text, ref_audio=None):
+        """Token-level streaming for ONNX backend using engine.stream_audio."""
+        print("TTS requested Chatterbox TTS (Streaming ONNX Tokens)")
+        self._ensure_special_settings()
+        self._ensure_onnx()
+
+        # Initialize audio streamer playback
+        self.init_audio_stream_playback()
+
+        # Runtime settings
+        tts_volume = settings.GetOption("tts_volume")
+        emit_every = settings.GetOption("tts_streamed_token_batch_size")
+        if emit_every is None or emit_every <= 0:
+            emit_every = 12
+        exaggeration = float(self.special_settings.get("exaggeration", 0.5))
+        repetition_penalty = 1.2
+
+        # Prepare voice map and parse voice-tagged sections
+        language = self._use_language(text)
+        voices_map = self._build_voice_map(ref_audio)
+        voice_sections = self._parse_voice_tagged_text(text)
+        has_any_tags = re.search(r'(?m)^[\ufeff\u200b\s]*\[[^]]+\]', text) is not None
+        if not voice_sections:
+            if has_any_tags:
+                print("Found voice tags but no content associated; skipping streaming output.")
+                self.last_generation = {"audio": torch.zeros(1, 0), "sample_rate": self.sample_rate}
+                print("TTS generation finished (streaming ONNX)")
+                return torch.zeros(1, 0), self.sample_rate
+            voice_sections = [("main", text)]
+
+        segment_wavs = []
+        for voice_name, voice_text in voice_sections:
+            voice_audio = voices_map.get(voice_name)
+            if voice_audio is None:
+                print(f"Voice '{voice_name}' not found. Using 'main' voice.")
+                voice_audio = voices_map.get("main")
+
+            segments = self.chunk_up_text(
+                voice_text,
+                goal_length=self.chunk_goal_length,
+                max_length=self.chunk_max_length,
+                jitter=self.chunk_jitter,
+                custom_split_chars=self.chunk_custom_split_chars
+            )
+            for segment in segments:
+                if not segment.strip():
+                    continue
+
+                emitted = 0
+                seg_chunks = []
+                # Stream chunks from engine
+                for new_chunk in self._onnx_engine.stream_audio(
+                    text=segment,
+                    language_id=str(language).lower(),
+                    target_voice_path=voice_audio,
+                    max_new_tokens=int(self.special_settings.get("onnx_max_new_tokens", 256)),
+                    exaggeration=exaggeration,
+                    repetition_penalty=repetition_penalty,
+                    emit_every_tokens=int(emit_every),
+                    progress=False,
+                ):
+                    # Volume adjust per-chunk
+                    if tts_volume != 1.0:
+                        new_chunk = new_chunk * float(tts_volume)
+                    seg_chunks.append(torch.from_numpy(new_chunk).float())
+                    if self.audio_streamer is not None:
+                        self.audio_streamer.add_audio_chunk(self.return_pcm_audio(new_chunk))
+                    emitted += new_chunk.shape[0]
+
+                # Build segment waveform
+                if len(seg_chunks) > 0:
+                    seg_wave = torch.cat(seg_chunks, dim=-1).unsqueeze(0)
+                else:
+                    seg_wave = torch.zeros(1, 0)
+                segment_wavs.append(seg_wave)
+                self.garbage_collect()
+
+        # Final waveform
+        if len(segment_wavs) == 0:
+            final_wave = torch.zeros(1, self.sample_rate // 10)
+        else:
+            final_wave = torch.cat(segment_wavs, dim=-1)
+        self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
+        print("TTS generation finished (streaming ONNX)")
+        return final_wave, self.sample_rate
+
     def voice_conversion(self, audio, target_voice_path):
         # Ensure model precision matches current setting before VC
         self._ensure_special_settings()
@@ -963,7 +1187,7 @@ class Chatterbox(metaclass=SingletonMeta):
         if isinstance(audio, torch.Tensor):
             np_arr = audio.detach().cpu().float().numpy()
         elif isinstance(audio, np.ndarray):
-            np_arr = audio.astype(np.float32, copy=False)
+            np_arr = np.float32(audio)
         else:
             np_arr = np.asarray(audio, dtype=np.float32)
 
