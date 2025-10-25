@@ -43,16 +43,60 @@ TTS_MODEL_LINKS = {
     # Models
     "chatterbox-multilingual": {
         "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/chatterbox-multilingual.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/chatterbox-tts/chatterbox-multilingual.zip",
+            "https://s3.libs.space:9000/ai-models/chatterbox-tts/chatterbox-multilingual.zip",
         ],
-        "checksum": "",
+        "checksum": "34140a601d03cc1faad454d894389a4d4876b84caca046493e6b270a689ce8af",
         "file_checksums": {
+            "Cangjie5_TC.json": "7073fd9de919443ae88e0bd2449917a65fe54898a4413ed1edcc4b67f28bce8c",
+            "conds.pt": "6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e",
+            "grapheme_mtl_merged_expanded_v1.json": "df81a7ca7c31796cbe97f7a7142d5a53b12e88e12417ebe98f66602cafaf0461",
+            "mtl_tokenizer.json": "e7f9364e2c279b2de19f417a83624d9887532a56daec2ddddac470cc71693253",
+            "s3gen.safetensors": "2b78103c654207393955e4900aac14a12de8ef25f4b09424f1ef91941f161d4e",
+            "spacy_ontonotes\\features.msgpack": "fd4322482a7018b9bce9216173ae9d2848efe6d310b468bbb4383fb55c874a18",
+            "spacy_ontonotes\\weights.npz": "5ada075eb25a854f71d6e6fa4e7d55e7be0ae049255b1f8f19d05c13b1b68c9e",
+            "t3_mtl23ls_v2.safetensors": "b1237586127ce98e7800a68e49938eb5092846862aabcb6e17b2fda7889a6c75",
+            "tokenizer.json": "d71e3a44eabb1784df9a68e9f95b251ecbf1a7af6a9f50835856b2ca9d8c14a5",
+            "ve.safetensors": "f0921cab452fa278bc25cd23ffd59d36f816d7dc5181dd1bef9751a7fb61f63c"
         },
         "path": "chatterbox-multilingual",
+    },
+    "chatterbox-multilingual-onnx": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/chatterbox-multilingual-onnx.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/chatterbox-tts/chatterbox-multilingual-onnx.zip",
+            "https://s3.libs.space:9000/ai-models/chatterbox-tts/chatterbox-multilingual-onnx.zip",
+        ],
+        "checksum": "7e8223dea46bcf81d43301374b8da5aa0950c5218eb2623c2bf663e9b2cc726f",
+        "file_checksums": {
+            "Cangjie5_TC.json": "7073fd9de919443ae88e0bd2449917a65fe54898a4413ed1edcc4b67f28bce8c",
+            "default_voice.wav": "3ebc531cdaba358a327099c1c4f0448026719957bcf4d8e9868767f227e02f4e",
+            "generation_config.json": "1b6fbb953861089ebe7da64df46eeef570d53f47a44b7cc1b4d543669fc9cd50",
+            "onnx\\conditional_decoder.onnx": "1656d0d31332bae1854839959a3139300ebb67c178651dfa3f8c5fbfa5351351",
+            "onnx\\conditional_decoder.onnx_data": "51d58345a272747665ec9d5bb61e01835258a940e321a288582ac4c18cf01b5a",
+            "onnx\\embed_tokens.onnx": "f785819ca4f6271262d5bb8971d62796c3a909e3b031982c113dbe83a4c3b854",
+            "onnx\\embed_tokens.onnx_data": "2a15f7dd73b2ee47f6edf87740324011594b5a528ed6471ae55e327ed6cad68c",
+            "onnx\\language_model.onnx": "861a34585605e8ad671051788afc495dcbeaee833a41523a1b33aded9c3babc7",
+            "onnx\\language_model.onnx_data": "b3556d41085196c122b7197e4d44ec4475b6d7cfe0971a70faa95caa38ad787a",
+            "onnx\\language_model_fp16.onnx": "0c36a5bbbc2a4ed8c345033896612cd320fd0971a0f5e6447ab4cdd2d7f22e36",
+            "onnx\\language_model_fp16.onnx_data": "16dca11ae994e78427fa3090cc6faf347a15988ca40809c1bd9f2721f3b759a0",
+            "onnx\\language_model_q4.onnx": "7f8cdca83b2493536cbf3acf421199808a3d68736f55f4eabd20ef8a99da4313",
+            "onnx\\language_model_q4.onnx_data": "e79ab8784122a501718868b9631ff46e151c552d9b24e50f25d721f375e3526c",
+            "onnx\\language_model_q4f16.onnx": "3b78e9235be5e2e2a811e482399155cb30415f6d87c98c21d12bf48843fc928f",
+            "onnx\\language_model_q4f16.onnx_data": "bdbc79504d20742b5d028074b4f1cdca8872e013fdfbbcea6b8b03154fe85a42",
+            "onnx\\speech_encoder.onnx": "8f1c8a0f89b77bf9cd5dd8f2e034eb2c79dc00fe70d41196b28c257643b00ccb",
+            "onnx\\speech_encoder.onnx_data": "92f8f290fc9720e169bc2412c507209e20b03f6564bc3243739e25c56f7dfb8f",
+            "tokenizer.json": "4abe9b558c1ea02170c2f11de6b1ec9e0dc6f75bc63566913a3e93929d91d035",
+            "tokenizer_config.json": "b35967f93e30313d05fc9d520721ca9f671aaa5b3edbb03059aed3ff68b4c4c0"
+        },
+        "path": "chatterbox-multilingual-onnx",
     }
 }
 
 model_list = {
     "Default": ["chatterbox-multilingual"],
+    "ONNX": ["chatterbox-multilingual-onnx"],
 }
 
 class Chatterbox(metaclass=SingletonMeta):
@@ -80,8 +124,6 @@ class Chatterbox(metaclass=SingletonMeta):
         "precision": "float32",  # can be "float16" or "float32"
         "language": "en",
         "streaming_mode": "segment", # can be "segment" or "token"
-        # Backend selector: "transformer" (default) or "onnx"
-        "backend": "transformer",
         # ONNX-specific knob
         "onnx_max_new_tokens": 256,
 
@@ -110,6 +152,13 @@ class Chatterbox(metaclass=SingletonMeta):
         if not self.voice_list:
             self.update_voices()
         self.language_code_converter = Utilities.LanguageCodeConverter()
+
+    def _get_model_type(self):
+        model = self._get_model_name()
+        if model.endswith("-onnx"):
+            return "onnx"
+        else:
+            return "transformer"
 
     def set_compute_device(self, device):
         prev_device = getattr(self, 'compute_device_str', None)
@@ -288,7 +337,7 @@ class Chatterbox(metaclass=SingletonMeta):
             "model_path": cache_path,
             "model_link_dict": TTS_MODEL_LINKS,
             "model_name": model_name,
-            "title": "Text 2 Speech (Kokoro TTS)",
+            "title": "Text 2 Speech (Chatterbox TTS)",
 
             "alt_fallback": False,
             "force_non_ui_dl": False,
@@ -325,8 +374,27 @@ class Chatterbox(metaclass=SingletonMeta):
             torch.cuda.empty_cache()
         gc.collect()
 
-    def load(self, lang='en'):
-        self.load_model(lang)
+
+    def _get_model_name(self):
+        model = "chatterbox-multilingual"
+        if len(settings.GetOption('tts_model')) == 2:
+            #language = settings.GetOption('tts_model')[0]
+            model = settings.GetOption('tts_model')[1]
+            # remove language part from string example: " (en & zh)"
+            model = re.sub(r'\(.*?\)', '', model).strip()
+
+        if "custom" in model:
+            return model
+
+        if model == "" or model not in TTS_MODEL_LINKS:
+            model = "chatterbox-multilingual"
+
+        return model
+
+    def load(self):
+        desired_precision = self.special_settings.get("precision", "float32")
+        desired_dtype = self._precision_string_to_dtype(desired_precision)
+        self.load_model(dtype=desired_dtype)
 
     def _precision_string_to_dtype(self, precision: str):
         """Map a user precision string to a torch.dtype, with device-aware fallback."""
@@ -357,20 +425,18 @@ class Chatterbox(metaclass=SingletonMeta):
         # If model not loaded or precision changed, (re)load
         if self.model is None or self._loaded_precision_dtype != desired_dtype:
             # Reload in new precision
-            self.load_model(lang=self.special_settings.get("language", "en"), dtype=desired_dtype)
+            self.load_model(dtype=desired_dtype)
 
-    def load_model(self, lang='en', dtype=None):
-        model = "chatterbox-multilingual"
+    def load_model(self, dtype=None):
+        model = self._get_model_name()
         self.set_compute_device(settings.GetOption('tts_ai_device'))
-        #
-        # if "custom" not in model:
-        #     model_directory = Path(cache_path / TTS_MODEL_LINKS[model]["path"])
-        # else:
-        #     model_directory = Path(cache_path / model)
-        #     os.makedirs(model_directory, exist_ok=True)
-        # if "custom" not in model:
-        #     self.download_model(model)
-        model_directory = Path(cache_path / "chatterbox-multilingual")
+        if "custom" not in model:
+            model_directory = Path(cache_path / TTS_MODEL_LINKS[model]["path"])
+        else:
+            model_directory = Path(cache_path / model)
+            os.makedirs(model_directory, exist_ok=True)
+        if "custom" not in model:
+            self.download_model(model)
 
         # Determine dtype: from arg or special settings
         if dtype is None:
@@ -379,11 +445,16 @@ class Chatterbox(metaclass=SingletonMeta):
 
         # If device cannot handle selected precision, fallback handled in helper
         self.release_model()
-        if self.model is None:
-            print(f"Loading Chatterbox TTS model {model} on device {self.compute_device_str} with precision {dtype}")
-            self.model = ChatterboxMultilingualTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
-            self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
-            self._loaded_precision_dtype = dtype
+        if model.endswith("-onnx"):
+            if self._onnx_engine is None:
+                self._ensure_onnx(model)
+                self._loaded_precision_dtype = dtype
+        else:
+            if self.model is None:
+                print(f"Loading Chatterbox TTS model {model} on device {self.compute_device_str} with precision {dtype}")
+                self.model = ChatterboxMultilingualTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
+                self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
+                self._loaded_precision_dtype = dtype
 
     def list_models(self):
         return model_list
@@ -512,7 +583,7 @@ class Chatterbox(metaclass=SingletonMeta):
         flush()
         return segments
 
-    def _ensure_onnx(self):
+    def _ensure_onnx(self, model: str):
         """Lazy-create ONNX TTS engine when backend is set to 'onnx'."""
         if self._onnx_engine is not None:
             return
@@ -547,13 +618,15 @@ class Chatterbox(metaclass=SingletonMeta):
         except Exception as ex:
             raise RuntimeError(f"ONNX backend dependency onnxruntime not available: {ex}")
 
-        model_dir = Path(cache_path / "chatterbox-multilingual-onnx").resolve()
+        model_dir = Path(cache_path / model).resolve()
         # Select providers based on device
         try:
             avail = onnxruntime.get_available_providers()
             if self.compute_device_str == "cuda" and "CUDAExecutionProvider" in avail:
+                print("Using ONNX Runtime with CUDAExecutionProvider")
                 providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
             else:
+                print("Using ONNX Runtime with CPUExecutionProvider")
                 providers = ["CPUExecutionProvider"]
         except Exception:
             providers = None
@@ -572,7 +645,7 @@ class Chatterbox(metaclass=SingletonMeta):
         #    self.stop_flag = False
         self._ensure_special_settings()
 
-        backend = self.special_settings.get("backend", "transformer").lower()
+        backend = self._get_model_type().lower()
         if backend == "onnx":
             return self._tts_generator_onnx(text, ref_audio=ref_audio, language=language)
 
@@ -651,7 +724,6 @@ class Chatterbox(metaclass=SingletonMeta):
     def _tts_generator_onnx(self, text, ref_audio=None, language="en"):
         """Generate TTS audio using ONNX backend and return (torch.Tensor [1,N], sample_rate)."""
         try:
-            self._ensure_onnx()
             # Resolve voice audio path
             if ref_audio is None:
                 ref_audio = self._resolve_main_voice_audio(None)
@@ -751,7 +823,7 @@ class Chatterbox(metaclass=SingletonMeta):
 
     def tts_streaming(self, text, ref_audio=None):
         self._ensure_special_settings()
-        backend = self.special_settings.get("backend", "transformer").lower()
+        backend = self._get_model_type().lower()
         streaming_mode = self.special_settings.get("streaming_mode", "segment")
         if streaming_mode == "token":
             if backend == "onnx":
@@ -1000,7 +1072,6 @@ class Chatterbox(metaclass=SingletonMeta):
         """Token-level streaming for ONNX backend using engine.stream_audio."""
         print("TTS requested Chatterbox TTS (Streaming ONNX Tokens)")
         self._ensure_special_settings()
-        self._ensure_onnx()
 
         # Initialize audio streamer playback
         self.init_audio_stream_playback()
