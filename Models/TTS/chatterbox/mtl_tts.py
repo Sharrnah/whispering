@@ -266,6 +266,7 @@ class ChatterboxMultilingualTTS:
         exaggeration=0.5,
         cfg_weight=0.5,
         temperature=0.8,
+        max_new_tokens=256,
         repetition_penalty=2.0,
         min_p=0.05,
         top_p=1.0,
@@ -312,10 +313,11 @@ class ChatterboxMultilingualTTS:
         text_tokens = F.pad(text_tokens, (0, 1), value=eot)
 
         with torch.inference_mode():
+            max_new_tokens = int(max_new_tokens) if max_new_tokens is not None else 256
             speech_tokens = self.t3.inference(
                 t3_cond=self.conds.t3,
                 text_tokens=text_tokens,
-                max_new_tokens=1000,  # TODO: use the value in config
+                max_new_tokens=max_new_tokens,
                 temperature=temperature,
                 cfg_weight=cfg_weight,
                 repetition_penalty=repetition_penalty,

@@ -124,8 +124,9 @@ class Chatterbox(metaclass=SingletonMeta):
         "precision": "float32",  # can be "float16" or "float32"
         "language": "en",
         "streaming_mode": "segment", # can be "segment" or "token"
-        # ONNX-specific knob
-        "onnx_max_new_tokens": 256,
+
+        "max_new_tokens": 256,
+        "repetition_penalty": 1.2,
 
         "seed": -1,
         "temperature": 0.8,
@@ -676,6 +677,12 @@ class Chatterbox(metaclass=SingletonMeta):
 
             # Backward-compatible cfg weight lookup
             cfg_weight = self.special_settings.get("cfg_weight", self.special_settings.get("cfg", 0.5))
+            max_new_tokens = int(self.special_settings.get(
+                "max_new_tokens", 256,
+            ))
+            repetition_penalty = float(self.special_settings.get(
+                "repetition_penalty", 1.2,
+            ))
 
             with torch.inference_mode():
                 # Prepare/reuse voice conditionals once instead of per segment
@@ -692,6 +699,9 @@ class Chatterbox(metaclass=SingletonMeta):
                     "exaggeration": exaggeration,
                     "temperature": temperature,
                     "cfg_weight": cfg_weight,
+                    "max_new_tokens": max_new_tokens,
+                    # Align repetition handling with ONNX backend to curb trailing speech
+                    "repetition_penalty": repetition_penalty,
                 }
 
                 # Only pass language; avoid audio_prompt_path to prevent re-encoding
@@ -734,8 +744,8 @@ class Chatterbox(metaclass=SingletonMeta):
             tts_volume = settings.GetOption("tts_volume")
             tts_normalize = settings.GetOption("tts_normalize")
             exaggeration = float(self.special_settings.get("exaggeration", 0.5))
-            max_new_tokens = int(self.special_settings.get("onnx_max_new_tokens", 256))
-            repetition_penalty = 1.2
+            max_new_tokens = int(self.special_settings.get("max_new_tokens", 256))
+            repetition_penalty = float(self.special_settings.get("repetition_penalty", 1.2))
 
             # Generate waveform via engine
             wav_np = self._onnx_engine.generate(
@@ -922,10 +932,16 @@ class Chatterbox(metaclass=SingletonMeta):
                 print("TTS generation finished (streaming)")
                 return torch.zeros(1, 0), self.sample_rate
             voice_sections = [("main", text)]
+        max_new_tokens = int(self.special_settings.get(
+            "max_new_tokens", 256,
+        ))
+        repetition_penalty = float(self.special_settings.get(
+            "repetition_penalty", 1.2,
+        ))
+
         # For final return, also build the full waveform as we stream
         segment_wavs = []
         # Streaming hyperparameters aligned with generate()
-        repetition_penalty = 2.0
         min_p = 0.05
         top_p = 1.0
 
@@ -974,7 +990,7 @@ class Chatterbox(metaclass=SingletonMeta):
                 token_stream = self.model.t3.inference_stream(
                     t3_cond=self.model.conds.t3,
                     text_tokens=text_tokens,
-                    max_new_tokens=1000,
+                    max_new_tokens=max_new_tokens,
                     stop_on_eos=True,
                     do_sample=True,
                     temperature=temperature,
@@ -1082,7 +1098,7 @@ class Chatterbox(metaclass=SingletonMeta):
         if emit_every is None or emit_every <= 0:
             emit_every = 12
         exaggeration = float(self.special_settings.get("exaggeration", 0.5))
-        repetition_penalty = 1.2
+        repetition_penalty = float(self.special_settings.get("repetition_penalty", 1.2))
 
         # Prepare voice map and parse voice-tagged sections
         language = self._use_language(text)
@@ -1122,7 +1138,7 @@ class Chatterbox(metaclass=SingletonMeta):
                     text=segment,
                     language_id=str(language).lower(),
                     target_voice_path=voice_audio,
-                    max_new_tokens=int(self.special_settings.get("onnx_max_new_tokens", 256)),
+                    max_new_tokens=int(self.special_settings.get("max_new_tokens", 256)),
                     exaggeration=exaggeration,
                     repetition_penalty=repetition_penalty,
                     emit_every_tokens=int(emit_every),
