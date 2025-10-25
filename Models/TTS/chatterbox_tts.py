@@ -91,7 +91,32 @@ TTS_MODEL_LINKS = {
             "tokenizer_config.json": "b35967f93e30313d05fc9d520721ca9f671aaa5b3edbb03059aed3ff68b4c4c0"
         },
         "path": "chatterbox-multilingual-onnx",
-    }
+    },
+    # Default Voices
+    "voices": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/voices.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/chatterbox-tts/voices.zip",
+            "https://s3.libs.space:9000/ai-models/chatterbox-tts/voices.zip",
+        ],
+        "checksum": "1219fc592b50118807d54e3049e6b019d248e2e1a6be2324e398b3edd6df19a9",
+        "file_checksums": {
+            "Announcer_Ahri.wav": "2a3fd17d45b3c5633dd64e2d80a6e3fc924fa829da405e3b591a5bacdc88f9fc",
+            "Attenborough.wav": "358540c89932baf1103960d99949b78ea7466f95b2225fdcd8f8bb8b976f09ee",
+            "Jane.wav": "d1d2235af1a4408c641a765427978486f5cca9b369fc6456d8086449f1f92fe3",
+            "Justin.wav": "a83c37f408b53efaeb9189f166c6669d1a0dc6cf779e85913fa9cbbbbe0d5aaf",
+            "Xiaochen.wav": "7f0b735e188a06dc9f104eeb3fd71a3ef580d1f2133c95630c92a244dd253732",
+            "default_voice.wav": "3ebc531cdaba358a327099c1c4f0448026719957bcf4d8e9868767f227e02f4e",
+            "en_0.wav": "f006e2e9c76523bde4f5bbe67a7be9a600786d7432cbcc9486bc9501053298b7",
+            "en_1.wav": "b0e22048e72414fcc1e6b6342e47a774d748a195ed34e4a5b3fcf416707f2b71",
+            "fallback_audio.wav": "eaa7796d2c44424c645a0b384d82f09aac48fab2c9977de6f53b6a4f9d0e0da1",
+            "female_shadowheart.wav": "8abb726ad6aaa5203e62de4c92ac2aab3d3fa1fdb509c9b76d254722178ab70a",
+            "test_zh_1_ref_short.wav": "96724a113240d1f82c6ded1334122f0176b96c9226ccd3c919e625bcfd2a3ede",
+            "tiktok_adam.wav": "2ed130b6dd069ee4c306f6cb8fedb94db75567aefa084085c6a069bd2c34662d",
+            "tiktok_jessie.wav": "5a26de921ea3e7c1ce1bfd2344fb107781def9366b56e2f583c7500a1052dbbd"
+        },
+        "path": "voices",
+    },
 }
 
 model_list = {
@@ -126,7 +151,7 @@ class Chatterbox(metaclass=SingletonMeta):
         "streaming_mode": "segment", # can be "segment" or "token"
 
         "max_new_tokens": 256,
-        "repetition_penalty": 1.2,
+        "repetition_penalty": 1.7,
 
         "seed": -1,
         "temperature": 0.8,
@@ -438,6 +463,7 @@ class Chatterbox(metaclass=SingletonMeta):
             os.makedirs(model_directory, exist_ok=True)
         if "custom" not in model:
             self.download_model(model)
+        self.download_model("voices")
 
         # Determine dtype: from arg or special settings
         if dtype is None:
