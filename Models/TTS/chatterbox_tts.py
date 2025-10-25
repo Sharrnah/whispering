@@ -141,7 +141,7 @@ class Chatterbox(metaclass=SingletonMeta):
     chunk_max_length = 170
     chunk_jitter = 0
     chunk_custom_split_chars = ","
-    chunk_valid_ending_chars = ".;!?\n\""
+    chunk_valid_ending_chars = ".;!?！。？！\n\""
 
     download_state = {"is_downloading": False}
     compute_device = "cpu"
