@@ -22,7 +22,7 @@ hiddenimports = [
     'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio',
     'pyannote.pipeline', 'pyloudnorm', 'future', 'noisereduce', 'frozendict', 'torch_directml', 'x_transformers', 'inflect', 'backoff',
     'language_tags', 'spacy', 'en_core_web_sm', 'misaki', 'fugashi', 'mojimoji', 'unidic', 'unidic-lite', 'ordered_set', 'phonemizer',
-    'flash_attn', 'mistral_common', 'snac', 'peft', 'conformer', 'diffusers', 'spacy-pkuseg', 's3tokenizer'
+    'flash_attn', 'mistral_common', 'snac', 'peft', 'conformer', 'diffusers', 'spacy-pkuseg', 'spacy_pkuseg', 's3tokenizer'
     'espeakng_loader', 'unidic_lite', 'mamba_ssm', 'audiotools'
 ]
 hiddenimports += [
@@ -37,6 +37,7 @@ datas += collect_data_files('phonemizer')
 datas += collect_data_files('backoff')
 datas += collect_data_files('triton')
 datas += collect_data_files('mistral_common')
+datas += collect_data_files('spacy_pkuseg')
 datas += copy_metadata('rich')
 datas += copy_metadata('torch')
 datas += copy_metadata('tqdm')
@@ -74,7 +75,7 @@ for pkg in [
     'flash_attn', 'mistral_common', 'espeakng_loader', 'unidic_lite',
     'mamba_ssm', 'audiotools', 'x_transformers', 'snac',
     'triton.runtime.jit', 'triton.runtime.autotuner', 'triton.runtime.driver',
-    's3tokenizer', 'spacy-pkuseg'
+    's3tokenizer', 'spacy-pkuseg', 'spacy_pkuseg'
 ]:
     d, b, h = collect_all(pkg)
     datas += d
