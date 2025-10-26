@@ -14,6 +14,67 @@ import audio_tools
 
 import downloader
 
+# --- Begin: PyTorch 2.6+ safe allowlist for checkpoint loading ---
+# PyTorch 2.6 defaults torch.load to weights_only=True which can fail to unpickle
+# certain safe classes in legacy checkpoints. We add an allowlist for these.
+_PATCH_APPLIED = False
+
+
+def _apply_torch_load_patch_if_needed():
+    global _PATCH_APPLIED
+    if _PATCH_APPLIED:
+        return
+    try:
+        # Allowlist TorchVersion used in some checkpoints metadata and
+        # pyannote classes commonly referenced in checkpoints.
+        from torch.serialization import add_safe_globals  # type: ignore
+        import importlib
+        import inspect
+
+        # Helper to add a class/function by dotted path if available
+        def _add_safe_global_by_name(dotted_name: str):
+            try:
+                module_path, attr_name = dotted_name.rsplit('.', 1)
+                mod = importlib.import_module(module_path)
+                obj = getattr(mod, attr_name, None)
+                if obj is not None:
+                    add_safe_globals([obj])
+            except Exception:
+                pass
+
+        # Helper to add all classes from a module by dotted path
+        def _add_all_classes_from_module(module_path: str):
+            try:
+                mod = importlib.import_module(module_path)
+                classes = [obj for _, obj in inspect.getmembers(mod, inspect.isclass)]
+                if classes:
+                    add_safe_globals(classes)
+            except Exception:
+                pass
+
+        # TorchVersion
+        try:
+            import torch.torch_version as _tv  # type: ignore
+            try:
+                add_safe_globals([_tv.TorchVersion])
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        # Known pyannote class required by weights-only safe loader
+        _add_safe_global_by_name('pyannote.audio.core.task.Specifications')
+
+        # Proactively allow all classes from relevant pyannote core modules
+        _add_all_classes_from_module('pyannote.audio.core.task')
+        _add_all_classes_from_module('pyannote.audio.core.model')
+
+    except Exception:
+        # If torch doesn't expose these (older versions), just continue.
+        pass
+    _PATCH_APPLIED = True
+# --- End: PyTorch 2.6+ safe allowlist for checkpoint loading ---
+
 model_cache_path = Path(Path.cwd() / ".cache" / "pyannote")
 
 MODEL_LINKS = {
@@ -40,6 +101,9 @@ class SpeakerDiarization(metaclass=SingletonMeta):
             if self._needs_download():
                 self.download_model()
             pipeline_path = str(Path(model_cache_path / "diarization_config.yaml").resolve())
+
+            # Ensure torch.load compatibility before loading pyannote pipeline
+            _apply_torch_load_patch_if_needed()
 
             self.pipeline = Pipeline.from_pretrained(pipeline_path)
             self.pipeline.to(torch.device("cuda"))
@@ -107,6 +171,9 @@ class SpeakerDiarization(metaclass=SingletonMeta):
 
         print(f"Changing working directory to {cd_to}")
         os.chdir(cd_to)
+
+        # Ensure torch.load compatibility before loading pyannote pipeline
+        _apply_torch_load_patch_if_needed()
 
         pipeline = Pipeline.from_pretrained(path_to_config)
 
