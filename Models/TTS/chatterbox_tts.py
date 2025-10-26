@@ -150,8 +150,8 @@ class Chatterbox(metaclass=SingletonMeta):
         "language": "en",
         "streaming_mode": "segment", # can be "segment" or "token"
 
-        "max_new_tokens": 256,
-        "repetition_penalty": 1.7,
+        "max_new_tokens": 512,
+        "repetition_penalty": 1.9,
 
         "seed": -1,
         "temperature": 0.8,
