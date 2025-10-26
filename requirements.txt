@@ -1,7 +1,7 @@
 # numpy v1.23.4 required for whisper
 numpy==1.26.4
 #numpy==2.2.6
-numba==0.61.2
+numba==0.62.1
 contourpy==1.2.1
 
 tqdm==4.66.4
@@ -102,7 +102,8 @@ annotated_types==0.6.0
 frozendict==2.4.4
 
 # speaker diarization
-pyannote.audio==3.3.1
+#pyannote.audio==4.0.1
+pyannote.audio==3.4.0
 
 # decoder for wav2vec_bert
 #pyctcdecode==0.5.0
@@ -165,6 +166,8 @@ fugashi
 mojimoji
 ordered_set
 
+# OpenAudio (former Fishspeech) TTS S1 dependencies
+einops==0.8.1
 # Orpheus TTS dependencies
 jinja2==3.1.6
 jitaer==0.10.0
