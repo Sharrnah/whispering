@@ -21,6 +21,9 @@ if __name__ == '__main__':
     # enable fast GPU mode for safetensors (https://huggingface.co/docs/safetensors/speed)
     os.environ["SAFETENSORS_FAST_GPU"] = "1"
 
+    # disable implicit token usage from huggingface hub
+    os.environ["HF_HUB_DISABLE_IMPLICIT_TOKEN"] = "1"
+
     atexit.register(processmanager.cleanup_subprocesses)
 
 
