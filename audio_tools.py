@@ -133,6 +133,17 @@ def get_audio_api_index_by_name(name):
     return 0, ""
 
 
+# Compatibility wrapper: support either the external 'resampy' module with .resample
+# or librosa's function imported as 'resampy' directly.
+def _resampy_resample(y, orig_sr, target_sr, filter="kaiser_best"):
+    try:
+        # External resampy module style
+        return resampy.resample(y, orig_sr, target_sr, filter=filter)
+    except AttributeError:
+        # librosa's resample function imported as 'resampy'
+        return resampy(y, orig_sr, target_sr, filter=filter)
+
+
 # resampy_audio function using the resampy library to resample audio data to a different sample rate and convert it to mono. (slower than resample, but less error prone to strange data)
 # set target_channels to '-1' to average the left and right channels to create mono audio (default)
 # set target_channels to '0' to extract the first channel (left channel) data
@@ -156,26 +167,52 @@ def resampy_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target_
 
     # try to guess if the audio is mono or stereo
     if is_mono is None:
-        is_mono = audio_data.shape[0] % 2 != 0
+        # Heuristic is unreliable; default to False if even length (likely stereo interleaved)
+        is_mono = (audio_data.shape[0] % 2 != 0)
 
-    if target_channels < 2 and not is_mono:
+    # Handle stereo inputs explicitly by reshaping to frames x channels when appropriate
+    if not is_mono and (target_channels in (-1, 0, 1, 2)):
         # Reshape the array to separate the channels
-        audio_data = audio_data.reshape(-1, 2)
+        frame_count = (audio_data.shape[0] // 2)
+        audio_data = audio_data[: frame_count * 2].reshape(-1, 2)
 
     if target_channels == -1 and not is_mono:
         # Average the left and right channels to create mono audio
         audio_data = audio_data.mean(axis=1)
-    elif target_channels == 0 or target_channels == 1 and not is_mono:
-        # Extract the first channel (left channel) data
-        audio_data = audio_data[:, target_channels]
-    elif target_channels == 2 and is_mono:
-        # Duplicate the mono channel to create left and right channels
-        # Also flatten the array and convert it back to int16 dtype
-        audio_data = np.column_stack((audio_data, audio_data)).flatten()
+        # Resample mono
+        audio_data = _resampy_resample(audio_data, recorded_sample_rate, target_sample_rate, filter=filter)
+        return np.asarray(audio_data, dtype=audio_data_dtype)
+    elif (target_channels == 0 or target_channels == 1) and not is_mono:
+        # Extract the requested channel (0=left, 1=right)
+        ch = audio_data[:, target_channels]
+        ch = _resampy_resample(ch, recorded_sample_rate, target_sample_rate, filter=filter)
+        return np.asarray(ch, dtype=audio_data_dtype)
+    elif target_channels == 2:
+        if is_mono:
+            # Duplicate the mono channel to create left and right channels
+            # Also flatten the array and convert it back to int16 dtype
+            # First resample mono, then duplicate
+            mono = audio_data
+            mono = _resampy_resample(mono, recorded_sample_rate, target_sample_rate, filter=filter)
+            stereo = np.column_stack((mono, mono)).astype(audio_data_dtype)
+            return stereo.flatten()
+        else:
+            # Stereo input: resample each channel independently, then interleave
+            left = audio_data[:, 0]
+            right = audio_data[:, 1]
+            left_res = _resampy_resample(left, recorded_sample_rate, target_sample_rate, filter=filter)
+            right_res = _resampy_resample(right, recorded_sample_rate, target_sample_rate, filter=filter)
+            # Ensure equal length after resampling
+            min_len = min(len(left_res), len(right_res))
+            if min_len == 0:
+                return np.asarray([], dtype=audio_data_dtype)
+            left_res = left_res[:min_len]
+            right_res = right_res[:min_len]
+            interleaved = np.column_stack((left_res, right_res)).astype(audio_data_dtype).flatten()
+            return interleaved
 
-    # Resample the audio data to the desired sample rate
-    audio_data = resampy.resample(audio_data, recorded_sample_rate, target_sample_rate, filter=filter)
-    # Convert the resampled data back to int16 dtype
+    # Fallback: treat input as mono sequence
+    audio_data = _resampy_resample(audio_data, recorded_sample_rate, target_sample_rate, filter=filter)
     return np.asarray(audio_data, dtype=audio_data_dtype)
 
 
