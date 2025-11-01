@@ -132,7 +132,7 @@ class Chatterbox(metaclass=SingletonMeta):
     voice_list = []
     audio_streamer = None
     split_patterns = {
-        'fast': r'(?:[\.?!！。？！,，;；](?=[ \n])|[\n])+',
+        'fast': r'(?:[\.?!=！。？！,，;；](?=[ \n])|[\n])+',
         'slow': r'(?:\.(?=[ \n])|[\n?!。])+',
     }
     language_code_converter = None
@@ -151,10 +151,10 @@ class Chatterbox(metaclass=SingletonMeta):
         "streaming_mode": "segment", # can be "segment" or "token"
 
         "max_new_tokens": 512,
-        "repetition_penalty": 1.9,
+        "repetition_penalty": 2.0,
 
         "seed": -1,
-        "temperature": 0.5,
+        "temperature": 0.8,
         "exaggeration": 0.5,
         "cfg": 0.2,
         "use_vad": False,
@@ -174,6 +174,7 @@ class Chatterbox(metaclass=SingletonMeta):
         # Segment concatenation crossfade and final fade (non-streaming)
         "segment_crossfade_ms": 0,
         "final_edge_fade_ms": 0,
+        "replace_abbreviations": True,
         # Pause between segments (ms). If > 0, a silence of this duration is inserted between segments
         # and takes precedence over segment crossfade.
         "pause_between_segments_ms": 80,
@@ -761,8 +762,11 @@ class Chatterbox(metaclass=SingletonMeta):
                     "repetition_penalty": repetition_penalty,
                 }
 
+                # Abbreviation fix before generation
+                text_in = self._fix_abbreviations(text)
+
                 # Only pass language; avoid audio_prompt_path to prevent re-encoding
-                wav = self.model.generate(text, language_id=language, **generate_kwargs)
+                wav = self.model.generate(text_in, language_id=language, **generate_kwargs)
 
                 if tts_normalize:
                     wav, _ = audio_tools.normalize_audio_lufs(
@@ -804,9 +808,12 @@ class Chatterbox(metaclass=SingletonMeta):
             max_new_tokens = int(self.special_settings.get("max_new_tokens", 256))
             repetition_penalty = float(self.special_settings.get("repetition_penalty", 1.2))
 
+            # Abbreviation fix before generation
+            text_in = self._fix_abbreviations(text)
+
             # Generate waveform via engine
             wav_np = self._onnx_engine.generate(
-                text=text,
+                text=text_in,
                 language_id=str(language).lower() if isinstance(language, str) else "en",
                 target_voice_path=ref_audio,
                 max_new_tokens=max_new_tokens,
@@ -905,6 +912,7 @@ class Chatterbox(metaclass=SingletonMeta):
                 voice_sections = [("main", text)]
 
             audio_chunks = []
+            audio_chunk_voices = []  # track voice per chunk for boundary-aware pauses
             for voice_name, voice_text in voice_sections:
                 # Resolve voice audio, fallback to main if missing
                 voice_audio = voices_map.get(voice_name)
@@ -936,6 +944,7 @@ class Chatterbox(metaclass=SingletonMeta):
                         fe = bool(self.special_settings.get("vad_trim_end", True))
                         wav = self._apply_asymmetric_edge_fade(wav, sample_rate, seg_edge_fade, fs, fe)
                     audio_chunks.append(wav)
+                    audio_chunk_voices.append(voice_name)
 
             # If no audio was generated, return brief silence
             if not audio_chunks:
@@ -947,21 +956,41 @@ class Chatterbox(metaclass=SingletonMeta):
             # Concatenate with optional pause or crossfade between generated segments
             seg_crossfade_ms = int(self.special_settings.get("segment_crossfade_ms", 0))
             pause_ms = int(self.special_settings.get("pause_between_segments_ms", 0))
-            safe_chunks = [w for w in audio_chunks if isinstance(w, torch.Tensor) and w.numel() > 0]
-            if pause_ms > 0:
-                silence = self._make_silence(pause_ms, self.sample_rate)
-                interleaved = []
-                for i, w in enumerate(safe_chunks):
-                    interleaved.append(w if w.ndim == 2 else w.reshape(1, -1))
-                    if i < len(safe_chunks) - 1 and silence.numel() > 0:
-                        interleaved.append(silence)
-                final_wave = torch.cat(interleaved, dim=-1) if interleaved else torch.zeros(1, 0)
+            pause_voice_change_ms = int(self.special_settings.get("pause_between_voice_change_ms", 0))
+
+            # Build safe list of (wav, voice) pairs, filtering invalid/empty wavs
+            safe_pairs = []
+            for wav, vname in zip(audio_chunks, audio_chunk_voices):
+                if isinstance(wav, torch.Tensor) and wav.numel() > 0:
+                    # Ensure [1,N]
+                    w = wav if wav.ndim == 2 else wav.reshape(1, -1)
+                    safe_pairs.append((w, vname))
+
+            # Build final waveform boundary-aware; pauses override crossfade per boundary
+            if not safe_pairs:
+                final_wave = torch.zeros(1, 0)
             else:
-                if seg_crossfade_ms > 0:
-                    final_wave = self._concat_with_crossfade([w for w in safe_chunks], self.sample_rate, seg_crossfade_ms)
-                else:
-                    final_wave = torch.cat([w if w.ndim == 2 else w.reshape(1, -1) for w in safe_chunks], dim=-1) if safe_chunks else torch.zeros(1, 0)
+                out = safe_pairs[0][0]
+                for i in range(1, len(safe_pairs)):
+                    nxt_wav, nxt_voice = safe_pairs[i]
+                    cur_voice = safe_pairs[i - 1][1]
+                    # Choose pause for this boundary
+                    if nxt_voice != cur_voice and pause_voice_change_ms > 0:
+                        boundary_pause = pause_voice_change_ms
+                    else:
+                        boundary_pause = pause_ms
+                    if boundary_pause and boundary_pause > 0:
+                        sil = self._make_silence(boundary_pause, self.sample_rate)
+                        out = torch.cat([out, sil, nxt_wav], dim=-1)
+                    else:
+                        if seg_crossfade_ms > 0:
+                            out = self._concat_with_crossfade([out, nxt_wav], self.sample_rate, seg_crossfade_ms)
+                        else:
+                            out = torch.cat([out, nxt_wav], dim=-1)
+                final_wave = out
+            # Free per-chunk lists
             audio_chunks.clear()
+            audio_chunk_voices.clear()
 
             # Final pass VAD trimming on the concatenated audio (catch cross-boundary silences)
             if self.special_settings.get("use_vad", False):
@@ -1017,9 +1046,13 @@ class Chatterbox(metaclass=SingletonMeta):
                     return torch.zeros(1, 0), self.sample_rate
                 voice_sections = [("main", text)]
 
-            # Pre-count total segments to avoid trailing pause injection
-            total_segments = 0
+            # Build flat list of (voice_name, voice_audio, segment_text)
+            flat_segments = []
             for voice_name, voice_text in voice_sections:
+                voice_audio = voices_map.get(voice_name)
+                if voice_audio is None:
+                    print(f"Voice '{voice_name}' not found. Using 'main' voice.")
+                    voice_audio = voices_map.get("main")
                 segs = self.chunk_up_text(
                     voice_text,
                     goal_length=self.chunk_goal_length,
@@ -1027,69 +1060,86 @@ class Chatterbox(metaclass=SingletonMeta):
                     jitter=self.chunk_jitter,
                     custom_split_chars=self.chunk_custom_split_chars
                 )
-                total_segments += sum(1 for s in segs if str(s).strip())
-            segments_remaining = total_segments
-
+                for s in segs:
+                    s = str(s)
+                    if s.strip():
+                        flat_segments.append((voice_name, voice_audio, s))
             pause_ms = int(self.special_settings.get("pause_between_segments_ms", 0))
+            pause_voice_change_ms = int(self.special_settings.get("pause_between_voice_change_ms", 0))
 
             audio_chunks = []
-            for voice_name, voice_text in voice_sections:
-                voice_audio = voices_map.get(voice_name)
-                if voice_audio is None:
-                    print(f"Voice '{voice_name}' not found. Using 'main' voice.")
-                    voice_audio = voices_map.get("main")
-
-                segments = self.chunk_up_text(
-                    voice_text,
-                    goal_length=self.chunk_goal_length,
-                    max_length=self.chunk_max_length,
-                    jitter=self.chunk_jitter,
-                    custom_split_chars=self.chunk_custom_split_chars
-                )
-                for segment in segments:
-                    if not str(segment).strip():
-                        continue
-                    wav, sample_rate = self.tts_generator(segment, voice_audio, language=language)
-                    # Apply VAD trimming before streaming
-                    if self.special_settings.get("use_vad", False):
-                        try:
-                            wav = self._apply_vad_trim(wav, sample_rate)
-                        except Exception as e:
-                            print(f"VAD trim (streaming segment) error: {e}")
-                    # Optional edge fade per streamed segment (asymmetric per trim settings)
-                    seg_edge_fade = int(self.special_settings.get("vad_edge_fade_ms", 0))
-                    if seg_edge_fade > 0 and wav is not None and (isinstance(wav, torch.Tensor) and wav.numel() > 0):
-                        fs = bool(self.special_settings.get("vad_trim_start", False))
-                        fe = bool(self.special_settings.get("vad_trim_end", True))
-                        wav = self._apply_asymmetric_edge_fade(wav, sample_rate, seg_edge_fade, fs, fe)
-                    if isinstance(wav, torch.Tensor) and wav.numel() > 0:
-                        wav = self._apply_final_noise_reduction(wav, sample_rate)
-                        audio_chunks.append(wav)
-                        if self.audio_streamer is not None:
-                            wav_bytes = self.return_pcm_audio(wav)
-                            if wav_bytes and len(wav_bytes) > 0:
-                                self.audio_streamer.add_audio_chunk(wav_bytes)
-                    segments_remaining -= 1
-                    # Insert configurable pause between segments (not after last)
-                    if pause_ms > 0 and segments_remaining > 0:
-                        silence = self._make_silence(pause_ms, self.sample_rate)
+            inserted_any_silence = False
+            for idx, (voice_name, voice_audio, segment) in enumerate(flat_segments):
+                if not str(segment).strip():
+                    continue
+                wav, sample_rate = self.tts_generator(segment, voice_audio, language=language)
+                # Apply VAD trimming before streaming
+                if self.special_settings.get("use_vad", False):
+                    try:
+                        wav = self._apply_vad_trim(wav, sample_rate)
+                    except Exception as e:
+                        print(f"VAD trim (streaming segment) error: {e}")
+                # Optional edge fade per streamed segment (asymmetric per trim settings)
+                seg_edge_fade = int(self.special_settings.get("vad_edge_fade_ms", 0))
+                if seg_edge_fade > 0 and wav is not None and (isinstance(wav, torch.Tensor) and wav.numel() > 0):
+                    fs = bool(self.special_settings.get("vad_trim_start", False))
+                    fe = bool(self.special_settings.get("vad_trim_end", True))
+                    wav = self._apply_asymmetric_edge_fade(wav, sample_rate, seg_edge_fade, fs, fe)
+                if isinstance(wav, torch.Tensor) and wav.numel() > 0:
+                    wav = self._apply_final_noise_reduction(wav, sample_rate)
+                    audio_chunks.append(wav)
+                    if self.audio_streamer is not None:
+                        wav_bytes = self.return_pcm_audio(wav)
+                        if wav_bytes and len(wav_bytes) > 0:
+                            self.audio_streamer.add_audio_chunk(wav_bytes)
+                # Insert voice-aware pause if there are more segments coming
+                if idx < len(flat_segments) - 1:
+                    next_voice = flat_segments[idx + 1][0]
+                    boundary_pause = 0
+                    if next_voice != voice_name and pause_voice_change_ms > 0:
+                        boundary_pause = pause_voice_change_ms
+                    else:
+                        boundary_pause = pause_ms
+                    if boundary_pause and boundary_pause > 0:
+                        silence = self._make_silence(boundary_pause, self.sample_rate)
                         if silence.numel() > 0:
+                            inserted_any_silence = True
                             audio_chunks.append(silence)
                             if self.audio_streamer is not None:
                                 sil_bytes = self.return_pcm_audio(silence)
                                 if sil_bytes and len(sil_bytes) > 0:
                                     self.audio_streamer.add_audio_chunk(sil_bytes)
 
-            final_wave = torch.cat(audio_chunks, dim=-1) if audio_chunks else torch.zeros(1, 0)
+            # Build final return waveform; if any silence was inserted, avoid crossfade
+            seg_crossfade_ms = int(self.special_settings.get("segment_crossfade_ms", 0))
+            if not audio_chunks:
+                final_wave = torch.zeros(1, 0)
+            else:
+                if inserted_any_silence:
+                    final_wave = torch.cat(audio_chunks, dim=-1)
+                else:
+                    if seg_crossfade_ms > 0:
+                        final_wave = self._concat_with_crossfade(audio_chunks, self.sample_rate, seg_crossfade_ms)
+                    else:
+                        final_wave = torch.cat(audio_chunks, dim=-1)
+            audio_chunks.clear()
+
+            # Final pass VAD trimming on the concatenated audio (catch cross-boundary silences)
+            if self.special_settings.get("use_vad", False):
+                try:
+                    final_wave = self._apply_vad_trim(final_wave, self.sample_rate)
+                except Exception as e:
+                    print(f"VAD trim (final) error: {e}")
+
             # Apply optional final edge fade
             final_fade_ms = int(self.special_settings.get("final_edge_fade_ms", 0))
             if final_fade_ms > 0 and final_wave is not None and final_wave.numel() > 0:
                 final_wave = self._apply_edge_fade(final_wave, self.sample_rate, final_fade_ms)
+
             self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
-            print("TTS generation finished")
             return final_wave, self.sample_rate
         except Exception as ex:
-            print(f"tts_streaming_segments() failed: {ex}")
+            print(f"TTS() failed: {ex}")
             traceback.print_exc()
             err_wave = torch.zeros(1, 0)
             self.last_generation = {"audio": err_wave, "sample_rate": self.sample_rate}
@@ -1101,30 +1151,43 @@ class Chatterbox(metaclass=SingletonMeta):
             self._ensure_special_settings()
             # Ensure model precision matches current setting
             self._ensure_model_for_precision()
-
             # Initialize audio streamer playback
+            chunk_size = settings.GetOption("tts_streamed_chunk_size")
+            self.init_audio_stream_playback()
+            # Forward to the unified implementation
+            return self._tts_streaming_tokens_impl(text, ref_audio)
+        except Exception as ex:
+            print(f"tts_streaming_tokens() failed: {ex}")
+            traceback.print_exc()
+            err_wave = torch.zeros(1, 0)
+            self.last_generation = {"audio": err_wave, "sample_rate": self.sample_rate}
+            return err_wave, self.sample_rate
+
+    def _tts_streaming_tokens_impl(self, text, ref_audio=None):
+        try:
+            # Ensure runtime settings and playback are initialized
+            self._ensure_special_settings()
+            self._ensure_model_for_precision()
             chunk_size = settings.GetOption("tts_streamed_chunk_size")
             self.init_audio_stream_playback()
 
             # Pull runtime audio settings
             tts_volume = settings.GetOption("tts_volume")
-            # Streaming batching controls (to speed up synthesis)
             token_batch_size = settings.GetOption("tts_streamed_token_batch_size")
             if token_batch_size is None or token_batch_size <= 0:
-                token_batch_size = 12  # ~480ms at 25 tok/sec
+                token_batch_size = 12
             min_start_tokens = settings.GetOption("tts_streamed_min_start_tokens")
             if min_start_tokens is None or min_start_tokens <= 0:
-                min_start_tokens = 6  # ~240ms warm-up to avoid empty frames
+                min_start_tokens = 6
 
             exaggeration = self.special_settings["exaggeration"]
             temperature = self.special_settings["temperature"]
             if self._loaded_precision_dtype == torch.float16 and temperature < 0.55:
-                temperature = 0.55  # avoid cuda error in fp16 at low temps
-            # Backward-compatible cfg weight lookup
+                temperature = 0.55
             cfg_weight = self.special_settings.get("cfg_weight", self.special_settings.get("cfg", 0.5))
             self.set_seed()
 
-            # Prepare voice map and parse voice-tagged sections
+            # Voice-tag parsing and language
             language = self._use_language(text)
             voices_map = self._build_voice_map(ref_audio)
             voice_sections = self._parse_voice_tagged_text(text)
@@ -1136,17 +1199,17 @@ class Chatterbox(metaclass=SingletonMeta):
                     print("TTS generation finished (streaming)")
                     return torch.zeros(1, 0), self.sample_rate
                 voice_sections = [("main", text)]
-            max_new_tokens = int(self.special_settings.get(
-                "max_new_tokens", 256,
-            ))
-            repetition_penalty = float(self.special_settings.get(
-                "repetition_penalty", 1.2,
-            ))
 
-            # Pre-count total segments for accurate pause placement
-            total_segments = 0
-            voice_sections_seg_lists = []
+            max_new_tokens = int(self.special_settings.get("max_new_tokens", 256))
+            repetition_penalty = float(self.special_settings.get("repetition_penalty", 1.2))
+
+            # Flatten segments with voices
+            flat_segments = []
             for voice_name, voice_text in voice_sections:
+                voice_audio = voices_map.get(voice_name)
+                if voice_audio is None:
+                    print(f"Voice '{voice_name}' not found. Using 'main' voice.")
+                    voice_audio = voices_map.get("main")
                 segs = self.chunk_up_text(
                     voice_text,
                     goal_length=self.chunk_goal_length,
@@ -1154,25 +1217,20 @@ class Chatterbox(metaclass=SingletonMeta):
                     jitter=self.chunk_jitter,
                     custom_split_chars=self.chunk_custom_split_chars
                 )
-                segs = [s for s in segs if str(s).strip()]
-                voice_sections_seg_lists.append((voice_name, segs))
-                total_segments += len(segs)
-            segments_remaining = total_segments
+                for s in segs:
+                    s = str(s)
+                    if s.strip():
+                        flat_segments.append((voice_name, voice_audio, s))
+
             pause_ms = int(self.special_settings.get("pause_between_segments_ms", 0))
+            pause_voice_change_ms = int(self.special_settings.get("pause_between_voice_change_ms", 0))
 
             # For final return, also build the full waveform as we stream
             segment_wavs = []
-            # Streaming hyperparameters aligned with generate()
-            min_p = 0.05
-            top_p = 1.0
-
             last_voice_audio = None
-            for voice_name, seg_list in voice_sections_seg_lists:
-                voice_audio = voices_map.get(voice_name)
-                if voice_audio is None:
-                    print(f"Voice '{voice_name}' not found. Using 'main' voice.")
-                    voice_audio = voices_map.get("main")
+            inserted_any_silence = False
 
+            for idx, (voice_name, voice_audio, segment) in enumerate(flat_segments):
                 # Ensure conditionals for this voice (once per voice switch)
                 if voice_audio != last_voice_audio and voice_audio is not None:
                     try:
@@ -1181,147 +1239,150 @@ class Chatterbox(metaclass=SingletonMeta):
                         pass
                     last_voice_audio = voice_audio
 
-                for idx, segment in enumerate(seg_list):
-                    if not segment.strip():
+                if not segment.strip():
+                    continue
+
+                # Text preprocessing and tokenization
+                seg_text = punc_norm(self._fix_abbreviations(segment))
+                text_tokens = self.model.tokenizer.text_to_tokens(seg_text, language_id=language.lower()).to(self.model.device)
+                # CFG duplication
+                text_tokens = torch.cat([text_tokens, text_tokens], dim=0)
+                # Add SOT/EOT
+                sot = self.model.t3.hp.start_text_token
+                eot = self.model.t3.hp.stop_text_token
+                text_tokens = torch.nn.functional.pad(text_tokens, (1, 0), value=sot)
+                text_tokens = torch.nn.functional.pad(text_tokens, (0, 1), value=eot)
+
+                # Streaming decode for this text chunk
+                emitted_samples = 0
+                cache_source = torch.zeros(1, 1, 0, device=self.model.device)
+                token_stream = self.model.t3.inference_stream(
+                    t3_cond=self.model.conds.t3,
+                    text_tokens=text_tokens,
+                    max_new_tokens=max_new_tokens,
+                    stop_on_eos=True,
+                    do_sample=True,
+                    temperature=temperature,
+                    top_p=1.0,
+                    min_p=0.05,
+                    repetition_penalty=repetition_penalty,
+                    cfg_weight=cfg_weight,
+                    progress=False,
+                )
+
+                # Accumulate the synthesized audio for this segment
+                seg_audio = []
+                collected_tokens = []
+                last_synth_tok_count = 0
+
+                for tid in token_stream:
+                    # Skip SoS/EoS and out-of-range
+                    if tid >= SPEECH_VOCAB_SIZE:
+                        continue
+                    collected_tokens.append(int(tid))
+
+                    # Warm-up: wait until we have a few tokens to avoid empty frames
+                    if len(collected_tokens) < min_start_tokens:
                         continue
 
-                    # Text preprocessing and tokenization (match mtl_tts.generate logic)
-                    seg_text = punc_norm(segment)
-                    text_tokens = self.model.tokenizer.text_to_tokens(seg_text, language_id=language.lower()).to(self.model.device)
-                    # CFG duplication
-                    text_tokens = torch.cat([text_tokens, text_tokens], dim=0)
-                    # Add SOT/EOT
-                    sot = self.model.t3.hp.start_text_token
-                    eot = self.model.t3.hp.stop_text_token
-                    text_tokens = torch.nn.functional.pad(text_tokens, (1, 0), value=sot)
-                    text_tokens = torch.nn.functional.pad(text_tokens, (0, 1), value=eot)
+                    # Synthesize only when we have a full batch of new tokens
+                    if (len(collected_tokens) - last_synth_tok_count) < token_batch_size:
+                        continue
 
-                    # Streaming decode for this text chunk
-                    emitted_samples = 0
-                    cache_source = torch.zeros(1, 1, 0, device=self.model.device)
-                    token_stream = self.model.t3.inference_stream(
-                        t3_cond=self.model.conds.t3,
-                        text_tokens=text_tokens,
-                        max_new_tokens=max_new_tokens,
-                        stop_on_eos=True,
-                        do_sample=True,
-                        temperature=temperature,
-                        top_p=top_p,
-                        min_p=min_p,
-                        repetition_penalty=repetition_penalty,
-                        cfg_weight=cfg_weight,
-                        progress=False,
+                    # Run incremental synthesis for current tokens
+                    stoks = torch.tensor(collected_tokens, dtype=torch.long, device=self.model.device).unsqueeze(0)
+
+                    wav, cache_source = self.model.s3gen.inference(
+                        speech_tokens=stoks,
+                        ref_dict=self.model.conds.gen,
+                        cache_source=cache_source,
+                        finalize=False,
                     )
+                    wav = wav.squeeze(0).detach()
 
-                    # Accumulate the synthesized audio for this segment
-                    seg_audio = []
-                    collected_tokens: list[int] = []
-                    last_synth_tok_count = 0
+                    # Emit only the newly synthesized portion since last push
+                    if wav.size(-1) > emitted_samples:
+                        new_chunk = wav[..., emitted_samples:]
+                        emitted_samples = wav.size(-1)
+                        if new_chunk.numel() > 0:
+                            if tts_volume != 1.0:
+                                new_chunk = new_chunk * float(tts_volume)
+                            seg_audio.append(new_chunk.cpu())
+                            if self.audio_streamer is not None:
+                                pcm_bytes = self.return_pcm_audio(new_chunk.unsqueeze(0))
+                                if pcm_bytes and len(pcm_bytes) > 0:
+                                    self.audio_streamer.add_audio_chunk(pcm_bytes)
 
-                    for tid in token_stream:
-                        # Skip SoS/EoS and out-of-range
-                        if tid >= SPEECH_VOCAB_SIZE:
-                            continue
-                        collected_tokens.append(int(tid))
+                    last_synth_tok_count = len(collected_tokens)
 
-                        # Warm-up: wait until we have a few tokens to avoid empty frames
-                        if len(collected_tokens) < min_start_tokens:
-                            continue
+                # Finalize to flush the model tail for this segment
+                if len(collected_tokens) > 0:
+                    stoks = torch.tensor(collected_tokens, dtype=torch.long, device=self.model.device).unsqueeze(0)
+                    wav, _ = self.model.s3gen.inference(
+                        speech_tokens=stoks,
+                        ref_dict=self.model.conds.gen,
+                        cache_source=cache_source,
+                        finalize=True,
+                    )
+                    wav = wav.squeeze(0).detach()
+                    if wav.size(-1) > emitted_samples:
+                        new_chunk = wav[..., emitted_samples:]
+                        if new_chunk.numel() > 0:
+                            if tts_volume != 1.0:
+                                new_chunk = new_chunk * float(tts_volume)
+                            seg_audio.append(new_chunk.cpu())
+                            if self.audio_streamer is not None:
+                                pcm_bytes = self.return_pcm_audio(new_chunk.unsqueeze(0))
+                                if pcm_bytes and len(pcm_bytes) > 0:
+                                    self.audio_streamer.add_audio_chunk(pcm_bytes)
 
-                        # Synthesize only when we have a full batch of new tokens
-                        if (len(collected_tokens) - last_synth_tok_count) < token_batch_size:
-                            continue
+                # Build per-segment waveform and optional VAD/edge fade
+                if len(seg_audio) > 0:
+                    seg_wave = torch.cat(seg_audio, dim=-1).unsqueeze(0)
+                else:
+                    seg_wave = torch.zeros(1, 0)
 
-                        # Run incremental synthesis for current tokens
-                        stoks = torch.tensor(collected_tokens, dtype=torch.long, device=self.model.device).unsqueeze(0)
+                if self.special_settings.get("use_vad", False) and seg_wave.numel() > 0:
+                    try:
+                        seg_wave = self._apply_vad_trim(seg_wave, self.sample_rate)
+                    except Exception as e:
+                        print(f"VAD trim (streaming tokens segment) error: {e}")
 
-                        wav, cache_source = self.model.s3gen.inference(
-                            speech_tokens=stoks,
-                            ref_dict=self.model.conds.gen,
-                            cache_source=cache_source,
-                            finalize=False,
-                        )
-                        wav = wav.squeeze(0).detach()
+                seg_edge_fade = int(self.special_settings.get("vad_edge_fade_ms", 0))
+                if seg_edge_fade > 0 and seg_wave is not None and seg_wave.numel() > 0:
+                    fs = bool(self.special_settings.get("vad_trim_start", False))
+                    fe = bool(self.special_settings.get("vad_trim_end", True))
+                    seg_wave = self._apply_asymmetric_edge_fade(seg_wave, self.sample_rate, seg_edge_fade, fs, fe)
 
-                        # Emit only the newly synthesized portion since last push
-                        if wav.size(-1) > emitted_samples:
-                            new_chunk = wav[..., emitted_samples:]
-                            emitted_samples = wav.size(-1)
-                            if new_chunk.numel() > 0:
-                                if tts_volume != 1.0:
-                                    new_chunk = new_chunk * float(tts_volume)
-                                seg_audio.append(new_chunk.cpu())
-                                if self.audio_streamer is not None:
-                                    pcm_bytes = self.return_pcm_audio(new_chunk.unsqueeze(0))
-                                    if pcm_bytes and len(pcm_bytes) > 0:
-                                        self.audio_streamer.add_audio_chunk(pcm_bytes)
+                if seg_wave is not None and seg_wave.numel() > 0:
+                    segment_wavs.append(seg_wave)
 
-                        last_synth_tok_count = len(collected_tokens)
-
-                    # Finalize to flush the model tail for this segment
-                    if len(collected_tokens) > 0:
-                        stoks = torch.tensor(collected_tokens, dtype=torch.long, device=self.model.device).unsqueeze(0)
-                        wav, _ = self.model.s3gen.inference(
-                            speech_tokens=stoks,
-                            ref_dict=self.model.conds.gen,
-                            cache_source=cache_source,
-                            finalize=True,
-                        )
-                        wav = wav.squeeze(0).detach()
-                        if wav.size(-1) > emitted_samples:
-                            new_chunk = wav[..., emitted_samples:]
-                            if new_chunk.numel() > 0:
-                                if tts_volume != 1.0:
-                                    new_chunk = new_chunk * float(tts_volume)
-                                seg_audio.append(new_chunk.cpu())
-                                if self.audio_streamer is not None:
-                                    pcm_bytes = self.return_pcm_audio(new_chunk.unsqueeze(0))
-                                    if pcm_bytes and len(pcm_bytes) > 0:
-                                        self.audio_streamer.add_audio_chunk(pcm_bytes)
-
-                    # Build per-segment waveform and optional VAD/edge fade
-                    if len(seg_audio) > 0:
-                        seg_wave = torch.cat(seg_audio, dim=-1).unsqueeze(0)  # [1, N]
+                # Insert voice-aware pause if there are more segments coming
+                if idx < len(flat_segments) - 1:
+                    next_voice = flat_segments[idx + 1][0]
+                    if next_voice != voice_name and pause_voice_change_ms > 0:
+                        boundary_pause = pause_voice_change_ms
                     else:
-                        seg_wave = torch.zeros(1, 0)
-
-                    if self.special_settings.get("use_vad", False) and seg_wave.numel() > 0:
-                        try:
-                            seg_wave = self._apply_vad_trim(seg_wave, self.sample_rate)
-                        except Exception as e:
-                            print(f"VAD trim (streaming tokens segment) error: {e}")
-
-                    seg_edge_fade = int(self.special_settings.get("vad_edge_fade_ms", 0))
-                    if seg_edge_fade > 0 and seg_wave is not None and seg_wave.numel() > 0:
-                        fs = bool(self.special_settings.get("vad_trim_start", False))
-                        fe = bool(self.special_settings.get("vad_trim_end", True))
-                        seg_wave = self._apply_asymmetric_edge_fade(seg_wave, self.sample_rate, seg_edge_fade, fs, fe)
-
-                    if seg_wave is not None and seg_wave.numel() > 0:
-                        segment_wavs.append(seg_wave)
-
-                    # Stream a pause if configured and if there are more segments coming
-                    segments_remaining -= 1
-                    if pause_ms > 0 and segments_remaining > 0:
-                        silence = self._make_silence(pause_ms, self.sample_rate)
+                        boundary_pause = pause_ms
+                    if boundary_pause and boundary_pause > 0:
+                        silence = self._make_silence(boundary_pause, self.sample_rate)
                         if silence.numel() > 0:
+                            inserted_any_silence = True
+                            segment_wavs.append(silence)
                             if self.audio_streamer is not None:
                                 sil_bytes = self.return_pcm_audio(silence)
                                 if sil_bytes and len(sil_bytes) > 0:
                                     self.audio_streamer.add_audio_chunk(sil_bytes)
-                            # Also add to final assembly
-                            segment_wavs.append(silence)
 
-                    self.garbage_collect()
+                self.garbage_collect()
 
             # Build final waveform for return
             if len(segment_wavs) == 0:
                 final_wave = torch.zeros(1, self.sample_rate // 10)  # 0.1s silence fallback
             else:
                 seg_crossfade_ms = int(self.special_settings.get("segment_crossfade_ms", 0))
-                pause_ms = int(self.special_settings.get("pause_between_segments_ms", 0))
-                if pause_ms > 0:
-                    # segment_wavs already interleaved with silence during streaming; just concat
+                if inserted_any_silence:
+                    # Already interleaved with silences; do not crossfade
                     safe_wavs = [w if w.ndim == 2 else w.reshape(1, -1) for w in segment_wavs if isinstance(w, torch.Tensor) and w.numel() > 0]
                     final_wave = torch.cat(safe_wavs, dim=-1) if safe_wavs else torch.zeros(1, 0)
                 else:
@@ -1827,8 +1888,8 @@ class Chatterbox(metaclass=SingletonMeta):
                 if not trim_start and not trim_end:
                     return wav if isinstance(wav, torch.Tensor) and wav.ndim == 2 else wav_t.unsqueeze(0)
 
-                s_edge = merged[0][0] if trim_start else 0
-                e_edge = merged[-1][1] if trim_end else n
+                s_edge = merged[0][0] if trim_start else n
+                e_edge = merged[-1][1] if trim_end else 0
                 # Ensure valid ordering
                 s_edge = max(0, min(s_edge, n))
                 e_edge = max(0, min(e_edge, n))
@@ -1886,3 +1947,119 @@ class Chatterbox(metaclass=SingletonMeta):
                 return torch.zeros(1, 0)
             return wav if isinstance(wav, torch.Tensor) and wav.ndim == 2 else torch.as_tensor(wav, dtype=torch.float32).reshape(1, -1)
 
+    def _fix_abbreviations(self, text: str):
+        """Context-aware abbreviation fixer.
+        For ALL-CAPS tokens (>=2 chars), convert to dotted letters (e.g., GPU -> G.P.U.)
+        except:
+        - If token is in known_abbreviations_replaces mapping, use that mapping value.
+        - If both immediate neighbor words (prev/next) are also ALL-CAPS tokens (i.e., shouting block), skip.
+        The replacement is applied only if at least one neighbor word (length>=2) is NOT an ALL-CAPS abbreviation,
+        which prevents converting full ALL-CAPS sentences and ignores single-letter neighbors like 'I'.
+        """
+        replace_abbreviations = settings.GetOption("replace_abbreviations")
+        if not isinstance(text, str) or not replace_abbreviations or not text:
+            return text
+
+        known_abbreviations_replaces = {
+            "NASA": "NASA",
+            "NATO": "NATO",
+            "UNESCO": "UNESCO",
+            "UNICEF": "UNICEF",
+            "OPEC": "OPEC",
+            "CERN": "CERN",
+            "FIFA": "FIFA",
+            "UEFA": "UEFA",
+            "ESA": "ESA",
+            "BREXIT": "BREXIT",
+            "AIDS": "AIDS",
+            "SARS": "SARS",
+            "MERS": "MERS",
+            "COVID": "COVID",
+            "PIN": "PIN",
+            "SWAT": "SWAT",
+            "RAM": "RAM",
+            "ROM": "ROM",
+            "SETI": "SETI",
+            "CUDA": "CUDA",
+            "LASER": "LASER",
+            "RADAR": "RADAR",
+            "SONAR": "SONAR",
+            "BIOS": "BIOS",
+            "CAPTCHA": "CAPTCHA",
+            "AJAX": "AJAX",
+            "RAID": "RAID",
+            "YAML": "YAML",
+            "GIF": "GIF",
+            "JPEG": "J.PEG",
+            "TAR": "TAR",
+            "VR": "V. R. ",
+            "AI": "A. I. ",
+            "KI": "K. I. ",
+        }
+
+        # Tokenize words; keep spans to reconstruct
+        word_iter = list(re.finditer(r"\b\w+\b", text))
+        if not word_iter:
+            return text
+
+        def is_allcaps_abbrev(tok: str) -> bool:
+            return bool(re.fullmatch(r"[A-Z0-9]{2,}", tok or ""))
+
+        def is_len_ge2(tok: str) -> bool:
+            return tok is not None and len(tok) >= 2
+
+        replace_indices = set()
+        for idx, m in enumerate(word_iter):
+            tok = m.group(0)
+            if not is_allcaps_abbrev(tok):
+                continue
+            prev_is_abbrev = None
+            next_is_abbrev = None
+            prev_len_ge2 = False
+            next_len_ge2 = False
+            # previous word
+            if idx - 1 >= 0:
+                prev_tok = word_iter[idx - 1].group(0)
+                prev_is_abbrev = is_allcaps_abbrev(prev_tok)
+                prev_len_ge2 = is_len_ge2(prev_tok)
+            # next word
+            if idx + 1 < len(word_iter):
+                next_tok = word_iter[idx + 1].group(0)
+                next_is_abbrev = is_allcaps_abbrev(next_tok)
+                next_len_ge2 = is_len_ge2(next_tok)
+
+            # Consider neighbors only if they are length>=2
+            cond_prev = (prev_len_ge2 and (prev_is_abbrev is False))
+            cond_next = (next_len_ge2 and (next_is_abbrev is False))
+
+            # If inside a run of ALL-CAPS (prev or next is ALL-CAPS of len>=2), be strict:
+            # require the other side to be a non-abbrev len>=2 to convert.
+            in_caps_run = (prev_len_ge2 and (prev_is_abbrev is True)) or (next_len_ge2 and (next_is_abbrev is True))
+            if in_caps_run:
+                if cond_prev or cond_next:
+                    replace_indices.add(idx)
+            else:
+                # Not in a caps run: convert if either side (len>=2) is clearly non-abbrev
+                if cond_prev or cond_next:
+                    replace_indices.add(idx)
+
+        if not replace_indices:
+            return text
+
+        # Reconstruct with replacements applied
+        out = []
+        last = 0
+        for i, m in enumerate(word_iter):
+            s, e = m.span()
+            out.append(text[last:s])
+            tok = m.group(0)
+            if i in replace_indices:
+                repl = known_abbreviations_replaces.get(tok)
+                if repl is None:
+                    repl = ".".join(list(tok)) + "."
+                out.append(repl)
+            else:
+                out.append(tok)
+            last = e
+        out.append(text[last:])
+        return "".join(out)
