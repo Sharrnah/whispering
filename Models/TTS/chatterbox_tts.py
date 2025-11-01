@@ -154,12 +154,12 @@ class Chatterbox(metaclass=SingletonMeta):
         "repetition_penalty": 1.9,
 
         "seed": -1,
-        "temperature": 0.8,
+        "temperature": 0.5,
         "exaggeration": 0.5,
-        "cfg": 0.5,
-        "use_vad": True,
+        "cfg": 0.2,
+        "use_vad": False,
         # VAD/trim configs
-        "vad_confidence": 0.5,         # speech probability threshold
+        "vad_confidence": 0.2,         # speech probability threshold
         "vad_pad_ms": 20,              # pad before/after speech segments
         "vad_gap_merge_ms": 40,        # merge gaps shorter than this
         "vad_frame_len": 512,          # VAD frame length in samples at 16k
@@ -176,7 +176,13 @@ class Chatterbox(metaclass=SingletonMeta):
         "final_edge_fade_ms": 0,
         # Pause between segments (ms). If > 0, a silence of this duration is inserted between segments
         # and takes precedence over segment crossfade.
-        "pause_between_segments_ms": 400,
+        "pause_between_segments_ms": 80,
+        # Extra pause specifically when the next segment switches [voice_name]; if > 0, this value
+        # replaces pause_between_segments_ms at voice boundaries.
+        "pause_between_voice_change_ms": 400,
+        # Apply Noisereduce per generated segment/chunk (affects streaming playback and final assembly)
+        # No final-pass NR will be applied.
+        "noise_reduction_per_segment": False,
     }
 
     # Cache for prepared voice conditionals: key -> Conditionals
@@ -195,6 +201,7 @@ class Chatterbox(metaclass=SingletonMeta):
 
     # VAD (lazy)
     _vad_instance = None
+    _nr_instance = None  # cache Noisereduce singleton
 
     def __init__(self):
         self.set_compute_device(settings.GetOption("tts_ai_device"))
@@ -839,6 +846,48 @@ class Chatterbox(metaclass=SingletonMeta):
             return torch.zeros(1, 0)
         return torch.zeros(1, n, dtype=torch.float32)
 
+    def _apply_final_noise_reduction(self, wav: torch.Tensor, sample_rate: int) -> torch.Tensor:
+        """Optionally apply project Noisereduce on the final waveform; returns original on failure or disabled.
+        Accepts [1,N] float32 in [-1,1] and returns same shape/range.
+        """
+        try:
+            # Guard by the per-segment toggle only
+            if not bool(self.special_settings.get("noise_reduction_per_segment", False)):
+                return wav
+            # Guard empty
+            if wav is None or (isinstance(wav, torch.Tensor) and wav.numel() == 0):
+                return wav
+            # Normalize to 1D float tensor
+            x = wav.detach().cpu().float()
+            x1 = x.squeeze(0) if x.ndim == 2 else x.reshape(-1)
+            if x1.numel() == 0:
+                return wav
+            # Convert to int16 PCM bytes
+            x1 = torch.clamp(x1, -1.0, 1.0)
+            i16 = (x1 * 32767.0).round().to(torch.int16).numpy()
+            pcm_bytes = i16.tobytes()
+            # Call project noise reducer (cached instance)
+            try:
+                if self._nr_instance is None:
+                    from ..STS.Noisereduce import Noisereduce as _NoiseReducer
+                    self._nr_instance = _NoiseReducer()
+                out_bytes = self._nr_instance.enhance_audio(
+                    pcm_bytes, sample_rate=sample_rate, output_sample_rate=sample_rate,
+                    input_channels=1, output_channels=1
+                )
+                # Convert back to float tensor [1,N]
+                np_i16 = np.frombuffer(out_bytes, dtype=np.int16)
+                if np_i16.size == 0:
+                    return wav
+                y = torch.from_numpy(np_i16.astype(np.float32) / 32768.0).unsqueeze(0)
+                return y
+            except Exception as ex:
+                print(f"Noise reduction unavailable or failed: {ex}")
+                return wav
+        except Exception as e:
+            print(f"Noise reduction wrapper failed: {e}")
+            return wav
+
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         try:
             print("TTS requested Chatterbox TTS")
@@ -1014,6 +1063,7 @@ class Chatterbox(metaclass=SingletonMeta):
                         fe = bool(self.special_settings.get("vad_trim_end", True))
                         wav = self._apply_asymmetric_edge_fade(wav, sample_rate, seg_edge_fade, fs, fe)
                     if isinstance(wav, torch.Tensor) and wav.numel() > 0:
+                        wav = self._apply_final_noise_reduction(wav, sample_rate)
                         audio_chunks.append(wav)
                         if self.audio_streamer is not None:
                             wav_bytes = self.return_pcm_audio(wav)
@@ -1031,11 +1081,6 @@ class Chatterbox(metaclass=SingletonMeta):
                                     self.audio_streamer.add_audio_chunk(sil_bytes)
 
             final_wave = torch.cat(audio_chunks, dim=-1) if audio_chunks else torch.zeros(1, 0)
-            if self.special_settings.get("use_vad", False) and final_wave.numel() > 0:
-                try:
-                    final_wave = self._apply_vad_trim(final_wave, self.sample_rate)
-                except Exception as e:
-                    print(f"VAD trim (streaming final) error: {e}")
             # Apply optional final edge fade
             final_fade_ms = int(self.special_settings.get("final_edge_fade_ms", 0))
             if final_fade_ms > 0 and final_wave is not None and final_wave.numel() > 0:
@@ -1285,16 +1330,6 @@ class Chatterbox(metaclass=SingletonMeta):
                     else:
                         safe_wavs = [w if w.ndim == 2 else w.reshape(1, -1) for w in segment_wavs if isinstance(w, torch.Tensor) and w.numel() > 0]
                         final_wave = torch.cat(safe_wavs, dim=-1) if safe_wavs else torch.zeros(1, 0)
-
-            # Optional final VAD trim and edge fade
-            if self.special_settings.get("use_vad", False) and final_wave.numel() > 0:
-                try:
-                    final_wave = self._apply_vad_trim(final_wave, self.sample_rate)
-                except Exception as e:
-                    print(f"VAD trim (streaming tokens final) error: {e}")
-            final_fade_ms = int(self.special_settings.get("final_edge_fade_ms", 0))
-            if final_fade_ms > 0 and final_wave is not None and final_wave.numel() > 0:
-                final_wave = self._apply_edge_fade(final_wave, self.sample_rate, final_fade_ms)
 
             self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
             print("TTS generation finished (streaming)")
