@@ -18,10 +18,11 @@ vad_fallback_server = {
     "sha256": "3a24b1e4a2d3075c6ff467d05cda35705e490ee7e0088acbeb436fb456c4f7df",
 }
 
-class VAD(metaclass=SingletonMeta):
+#class VAD(metaclass=SingletonMeta):
+class VAD:
     _vad_model = None
     _vad_utils = None
-    vad_frames_per_buffer = 1536
+    vad_frames_per_buffer = 512
 
     def __init__(self, vad_thread_num=1):
         torch.set_num_threads(vad_thread_num)
@@ -72,6 +73,9 @@ class VAD(metaclass=SingletonMeta):
         return True
 
     def set_vad_frames_per_buffer(self, vad_frames_per_buffer):
+        if vad_frames_per_buffer != 512 and vad_frames_per_buffer != 256:
+            print("Warning: vad_frames_per_buffer should be 512 or 256. Using 512.")
+            vad_frames_per_buffer = 512
         self.vad_frames_per_buffer = vad_frames_per_buffer
 
     def get_vad_frames_per_buffer(self):
