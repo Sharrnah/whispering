@@ -138,7 +138,8 @@ class Chatterbox(metaclass=SingletonMeta):
     language_code_converter = None
     # Configurable chunking parameters
     chunk_goal_length = 130
-    chunk_max_length = 170
+    #chunk_max_length = 170
+    chunk_max_length = None # auto + 30% from goal
     chunk_jitter = 0
     chunk_custom_split_chars = ","
     chunk_valid_ending_chars = ".;!?！。？！\n\""
@@ -149,6 +150,7 @@ class Chatterbox(metaclass=SingletonMeta):
         "precision": "float32",  # can be "float16" or "float32"
         "language": "en",
         "streaming_mode": "segment", # can be "segment" or "token"
+        "segment_goal_length": 130,
 
         "max_new_tokens": 512,
         "repetition_penalty": 2.0,
@@ -177,7 +179,7 @@ class Chatterbox(metaclass=SingletonMeta):
         "replace_abbreviations": True,
         # Pause between segments (ms). If > 0, a silence of this duration is inserted between segments
         # and takes precedence over segment crossfade.
-        "pause_between_segments_ms": 80,
+        "pause_between_segments_ms": 100,
         # Extra pause specifically when the next segment switches [voice_name]; if > 0, this value
         # replaces pause_between_segments_ms at voice boundaries.
         "pause_between_voice_change_ms": 400,
@@ -275,9 +277,12 @@ class Chatterbox(metaclass=SingletonMeta):
     def chunk_up_text(self, text, goal_length=None, max_length=None, jitter=None, custom_split_chars=None):
         # Bark-inspired chunking, improved for Zonos
         if goal_length is None:
-            goal_length = self.chunk_goal_length
+            #goal_length = self.chunk_goal_length
+            goal_length = self.special_settings.get("segment_goal_length", self.chunk_goal_length)
         if max_length is None:
-            max_length = self.chunk_max_length
+            #max_length = self.chunk_max_length
+            # add 30% to goal length
+            max_length = int(goal_length * 1.3)
         if jitter is None:
             jitter = self.chunk_jitter
         if custom_split_chars is None:
@@ -427,9 +432,9 @@ class Chatterbox(metaclass=SingletonMeta):
         self._loaded_precision_dtype = None
 
     def garbage_collect(self):
-        #if torch.cuda.is_available():
-        #    torch.cuda.empty_cache()
-        #gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
         pass
 
 
@@ -924,8 +929,8 @@ class Chatterbox(metaclass=SingletonMeta):
                 # Chunk the text for this voice
                 segments = self.chunk_up_text(
                     voice_text,
-                    goal_length=self.chunk_goal_length,
-                    max_length=self.chunk_max_length,
+                    #goal_length=self.chunk_goal_length,
+                    #max_length=self.chunk_max_length,
                     jitter=self.chunk_jitter,
                     custom_split_chars=self.chunk_custom_split_chars
                 )
@@ -1057,8 +1062,8 @@ class Chatterbox(metaclass=SingletonMeta):
                     voice_audio = voices_map.get("main")
                 segs = self.chunk_up_text(
                     voice_text,
-                    goal_length=self.chunk_goal_length,
-                    max_length=self.chunk_max_length,
+                    #goal_length=self.chunk_goal_length,
+                    #max_length=self.chunk_max_length,
                     jitter=self.chunk_jitter,
                     custom_split_chars=self.chunk_custom_split_chars
                 )
@@ -1214,8 +1219,8 @@ class Chatterbox(metaclass=SingletonMeta):
                     voice_audio = voices_map.get("main")
                 segs = self.chunk_up_text(
                     voice_text,
-                    goal_length=self.chunk_goal_length,
-                    max_length=self.chunk_max_length,
+                    #goal_length=self.chunk_goal_length,
+                    #max_length=self.chunk_max_length,
                     jitter=self.chunk_jitter,
                     custom_split_chars=self.chunk_custom_split_chars
                 )
