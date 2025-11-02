@@ -717,7 +717,7 @@ class KokoroTTS(metaclass=SingletonMeta):
 
     def list_voices(self):
         self.update_voices()
-        return [voice["name"] for voice in self._get_voices()]
+        return [{"name": voice["name"], "value": voice["name"]} for voice in self._get_voices()]
 
     def get_voice_by_name(self, voice_name):
         for voice in self._get_voices():

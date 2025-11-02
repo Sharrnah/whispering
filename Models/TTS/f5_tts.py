@@ -622,7 +622,9 @@ class F5TTS(metaclass=SingletonMeta):
 
     def list_voices(self):
         self.update_voices()
-        return [voice["name"] for voice in self._get_voices()]
+        voice_list = [{"name": voice["name"], "value": voice["name"]} for voice in self._get_voices()]
+        voice_list.append({"name": "open_voice_dir", "value": "open_dir:"+str(voices_path.resolve())})
+        return voice_list
 
     def get_voice_by_name(self, voice_name):
         for voice in self._get_voices():

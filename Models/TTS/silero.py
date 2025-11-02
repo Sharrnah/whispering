@@ -264,7 +264,12 @@ class Silero(metaclass=SingletonMeta):
             return []
         speaker_list = self.model.speakers
         speaker_list.append('last')
-        return speaker_list
+
+        # build json list
+        voice_list_dict = []
+        for speaker in speaker_list:
+            voice_list_dict.append({"name": speaker, "value": speaker})
+        return voice_list_dict
 
     def set_language(self, lang):
         self.lang = lang
