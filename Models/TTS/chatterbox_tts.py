@@ -1958,7 +1958,7 @@ class Chatterbox(metaclass=SingletonMeta):
         The replacement is applied only if at least one neighbor word (length>=2) is NOT an ALL-CAPS abbreviation,
         which prevents converting full ALL-CAPS sentences and ignores single-letter neighbors like 'I'.
         """
-        replace_abbreviations = settings.GetOption("replace_abbreviations")
+        replace_abbreviations = bool(self.special_settings.get("replace_abbreviations", True))
         if not isinstance(text, str) or not replace_abbreviations or not text:
             return text
 
@@ -2005,7 +2005,7 @@ class Chatterbox(metaclass=SingletonMeta):
             return text
 
         def is_allcaps_abbrev(tok: str) -> bool:
-            return bool(re.fullmatch(r"[A-Z0-9]{2,}", tok or ""))
+            return bool(re.fullmatch(r"[A-Z]{2,}", tok or ""))
 
         def is_len_ge2(tok: str) -> bool:
             return tok is not None and len(tok) >= 2
