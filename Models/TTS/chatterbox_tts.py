@@ -156,7 +156,7 @@ class Chatterbox(metaclass=SingletonMeta):
         "repetition_penalty": 2.0,
 
         "seed": -1,
-        "temperature": 0.8,
+        "temperature": 0.5,
         "exaggeration": 0.5,
         "cfg": 0.2,
         "use_vad": False,
@@ -903,6 +903,7 @@ class Chatterbox(metaclass=SingletonMeta):
             print(f"Noise reduction wrapper failed: {e}")
             return wav
 
+    @torch.inference_mode()
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         try:
             print("TTS requested Chatterbox TTS")
@@ -1021,6 +1022,7 @@ class Chatterbox(metaclass=SingletonMeta):
             self.last_generation = {"audio": err_wave, "sample_rate": self.sample_rate}
             return err_wave, self.sample_rate
 
+    @torch.inference_mode()
     def tts_streaming(self, text, ref_audio=None):
         self._ensure_special_settings()
         backend = self._get_model_type().lower()
@@ -1145,12 +1147,14 @@ class Chatterbox(metaclass=SingletonMeta):
                 final_wave = self._apply_edge_fade(final_wave, self.sample_rate, final_fade_ms)
 
             self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
+            print("TTS generation finished (streaming) 100%")
             return final_wave, self.sample_rate
         except Exception as ex:
             print(f"TTS() failed: {ex}")
             traceback.print_exc()
             err_wave = torch.zeros(1, 0)
             self.last_generation = {"audio": err_wave, "sample_rate": self.sample_rate}
+            print("TTS generation failed (streaming)")
             return err_wave, self.sample_rate
 
     def tts_streaming_tokens(self, text, ref_audio=None):
