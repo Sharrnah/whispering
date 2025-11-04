@@ -186,6 +186,7 @@ class Chatterbox(metaclass=SingletonMeta):
         # Apply Noisereduce per generated segment/chunk (affects streaming playback and final assembly)
         # No final-pass NR will be applied.
         "noise_reduction_per_segment": False,
+        "noise_reduction_strength": 0.8,
     }
 
     # Cache for prepared voice conditionals: key -> Conditionals
@@ -887,7 +888,7 @@ class Chatterbox(metaclass=SingletonMeta):
                     self._nr_instance = _NoiseReducer()
                 out_bytes = self._nr_instance.enhance_audio(
                     pcm_bytes, sample_rate=sample_rate, output_sample_rate=sample_rate,
-                    input_channels=1, output_channels=1
+                    input_channels=1, output_channels=1, strength=float(self.special_settings.get("noise_reduction_strength", 0.5))
                 )
                 # Convert back to float tensor [1,N]
                 np_i16 = np.frombuffer(out_bytes, dtype=np.int16)
