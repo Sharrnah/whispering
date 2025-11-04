@@ -55,7 +55,7 @@ class DeepFilterNet(metaclass=SingletonMeta):
         sound = sound.squeeze()  # depends on the use case
         return sound
 
-    def enhance_audio(self, audio_bytes, sample_rate=16000, output_sample_rate=16000, input_channels=1, output_channels=1):
+    def enhance_audio(self, audio_bytes, sample_rate=16000, output_sample_rate=16000, input_channels=1, output_channels=1, strength=1.0):
         enhanced_sample_rate = self.df_state.sr()
         audio_bytes = audio_tools.resample_audio(audio_bytes, sample_rate, enhanced_sample_rate, 1,
                                                  input_channels=input_channels).tobytes()

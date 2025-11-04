@@ -23,13 +23,13 @@ class Noisereduce(metaclass=SingletonMeta):
         sound = sound.squeeze()  # depends on the use case
         return sound
 
-    def enhance_audio(self, audio_bytes, sample_rate=16000, output_sample_rate=16000, input_channels=1, output_channels=1):
+    def enhance_audio(self, audio_bytes, sample_rate=16000, output_sample_rate=16000, input_channels=1, output_channels=1, strength=1.0):
         audio_full_int16 = np.frombuffer(audio_bytes, np.int16)
         audio_bytes = self.int2float(audio_full_int16)
 
         audio_tensor = torch.frombuffer(audio_bytes, dtype=torch.float32).unsqueeze_(0)
         # reduce noise on tensor
-        enhanced_audio = nr.reduce_noise(y=audio_tensor, sr=sample_rate)
+        enhanced_audio = nr.reduce_noise(y=audio_tensor, sr=sample_rate, prop_decrease=strength)
 
         # convert torch tensor to bytes
         enhanced_audio = torch.as_tensor(enhanced_audio)

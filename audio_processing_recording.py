@@ -375,8 +375,13 @@ class AudioProcessor:
                         ########
                         # denoise using a ring buffer (to always work over a larger audio snipped.
                         ########
+                        denoise_strength = self.settings.GetOption("denoise_strength")
                         test_audio_buffered = self.audio_filter_buffer.get_ordered_buffer()
-                        test_audio_chunk_buffered_enhanced = self.audio_enhancer.enhance_audio(test_audio_buffered, sample_rate=self.default_sample_rate, output_sample_rate=self.default_sample_rate)
+                        test_audio_chunk_buffered_enhanced = self.audio_enhancer.enhance_audio(test_audio_buffered,
+                                                                                               sample_rate=self.default_sample_rate,
+                                                                                               output_sample_rate=self.default_sample_rate,
+                                                                                               strength=denoise_strength
+                                                                                               )
                         chunk_length = len(test_audio_chunk)
                         test_audio_chunk_denoise = test_audio_chunk_buffered_enhanced[-chunk_length:].tobytes()
                         # check confidence and peak amplitude again with denoised audio chunk
@@ -477,7 +482,8 @@ class AudioProcessor:
                         wavefiledata) > 0:
                     # denoise audio
                     if self.settings.GetOption("denoise_audio") != "" and self.audio_enhancer is not None:
-                        wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata).tobytes()
+                        denoise_strength = self.settings.GetOption("denoise_strength")
+                        wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata, strength=denoise_strength).tobytes()
 
                     # call sts plugin methods
                     if self.plugins is not None:
@@ -635,7 +641,8 @@ class AudioProcessor:
                         if wavefiledata is not None and len(wavefiledata) > 0:
                             # denoise audio
                             if self.settings.GetOption("denoise_audio") != "" and self.audio_enhancer is not None:
-                                wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata).tobytes()
+                                denoise_strength = self.settings.GetOption("denoise_strength")
+                                wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata, strength=denoise_strength).tobytes()
 
                             wave_file_bytes = audio_tools.audio_bytes_to_wav(wavefiledata, channels=CHANNELS,
                                                                              sample_rate=SAMPLE_RATE)

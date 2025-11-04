@@ -791,7 +791,8 @@ if __name__ == '__main__':
 
                     # denoise audio
                     if settings.SETTINGS.GetOption("denoise_audio") == "deepfilter" and audio_enhancer is not None:
-                        audio_data = audio_enhancer.enhance_audio(audio_data).tobytes()
+                        denoise_strength = settings.SETTINGS.GetOption("denoise_strength")
+                        audio_data = audio_enhancer.enhance_audio(audio_data, strength=denoise_strength).tobytes()
 
                     # add audio data to the queue
                     wav_audio_bytes = audio_tools.audio_bytes_to_wav(audio_data, channels=CHANNELS, sample_rate=SAMPLE_RATE)
