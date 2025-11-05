@@ -12,7 +12,7 @@ DEFAULT_SETTINGS_PATH = Path(Path.cwd() / "Profiles" / 'settings.yaml')
 DEBOUNCE_TIME = 1.5  # 1.5 second, adjust as necessary
 
 NON_PERSISTENT_SETTINGS = [
-    "stt_enabled",
+    "stt_enabled", "tts_answer",
     "whisper_languages", "lang_swap", "verbose",
     "transl_result_textarea_savetts_voice", "transl_result_textarea_sendtts_download",
     "plugin_timer_stopped", "plugin_current_timer", "websocket_final_messages",
