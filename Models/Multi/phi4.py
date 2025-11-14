@@ -347,7 +347,7 @@ class Phi4(metaclass=SingletonMeta):
                 self.model_path.resolve(),
                 trust_remote_code=True,
                 device_map=None,
-                torch_dtype=main_torch_dtype,
+                dtype=main_torch_dtype,
                 _attn_implementation=attention_implementation,
                 quantization_config=quantization_config,
             )
@@ -360,7 +360,7 @@ class Phi4(metaclass=SingletonMeta):
                 self.model_path.resolve(),
                 trust_remote_code=True,
                 device_map=None,
-                torch_dtype=main_torch_dtype,
+                dtype=main_torch_dtype,
                 _attn_implementation='sdpa',
             )
             self.model.to(self.compute_device)

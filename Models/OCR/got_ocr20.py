@@ -82,7 +82,7 @@ class Got_ocr_20(metaclass=SingletonMeta):
             self.download_model("GOT_OCR_2.0")
 
             websocket.set_loading_state("ocr_loading", True)
-            self.model = AutoModelForImageTextToText.from_pretrained(str(model_path.resolve()), torch_dtype=self.torch_dtype, device_map=self.device)
+            self.model = AutoModelForImageTextToText.from_pretrained(str(model_path.resolve()), dtype=self.torch_dtype, device_map=self.device)
             self.processor = AutoProcessor.from_pretrained(str(model_path.resolve()))
             websocket.set_loading_state("ocr_loading", False)
         except Exception as e:

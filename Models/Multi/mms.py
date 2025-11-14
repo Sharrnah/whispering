@@ -8626,10 +8626,10 @@ class Mms(metaclass=SingletonMeta):
                 print(f"MMS {model_size} is Loading to {device} using {compute_type} precision...")
 
                 self.processor = AutoProcessor.from_pretrained(str(model_path.resolve()),
-                                                               torch_dtype=compute_dtype)
+                                                               dtype=compute_dtype)
 
                 self.model = Wav2Vec2ForCTC.from_pretrained(str(model_path.resolve()),
-                                                            torch_dtype=compute_dtype,
+                                                            dtype=compute_dtype,
                                                             ignore_mismatched_sizes=True,
                                                             load_in_8bit=compute_8bit,
                                                             load_in_4bit=compute_4bit,

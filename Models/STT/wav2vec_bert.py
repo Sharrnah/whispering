@@ -134,7 +134,7 @@ class Wav2VecBert(metaclass=SingletonMeta):
                 self.previous_model = model
                 self.release_model()
                 print(f"Loading wav2vec model: {model} on {device} with {compute_type} precision...")
-                self.model = Wav2Vec2BertForCTC.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit)
+                self.model = Wav2Vec2BertForCTC.from_pretrained(str(Path(self.model_cache_path / model).resolve()), dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit)
                 if not compute_8bit and not compute_4bit:
                     self.model = self.model.to(self.compute_device)
                 self.processor = Wav2Vec2BertProcessor.from_pretrained(str(Path(self.model_cache_path / model).resolve()))

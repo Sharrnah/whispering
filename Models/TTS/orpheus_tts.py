@@ -340,7 +340,7 @@ class OrpheusTTS(metaclass=SingletonMeta):
                 attention_implementation = 'flash_attention_2'
 
             self.model = AutoModelForCausalLM.from_pretrained(str(Path(cache_path / model).resolve()),
-                                                              torch_dtype=torch.bfloat16,
+                                                              dtype=torch.bfloat16,
                                                               #torch_dtype=torch.float16,
                                                               quantization_config=quantization_config,
 

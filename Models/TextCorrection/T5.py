@@ -126,10 +126,10 @@ class TextCorrectionT5(metaclass=SingletonMeta):
                 self.previous_model = model
                 self.release_model()
                 print(f"Loading T5 model: {model} on {device} with {compute_type} precision...")
-                self.model = T5ForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit)
+                self.model = T5ForConditionalGeneration.from_pretrained(str(Path(self.model_cache_path / model).resolve()), dtype=compute_dtype, load_in_8bit=compute_8bit, load_in_4bit=compute_4bit)
                 if not compute_8bit and not compute_4bit:
                     self.model = self.model.to(self.compute_device)
-                self.tokenizer = T5Tokenizer.from_pretrained(str(Path(self.model_cache_path / model).resolve()), torch_dtype=compute_dtype)
+                self.tokenizer = T5Tokenizer.from_pretrained(str(Path(self.model_cache_path / model).resolve()), dtype=compute_dtype)
                 self.prompt_template = self.MODEL_LINKS[model].get("prompt_template", "")
                 self.capitalize_text = self.MODEL_LINKS[model].get("capitalize", False)
                 self.cleanup = self.MODEL_LINKS[model].get("cleanup", None)

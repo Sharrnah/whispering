@@ -8,13 +8,8 @@ tqdm==4.66.4
 rich==13.5.3
 more-itertools==10.3.0
 librosa==0.10.2.post1
-#transformers==4.33.2
-#transformers @ https://github.com/Sharrnah/transformers/archive/refs/heads/add_seamless-m4t.zip
-#transformers @ https://github.com/huggingface/transformers/archive/84724efd101af52ed3d6af878e41ff8fd651a9cc.zip
-#transformers==4.35.0
-#transformers @ https://github.com/huggingface/transformers/archive/235e5d4991e8a0984aa78db91087b49622c7740e.zip
-#transformers==4.43.3
-transformers==4.55.3
+#transformers==4.57.1
+transformers @ https://github.com/Sharrnah/transformers/archive/refs/heads/audioflamingo3.zip
 
 timm==1.0.17
 

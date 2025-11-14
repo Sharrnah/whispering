@@ -15,11 +15,19 @@ from transformers.generation.configuration_utils import (GenerationConfig,
                                                          GenerationMode)
 from transformers.generation.logits_process import LogitsProcessorList
 from transformers.generation.stopping_criteria import StoppingCriteriaList
-from transformers.generation.utils import (NEED_SETUP_CACHE_CLASSES_MAPPING,
-                                           GenerateDecoderOnlyOutput,
-                                           GenerateEncoderDecoderOutput,
-                                           GenerateNonBeamOutput,
-                                           GenerateOutput, logger)
+try:
+    from transformers.generation.utils import (NEED_SETUP_CACHE_CLASSES_MAPPING,
+                                               GenerateDecoderOnlyOutput,
+                                               GenerateEncoderDecoderOutput,
+                                               GenerateNonBeamOutput,
+                                               GenerateOutput, logger)
+except ImportError:
+    # Fallback for transformers versions where NEED_SETUP_CACHE_CLASSES_MAPPING is not exposed
+    from transformers.generation.utils import (GenerateDecoderOnlyOutput,
+                                               GenerateEncoderDecoderOutput,
+                                               GenerateNonBeamOutput,
+                                               GenerateOutput, logger)
+    NEED_SETUP_CACHE_CLASSES_MAPPING = {}
 from transformers.integrations import is_deepspeed_zero3_enabled
 from transformers.modeling_outputs import Seq2SeqLMOutput
 from transformers.utils import ModelOutput

@@ -76,6 +76,16 @@ def call_plugin_sts(plugins, wavefiledata, sample_rate):
                 plugin_inst.sts(wavefiledata, sample_rate)
             except Exception as e:
                 print("Error in plugin sts method: " + str(e))
+                traceback.print_exc()
+
+def call_plugin_realtime_sts(plugins, wavefiledata, sample_rate):
+    for plugin_inst in plugins:
+        if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'realtime_sts'):
+            try:
+                plugin_inst.realtime_sts(wavefiledata, sample_rate)
+            except Exception as e:
+                print("Error in plugin realtime_sts method: " + str(e))
+                traceback.print_exc()
 
 
 def process_audio_chunk(audio_chunk, sample_rate, vad_model=None):
@@ -299,6 +309,9 @@ class AudioProcessor:
                         self.mic_passthrough_queue.put_nowait(in_data)
                     except queue.Full:
                         pass  # If still full, proceed without returning early
+
+
+        threading.Thread(target=call_plugin_realtime_sts, args=(self.plugins, in_data, self.recorded_sample_rate), daemon=False).start()
 
         if not self.settings.GetOption("stt_enabled"):
             return None, pyaudio.paContinue

@@ -561,7 +561,7 @@ Have a conversation with an AI using your reference voice!
                 show_info("Loading chat model...")
                 model_name = "Qwen/Qwen2.5-3B-Instruct"
                 chat_model_state = AutoModelForCausalLM.from_pretrained(
-                    model_name, torch_dtype="auto", device_map="auto"
+                    model_name, dtype="auto", device_map="auto"
                 )
                 chat_tokenizer_state = AutoTokenizer.from_pretrained(model_name)
                 show_info("Chat model loaded.")
@@ -575,7 +575,7 @@ Have a conversation with an AI using your reference voice!
 
         if chat_model_state is None:
             model_name = "Qwen/Qwen2.5-3B-Instruct"
-            chat_model_state = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype="auto", device_map="auto")
+            chat_model_state = AutoModelForCausalLM.from_pretrained(model_name, dtype="auto", device_map="auto")
             chat_tokenizer_state = AutoTokenizer.from_pretrained(model_name)
 
     with chat_interface_container:

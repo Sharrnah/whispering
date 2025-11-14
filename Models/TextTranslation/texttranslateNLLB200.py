@@ -484,7 +484,7 @@ def load_model(size="small", compute_type="float32"):
 
     torch_dtype = torch.float16 if compute_type == "float16" else torch.float32
 
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_path_string, torch_dtype=torch_dtype).to(torch_device)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_path_string, dtype=torch_dtype).to(torch_device)
     if torch_device == 'cuda':
         model = model.half()
     tokenizer = AutoTokenizer.from_pretrained(model_path_string, token=True, return_tensors="pt")

@@ -240,10 +240,10 @@ class SeamlessM4T(metaclass=SingletonMeta):
         # facebook/seamless-m4t-medium
 
         self.processor = AutoProcessor.from_pretrained(str(model_path.resolve()),
-                                                       torch_dtype=self.precision)
+                                                       dtype=self.precision)
         if model_size.endswith("-v2"):
             self.model = SeamlessM4Tv2Model.from_pretrained(str(model_path.resolve()),
-                                                            torch_dtype=self.precision,
+                                                            dtype=self.precision,
                                                             ignore_mismatched_sizes=True,
                                                             low_cpu_mem_usage=True,
                                                             load_in_8bit=self.load_in_8bit,
@@ -251,7 +251,7 @@ class SeamlessM4T(metaclass=SingletonMeta):
                                                             )
         else:
             self.model = SeamlessM4TModel.from_pretrained(str(model_path.resolve()),
-                                                          torch_dtype=self.precision,
+                                                          dtype=self.precision,
                                                           ignore_mismatched_sizes=True,
                                                           low_cpu_mem_usage=True,
                                                           load_in_8bit=self.load_in_8bit,

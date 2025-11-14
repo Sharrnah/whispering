@@ -190,7 +190,7 @@ class Voxtral(metaclass=SingletonMeta):
                 Path(self.model_path / model).resolve(),
                 trust_remote_code=True,
                 device_map=self.compute_device_str,
-                torch_dtype=main_torch_dtype,
+                dtype=main_torch_dtype,
                 _attn_implementation=attention_implementation,
                 quantization_config=quantization_config,
             )
@@ -202,7 +202,7 @@ class Voxtral(metaclass=SingletonMeta):
                 Path(self.model_path / model).resolve(),
                 trust_remote_code=True,
                 device_map=self.compute_device_str,
-                torch_dtype=main_torch_dtype,
+                dtype=main_torch_dtype,
                 _attn_implementation='sdpa',
             ).cpu()
 
