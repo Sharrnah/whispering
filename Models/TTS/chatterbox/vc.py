@@ -25,6 +25,7 @@ class ChatterboxVC:
         self.sr = S3GEN_SR
         self.s3gen = s3gen
         self.device = device
+        self._cached_voice_path = None  # Cache for target voice path
         if ref_dict is None:
             self.ref_dict = None
         else:
@@ -76,16 +77,26 @@ class ChatterboxVC:
         return cls.from_local(Path(local_path).parent, device, dtype=dtype)
 
     def set_target_voice(self, wav_fpath):
+        # Check cache - only process if voice path has changed
+        if self._cached_voice_path == wav_fpath and self.ref_dict is not None:
+            return  # Voice already loaded, skip processing
+
         ## Load reference wav
         s3gen_ref_wav, _sr = librosa.load(wav_fpath, sr=S3GEN_SR)
 
         s3gen_ref_wav = s3gen_ref_wav[:self.DEC_COND_LEN]
         self.ref_dict = self.s3gen.embed_ref(s3gen_ref_wav, S3GEN_SR, device=self.device)
 
+        # Update cache with the newly loaded voice path
+        self._cached_voice_path = wav_fpath
+
     def generate(
         self,
         audio,
         target_voice_path=None,
+        n_timesteps=10,
+        temperature=1.0,
+        flow_cfg_scale=0.7
     ):
         if target_voice_path:
             self.set_target_voice(target_voice_path)
@@ -100,6 +111,9 @@ class ChatterboxVC:
             wav, _ = self.s3gen.inference(
                 speech_tokens=s3_tokens,
                 ref_dict=self.ref_dict,
+                n_timesteps=n_timesteps,
+                temperature=temperature,
+                flow_cfg_scale=flow_cfg_scale
             )
             wav = wav.squeeze(0).detach().cpu().numpy()
         return torch.from_numpy(wav).unsqueeze(0).float()

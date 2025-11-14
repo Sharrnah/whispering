@@ -35,7 +35,7 @@ class ConditionalCFM(BASECFM):
         self.lock = threading.Lock()
 
     @torch.inference_mode()
-    def forward(self, mu, mask, n_timesteps, temperature=1.0, spks=None, cond=None, prompt_len=0, flow_cache=torch.zeros(1, 80, 0, 2)):
+    def forward(self, mu, mask, n_timesteps, temperature=1.0, spks=None, cond=None, prompt_len=0, flow_cache=torch.zeros(1, 80, 0, 2), flow_cfg_scale=None):
         """Forward diffusion
 
         Args:
@@ -53,6 +53,9 @@ class ConditionalCFM(BASECFM):
             sample: generated mel-spectrogram
                 shape: (batch_size, n_feats, mel_timesteps)
         """
+
+        if flow_cfg_scale is not None:
+            self.inference_cfg_rate = flow_cfg_scale
 
         z = torch.randn_like(mu).to(mu.device).to(mu.dtype) * temperature
         cache_size = flow_cache.shape[2]
@@ -191,7 +194,7 @@ class CausalConditionalCFM(ConditionalCFM):
         self.rand_noise = torch.randn([1, 80, 50 * 300])
 
     @torch.inference_mode()
-    def forward(self, mu, mask, n_timesteps, temperature=1.0, spks=None, cond=None):
+    def forward(self, mu, mask, n_timesteps, temperature=1.0, spks=None, cond=None, flow_cfg_scale=None, **kwargs):
         """Forward diffusion
 
         Args:
@@ -209,6 +212,9 @@ class CausalConditionalCFM(ConditionalCFM):
             sample: generated mel-spectrogram
                 shape: (batch_size, n_feats, mel_timesteps)
         """
+
+        if flow_cfg_scale is not None:
+            self.inference_cfg_rate = flow_cfg_scale
 
         z = self.rand_noise[:, :, :mu.size(2)].to(mu.device).to(mu.dtype) * temperature
         # fix prompt and overlap part mu and z

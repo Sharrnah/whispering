@@ -132,7 +132,11 @@ class MaskedDiffWithXvec(torch.nn.Module):
                   prompt_feat,
                   prompt_feat_len,
                   embedding,
-                  flow_cache):
+                  flow_cache,
+                  n_timesteps=10,
+                  temperature=1.0,
+                  flow_cfg_scale=0.7
+                  ):
         if self.fp16 is True:
             prompt_feat = prompt_feat.half()
             embedding = embedding.half()
@@ -171,9 +175,11 @@ class MaskedDiffWithXvec(torch.nn.Module):
             mask=mask.unsqueeze(1),
             spks=embedding,
             cond=conds,
-            n_timesteps=10,
+            n_timesteps=n_timesteps,
             prompt_len=mel_len1,
-            flow_cache=flow_cache
+            flow_cache=flow_cache,
+            temperature=temperature,
+            flow_cfg_scale=flow_cfg_scale
         )
         feat = feat[:, :, mel_len1:]
         assert feat.shape[2] == mel_len2
@@ -250,7 +256,11 @@ class CausalMaskedDiffWithXvec(torch.nn.Module):
                   prompt_feat,
                   prompt_feat_len,
                   embedding,
-                  finalize):
+                  finalize,
+                  n_timesteps=10,
+                  temperature=1.0,
+                  flow_cfg_scale=0.7
+                  ):
         if self.fp16 is True:
             prompt_feat = prompt_feat.half()
             embedding = embedding.half()
@@ -293,7 +303,9 @@ class CausalMaskedDiffWithXvec(torch.nn.Module):
             mask=mask.unsqueeze(1),
             spks=embedding,
             cond=conds,
-            n_timesteps=10
+            n_timesteps=n_timesteps,
+            temperature=temperature,
+            flow_cfg_scale=flow_cfg_scale,
         )
         feat = feat[:, :, mel_len1:]
         assert feat.shape[2] == mel_len2

@@ -62,6 +62,27 @@ TTS_MODEL_LINKS = {
         },
         "path": "chatterbox-multilingual",
     },
+    "chatterbox-czech": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/chatterbox-czech.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/chatterbox-tts/chatterbox-czech.zip",
+            "https://s3.libs.space:9000/ai-models/chatterbox-tts/chatterbox-czech.zip",
+        ],
+        "checksum": "0a4eda5504e39de0c3aa85d2265dde0d3618824c843977597695cc841b2866dc",
+        "file_checksums": {
+            "Cangjie5_TC.json": "7073fd9de919443ae88e0bd2449917a65fe54898a4413ed1edcc4b67f28bce8c",
+            "conds.pt": "6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e",
+            "grapheme_mtl_merged_expanded_v1.json": "df81a7ca7c31796cbe97f7a7142d5a53b12e88e12417ebe98f66602cafaf0461",
+            "mtl_tokenizer.json": "e7f9364e2c279b2de19f417a83624d9887532a56daec2ddddac470cc71693253",
+            "s3gen.safetensors": "2b78103c654207393955e4900aac14a12de8ef25f4b09424f1ef91941f161d4e",
+            "spacy_ontonotes\\features.msgpack": "fd4322482a7018b9bce9216173ae9d2848efe6d310b468bbb4383fb55c874a18",
+            "spacy_ontonotes\\weights.npz": "5ada075eb25a854f71d6e6fa4e7d55e7be0ae049255b1f8f19d05c13b1b68c9e",
+            "t3_mtl23ls_v2.safetensors": "8f7cd33428bf610cce6e906ceaf6b076d9e35934f2b89a25d36a89e66f0217f3",
+            "tokenizer.json": "d71e3a44eabb1784df9a68e9f95b251ecbf1a7af6a9f50835856b2ca9d8c14a5",
+            "ve.safetensors": "f0921cab452fa278bc25cd23ffd59d36f816d7dc5181dd1bef9751a7fb61f63c"
+        },
+        "path": "chatterbox-czech",
+    },
     "chatterbox-multilingual-onnx": {
         "urls": [
             "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/chatterbox-multilingual-onnx.zip",
@@ -121,6 +142,7 @@ TTS_MODEL_LINKS = {
 
 model_list = {
     "Default": ["chatterbox-multilingual"],
+    "Czech": ["chatterbox-czech"],
     "ONNX": ["chatterbox-multilingual-onnx"],
 }
 
@@ -156,7 +178,7 @@ class Chatterbox(metaclass=SingletonMeta):
         "repetition_penalty": 2.0,
 
         "seed": -1,
-        "temperature": 0.5,
+        "temperature": 0.2,
         "exaggeration": 0.5,
         "cfg": 0.2,
         "use_vad": False,
@@ -517,9 +539,28 @@ class Chatterbox(metaclass=SingletonMeta):
         else:
             if self.model is None:
                 print(f"Loading Chatterbox TTS model {model} on device {self.compute_device_str} with precision {dtype}")
-                self.model = ChatterboxMultilingualTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
-                self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
+                self.model = ChatterboxMultilingualTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype, do_compile=False)
+                #self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
                 self._loaded_precision_dtype = dtype
+
+    def load_vc_model(self, dtype=None):
+        model = self._get_model_name()
+        self.set_compute_device(settings.GetOption('tts_ai_device'))
+        if "custom" not in model:
+            model_directory = Path(cache_path / TTS_MODEL_LINKS[model]["path"])
+        else:
+            model_directory = Path(cache_path / model)
+            os.makedirs(model_directory, exist_ok=True)
+        if "custom" not in model:
+            self.download_model(model)
+        self.download_model("voices")
+
+        # Determine dtype: from arg or special settings
+        if dtype is None:
+            desired_precision = self.special_settings.get("precision", "float32")
+            dtype = self._precision_string_to_dtype(desired_precision)
+
+        self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
 
     def list_models(self):
         return model_list
@@ -527,7 +568,7 @@ class Chatterbox(metaclass=SingletonMeta):
     def list_models_indexed(self):
         return tuple([{"language": language, "models": models} for language, models in self.list_models().items()])
 
-    def _get_voices(self):
+    def get_voices(self):
         return self.voice_list
 
     def update_voices(self):
@@ -546,12 +587,12 @@ class Chatterbox(metaclass=SingletonMeta):
 
     def list_voices(self):
         self.update_voices()
-        voice_list = [{"name": voice["name"], "value": voice["name"]} for voice in self._get_voices()]
+        voice_list = [{"name": voice["name"], "value": voice["name"]} for voice in self.get_voices()]
         voice_list.append({"name": "open_voice_dir", "value": "open_dir:"+str(voices_path.resolve())})
         return voice_list
 
     def get_voice_by_name(self, voice_name):
-        for voice in self._get_voices():
+        for voice in self.get_voices():
             if voice["name"] == voice_name:
                 return voice
         return None
@@ -600,7 +641,7 @@ class Chatterbox(metaclass=SingletonMeta):
 
     def _build_voice_map(self, main_ref_audio):
         """Build a map of voice name -> audio file path, including 'main'."""
-        voices_map = {v["name"]: v["audio_filename"] for v in self._get_voices()}
+        voices_map = {v["name"]: v["audio_filename"] for v in self.get_voices()}
         voices_map["main"] = self._resolve_main_voice_audio(main_ref_audio)
         return voices_map
 
@@ -1421,11 +1462,23 @@ class Chatterbox(metaclass=SingletonMeta):
         print("TTS requested Chatterbox TTS (Streaming ONNX Tokens) — falling back to segment streaming")
         return self.tts_streaming_segments(text, ref_audio)
 
-    def voice_conversion(self, audio, target_voice_path):
-        # Ensure model precision matches current setting before VC
+    def voice_conversion(self, audio, target_voice_path, settings_args=None):
+        """
+        Convert input audio tensor to target voice using the voice conversion model.
+        settings_args: dict of additional settings to pass to vc_model
+        settings_args = {
+            n_timesteps: 10,
+            temperature: 1.0,
+            flow_cfg_scale: 0.7
+        }
+        """
         self._ensure_special_settings()
         self._ensure_model_for_precision()
-        wav = self.vc_model.generate(audio, target_voice_path=target_voice_path)
+
+        if settings_args is None:
+            settings_args = {}
+
+        wav = self.vc_model.generate(audio, target_voice_path=target_voice_path, **settings_args)
         return wav, self.sample_rate
 
     def init_audio_stream_playback(self):

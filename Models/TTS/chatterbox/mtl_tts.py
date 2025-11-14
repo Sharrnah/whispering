@@ -44,6 +44,7 @@ SUPPORTED_LANGUAGES = {
   "sw": "Swahili",
   "tr": "Turkish",
   "zh": "Chinese",
+  "cz": "Czech", # Czech needs separate model
 }
 
 
@@ -163,7 +164,7 @@ class ChatterboxMultilingualTTS:
         return SUPPORTED_LANGUAGES.copy()
 
     @classmethod
-    def from_local(cls, ckpt_dir, device, dtype = torch.float16) -> 'ChatterboxMultilingualTTS':
+    def from_local(cls, ckpt_dir, device, dtype = torch.float16, do_compile = False) -> 'ChatterboxMultilingualTTS':
         ckpt_dir = Path(ckpt_dir)
 
         ve = VoiceEncoder()
@@ -176,6 +177,9 @@ class ChatterboxMultilingualTTS:
         #     ve.to(dtype)
         ve.eval()
 
+        if do_compile:
+            ve = torch.compile(ve)
+
         t3 = T3(T3Config.multilingual())
         t3_state = load_safetensors(ckpt_dir / "t3_mtl23ls_v2.safetensors")
         if "model" in t3_state.keys():
@@ -186,6 +190,9 @@ class ChatterboxMultilingualTTS:
             t3.to(dtype)
         t3.eval()
 
+        if do_compile:
+            t3 = torch.compile(t3)
+
         s3gen = S3Gen()
         s3gen.load_state_dict(
             load_safetensors(ckpt_dir / "s3gen.safetensors"), strict=False
@@ -195,6 +202,9 @@ class ChatterboxMultilingualTTS:
         # if device in ["cuda"]:
         #     s3gen.to(dtype)
         s3gen.eval()
+
+        if do_compile:
+            s3gen = torch.compile(s3gen)
 
         tokenizer = MTLTokenizer(
             str(ckpt_dir / "grapheme_mtl_merged_expanded_v1.json")
