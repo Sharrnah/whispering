@@ -454,6 +454,21 @@ class Chatterbox(metaclass=SingletonMeta):
         # Reset precision tracker on release
         self._loaded_precision_dtype = None
 
+    def release_vc_model(self):
+        if self.vc_model is not None:
+            if hasattr(self.vc_model, 'model'):
+                del self.vc_model.model
+            if hasattr(self.vc_model, 'feature_extractor'):
+                del self.vc_model.feature_extractor
+            if hasattr(self.vc_model, 'hf_tokenizer'):
+                del self.vc_model.hf_tokenizer
+            del self.vc_model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        # Reset precision tracker on release
+        self._loaded_precision_dtype = None
+
     def garbage_collect(self):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -542,8 +557,10 @@ class Chatterbox(metaclass=SingletonMeta):
                 self.model = ChatterboxMultilingualTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype, do_compile=False)
                 #self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
                 self._loaded_precision_dtype = dtype
+                print("Chatterbox TTS model loaded.")
 
     def load_vc_model(self, dtype=None):
+        print(f"Loading Chatterbox VC model on device {self.compute_device_str} with precision {dtype}")
         model = self._get_model_name()
         self.set_compute_device(settings.GetOption('tts_ai_device'))
         if "custom" not in model:
@@ -561,6 +578,7 @@ class Chatterbox(metaclass=SingletonMeta):
             dtype = self._precision_string_to_dtype(desired_precision)
 
         self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
+        print("Chatterbox VC model loaded.")
 
     def list_models(self):
         return model_list
@@ -1473,7 +1491,6 @@ class Chatterbox(metaclass=SingletonMeta):
         }
         """
         self._ensure_special_settings()
-        self._ensure_model_for_precision()
 
         if settings_args is None:
             settings_args = {}
