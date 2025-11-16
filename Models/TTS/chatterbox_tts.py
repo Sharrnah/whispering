@@ -560,7 +560,7 @@ class Chatterbox(metaclass=SingletonMeta):
                 print("Chatterbox TTS model loaded.")
 
     def load_vc_model(self, dtype=None):
-        print(f"Loading Chatterbox VC model on device {self.compute_device_str} with precision {dtype}")
+        print(f"Loading VC model on device {self.compute_device_str} with precision {dtype}")
         model = self._get_model_name()
         self.set_compute_device(settings.GetOption('tts_ai_device'))
         if "custom" not in model:
@@ -578,7 +578,7 @@ class Chatterbox(metaclass=SingletonMeta):
             dtype = self._precision_string_to_dtype(desired_precision)
 
         self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
-        print("Chatterbox VC model loaded.")
+        print("VC model loaded.")
 
     def list_models(self):
         return model_list
