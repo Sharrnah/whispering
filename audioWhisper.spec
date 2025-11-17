@@ -17,7 +17,7 @@ except Exception:
     pass
 
 hiddenimports = [
-    'torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers', 'transformers.models.nllb', 'sentencepiece',
+    'torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers', 'transformers.models.nllb', 'torchcodec', 'sentencepiece',
     'df.deepfilternet3', 'bitsandbytes', 'faiss', 'faiss-cpu', 'praat-parselmouth', 'parselmouth', 'pyworld', 'torchcrepe',
     'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio',
     'pyannote.pipeline', 'pyloudnorm', 'future', 'noisereduce', 'frozendict', 'torch_directml', 'x_transformers', 'inflect', 'backoff',
@@ -63,7 +63,7 @@ datas += copy_metadata('backoff')
 
 # ---- Bundle these as real modules (code + extensions) ----
 for pkg in [
-    'easyocr', 'winsdk', 'ctranslate2', 'torchaudio', 'scipy', 'lazy_loader',
+    'easyocr', 'winsdk', 'ctranslate2', 'torchaudio', 'torchcodec', 'scipy', 'lazy_loader',
     'decorator', 'librosa', 'torchlibrosa', 'sentencepiece', 'transformers',
     'df', 'nltk', 'fairseq', 'bitsandbytes', 'faiss', 'faiss-cpu', 'faiss_cpu',
     'praat-parselmouth', 'praat_parselmouth', 'parselmouth', 'pyworld',
