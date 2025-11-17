@@ -1480,6 +1480,7 @@ class Chatterbox(metaclass=SingletonMeta):
         print("TTS requested Chatterbox TTS (Streaming ONNX Tokens) — falling back to segment streaming")
         return self.tts_streaming_segments(text, ref_audio)
 
+    @torch.inference_mode()
     def voice_conversion(self, audio, target_voice_path, settings_args=None):
         """
         Convert input audio tensor to target voice using the voice conversion model.
