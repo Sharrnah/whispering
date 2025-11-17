@@ -27,6 +27,37 @@ import tempfile
 #        "https://github.com/NVIDIA/TensorRT/tree/master/tools/pytorch-quantization."
 #    )
 
+# parekeet v3 languages:
+# PARAKEET_V3_LANGUAGES = {
+#     "bg": "Bulgarian",
+#     "hr": "Croatian",
+#     "cs": "Czech",
+#     "da": "Danish",
+#     "nl": "Dutch",
+#     "en": "English",
+#     "et": "Estonian",
+#     "fi": "Finnish",
+#     "fr": "French",
+#     "de": "German",
+#     "el": "Greek",
+#     "hu": "Hungarian",
+#     "it": "Italian",
+#     "lv": "Latvian",
+#     "lt": "Lithuanian",
+#     "mt": "Maltese",
+#     "pl": "Polish",
+#     "pt": "Portuguese",
+#     "ro": "Romanian",
+#     "sk": "Slovak",
+#     "sl": "Slovenian",
+#     "es": "Spanish",
+#     "sv": "Swedish",
+#     "ru": "Russian",
+#     "uk": "Ukrainian",
+# }
+PARAKEET_LANGUAGES = {
+    "auto": "Auto",
+}
 
 LANGUAGES = {
     "en": "English",
@@ -71,6 +102,10 @@ class NemoCanary(metaclass=SingletonMeta):
     @staticmethod
     def get_languages():
         return tuple([{"code": code, "name": language} for code, language in LANGUAGES.items()])
+
+    @staticmethod
+    def get_parakeet_languages():
+        return tuple([{"code": code, "name": language} for code, language in PARAKEET_LANGUAGES.items()])
 
     def _str_to_dtype_dict(self, dtype_str):
         if dtype_str == "float16":
@@ -195,6 +230,7 @@ class NemoCanary(metaclass=SingletonMeta):
         with open(os.path.join(directory, filename), 'w') as file:
             yaml.dump(data, file, default_flow_style=False)
 
+    @torch.inference_mode()
     def transcribe(self, audio_sample, task, source_lang=None, target_lang='en',
                    without_timestamps=False, **kwargs) -> dict:
 
@@ -266,14 +302,13 @@ class NemoCanary(metaclass=SingletonMeta):
         if model.startswith("canary-"):
             # Transcribe using the model
             if not self.compute_device.startswith("cuda"):
-                with torch.no_grad():
-                    predicted_text = self.model.transcribe([audio_sample], batch_size=16, verbose=False, **config_kwargs)
+                predicted_text = self.model.transcribe([audio_sample], batch_size=16, verbose=False, **config_kwargs)
             else:
                 with torch.cuda.amp.autocast(dtype=compute_type):
-                    with torch.no_grad():
-                        predicted_text = self.model.transcribe([audio_sample], batch_size=16, verbose=False, **config_kwargs)
+                    predicted_text = self.model.transcribe([audio_sample], batch_size=16, verbose=False, **config_kwargs)
 
-            result_text = predicted_text[0].text
+            if len(predicted_text) > 0:
+                result_text = predicted_text[0].text
 
             if not without_timestamps:
                 timestamp = predicted_text[0].timestamp
@@ -282,7 +317,15 @@ class NemoCanary(metaclass=SingletonMeta):
                     segment_list.append({'text': single_segment['segment'], 'start': single_segment['start'], 'end': single_segment['end']})
 
         elif model.startswith("parakeet-"):
-            with torch.no_grad():
+            config_kwargs = {}
+            if not without_timestamps:
+                config_kwargs["timestamps"] = True
+                predicted_text = self.model.transcribe([audio_sample], verbose=False, **config_kwargs)
+                timestamp = predicted_text[0].timestamp
+                segments = timestamp['segment']
+                for single_segment in segments:
+                    segment_list.append({'text': single_segment['segment'], 'start': single_segment['start'], 'end': single_segment['end']})
+            else:
                 predicted_text = self.model.transcribe([audio_sample], verbose=False)
             result_text = predicted_text[0].text
 

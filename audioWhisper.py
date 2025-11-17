@@ -468,8 +468,11 @@ if __name__ == '__main__':
         elif settings.SETTINGS.GetOption("stt_type") == "wav2vec_bert":
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.wav2vec_bert_get_languages())
         elif settings.SETTINGS.GetOption("stt_type") == "nemo_canary":
-            settings.SETTINGS.SetOption("whisper_languages", audioprocessor.nemo_canary_get_languages())
-        elif settings.SETTINGS.GetOption("stt_type") == "phi4":
+            if settings.SETTINGS.GetOption("model").startswith("parakeet-"):
+                settings.SETTINGS.SetOption("whisper_languages", audioprocessor.nemo_canary_parakeet_get_languages())
+            else:
+                settings.SETTINGS.SetOption("whisper_languages", audioprocessor.nemo_canary_get_languages())
+        elif settings.SETTINGS.GetOption("stt_type") == "phi4" or settings.SETTINGS.GetOption("stt_type") == "phi4-onnx":
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.phi4_get_languages())
         elif settings.SETTINGS.GetOption("stt_type") == "voxtral":
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.voxtral_get_languages())

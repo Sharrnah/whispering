@@ -83,7 +83,7 @@ nltk==3.9
 # NVIDIA Nemo (Canary) dependency
 Cython==3.0.10
 youtokentome @ https://github.com/gburlet/YouTokenToMe/archive/refs/heads/dependencies.zip
-git+https://github.com/NVIDIA/NeMo.git@v2.4.1#egg=nemo_toolkit[asr]
+git+https://github.com/NVIDIA/NeMo.git@v2.5.3#egg=nemo_toolkit[asr]
 #git+https://github.com/NVIDIA/NeMo.git@v2.4.1#egg=nemo_toolkit[asr,tts]
 
 # plugin dependencies

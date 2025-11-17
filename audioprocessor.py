@@ -120,6 +120,9 @@ def wav2vec_bert_get_languages():
 def nemo_canary_get_languages():
     return nemo_canary.NemoCanary.get_languages()
 
+def nemo_canary_parakeet_get_languages():
+    return nemo_canary.NemoCanary.get_parakeet_languages()
+
 def phi4_get_languages():
     return phi4.Phi4.get_languages()
 
