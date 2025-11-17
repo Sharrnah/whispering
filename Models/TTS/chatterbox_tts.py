@@ -766,6 +766,7 @@ class Chatterbox(metaclass=SingletonMeta):
         self._onnx_mapping_path = None
         self._onnx_engine = None
 
+    @torch.inference_mode()
     def tts_generator(self, text, ref_audio=None, language="en"):
         #with self.stop_flag_lock:
         #    self.stop_flag = False
@@ -1081,7 +1082,6 @@ class Chatterbox(metaclass=SingletonMeta):
             self.last_generation = {"audio": err_wave, "sample_rate": self.sample_rate}
             return err_wave, self.sample_rate
 
-    @torch.inference_mode()
     def tts_streaming(self, text, ref_audio=None):
         self._ensure_special_settings()
         backend = self._get_model_type().lower()
@@ -1093,6 +1093,7 @@ class Chatterbox(metaclass=SingletonMeta):
         else:
             return self.tts_streaming_segments(text, ref_audio)
 
+    @torch.inference_mode()
     def tts_streaming_segments(self, text, ref_audio=None):
         try:
             print("TTS requested Chatterbox TTS (Streaming)")
@@ -1234,6 +1235,7 @@ class Chatterbox(metaclass=SingletonMeta):
             self.last_generation = {"audio": err_wave, "sample_rate": self.sample_rate}
             return err_wave, self.sample_rate
 
+    @torch.inference_mode()
     def _tts_streaming_tokens_impl(self, text, ref_audio=None):
         try:
             # Ensure runtime settings and playback are initialized
