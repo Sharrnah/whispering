@@ -106,8 +106,9 @@ class SpeakerDiarization(metaclass=SingletonMeta):
             _apply_torch_load_patch_if_needed()
 
             self.pipeline = Pipeline.from_pretrained(pipeline_path)
-            self.pipeline.to(torch.device("cuda"))
-            print("pyannote pipeline loaded")
+            device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+            self.pipeline.to(device)
+            print("pyannote pipeline loaded on device:", device)
             # initialize audio reader
             self._io = Audio()
 
