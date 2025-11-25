@@ -181,13 +181,14 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
             (final_audio or (not final_audio and audio_timestamp > last_audio_timestamp)):
 
         if final_audio:
+            osc_enabled = osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled")
             if not verbose:
                 try:
-                    print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": " + predicted_text.encode('utf-8',
+                    print("Transcribe" + (" (OSC)" if osc_enabled else "") + ": " + predicted_text.encode('utf-8',
                                                                                                             'ignore').decode(
                         'utf-8', 'ignore'))
                 except:
-                    print("Transcribe" + (" (OSC)" if osc_ip != "0" else "") + ": ???")
+                    print("Transcribe" + (" (OSC)" if osc_enabled else "") + ": ???")
 
             else:
                 try:
