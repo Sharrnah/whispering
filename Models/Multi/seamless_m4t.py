@@ -2,7 +2,7 @@ import os
 
 import scipy
 #from transformers import AutoProcessor, SeamlessM4TModel, SeamlessM4TConfig
-from transformers import AutoProcessor, SeamlessM4TModel, SeamlessM4Tv2Model
+from transformers import AutoProcessor, SeamlessM4TModel, SeamlessM4Tv2Model, BitsAndBytesConfig
 
 from pathlib import Path
 import torch
@@ -239,6 +239,14 @@ class SeamlessM4T(metaclass=SingletonMeta):
         print(f"Seamless-M4T {model_size} is Loading to {self.device} using {self.compute_type_name} precision...")
         # facebook/seamless-m4t-medium
 
+
+        quantization_config = None
+        if self.load_in_8bit:
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=False,
+                load_in_8bit=self.load_in_8bit
+            )
+
         self.processor = AutoProcessor.from_pretrained(str(model_path.resolve()),
                                                        dtype=self.precision)
         if model_size.endswith("-v2"):
@@ -246,7 +254,7 @@ class SeamlessM4T(metaclass=SingletonMeta):
                                                             dtype=self.precision,
                                                             ignore_mismatched_sizes=True,
                                                             low_cpu_mem_usage=True,
-                                                            load_in_8bit=self.load_in_8bit,
+                                                            quantization_config=quantization_config,
                                                             #config=configuration)
                                                             )
         else:
@@ -254,7 +262,7 @@ class SeamlessM4T(metaclass=SingletonMeta):
                                                           dtype=self.precision,
                                                           ignore_mismatched_sizes=True,
                                                           low_cpu_mem_usage=True,
-                                                          load_in_8bit=self.load_in_8bit,
+                                                          quantization_config=quantization_config,
                                                           #config=configuration)
                                                           )
 
