@@ -339,6 +339,8 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
     osc_port = settings.GetOption("osc_port")
     websocket_ip = settings.GetOption("websocket_ip")
 
+    message = predicted_text
+
     second_translation_enabled = settings.GetOption("txt_second_translation_enabled")
     second_translation_wrap = settings.GetOption("txt_second_translation_wrap")
     second_translation_wrap = second_translation_wrap.replace("\\n", "\n")
@@ -360,15 +362,6 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
 
     # Send over OSC
     if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and predicted_text != "":
-        osc_notify = final_audio and settings.GetOption("osc_typing_indicator")
-
-        osc_send_type = settings.GetOption("osc_send_type")
-        osc_chat_limit = settings.GetOption("osc_chat_limit")
-        osc_time_limit = settings.GetOption("osc_time_limit")
-        osc_scroll_time_limit = settings.GetOption("osc_scroll_time_limit")
-        osc_initial_time_limit = settings.GetOption("osc_initial_time_limit")
-        osc_scroll_size = settings.GetOption("osc_scroll_size")
-        osc_max_scroll_size = settings.GetOption("osc_max_scroll_size")
         osc_type_transfer_split = settings.GetOption("osc_type_transfer_split")
         osc_type_transfer_split = replace_osc_placeholders(osc_type_transfer_split, result_obj, settings)
 
@@ -388,45 +381,58 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
 
         message = build_whisper_translation_osc_prefix(result_obj, settings) + osc_text
 
-        if second_translation_enabled and second_translations:
-            for lang, text in second_translations.items():
-                message += second_translation_wrap + text
-                result_obj["txt_translation"] += second_translation_wrap + text
-                result_obj["txt_translation_target"] += "|"+lang
+    # do regular stuff like translating and sending websocket message (in between OSC stuff)
+    if second_translation_enabled and second_translations:
+        for lang, text in second_translations.items():
+            message += second_translation_wrap + text
+            result_obj["txt_translation"] += second_translation_wrap + text
+            result_obj["txt_translation_target"] += "|"+lang
 
-        # Send to Websocket
-        if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and websocket_ip != "" and final_audio:
-            websocket.BroadcastMessage(json.dumps(result_obj))
-            # threading.Thread(
-            #    target=websocket.BroadcastMessage,
-            #    args=(json.dumps(result_obj),)
-            # ).start()
+    # Send to Websocket
+    if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and websocket_ip != "" and final_audio:
+        websocket.BroadcastMessage(json.dumps(result_obj))
+        # threading.Thread(
+        #    target=websocket.BroadcastMessage,
+        #    args=(json.dumps(result_obj),)
+        # ).start()
 
-        # Send to TTS on final audio
-        if final_audio:
-            streamed_playback = settings.GetOption("tts_streamed_playback")
-            if settings.GetOption("tts_answer") and predicted_text != "" and tts.init():
-                try:
-                    if settings.GetOption("tts_queue_enabled") and hasattr(tts.tts, 'enqueue_tts'):
-                        # Queue mode handles both streaming and non-streaming inside enqueue
-                        tts.tts.enqueue_tts(predicted_text, streaming=streamed_playback)
+    # Send to TTS on final audio
+    if final_audio:
+        streamed_playback = settings.GetOption("tts_streamed_playback")
+        if settings.GetOption("tts_answer") and predicted_text != "" and tts.init():
+            try:
+                if settings.GetOption("tts_queue_enabled") and hasattr(tts.tts, 'enqueue_tts'):
+                    # Queue mode handles both streaming and non-streaming inside enqueue
+                    tts.tts.enqueue_tts(predicted_text, streaming=streamed_playback)
+                else:
+                    if streamed_playback and hasattr(tts.tts, "tts_streaming"):
+                        #tts.tts.tts_streaming(predicted_text)
+                        threading.Thread(
+                           target=tts.tts.tts_streaming,
+                           args=(predicted_text,)
+                        ).start()
                     else:
-                        if streamed_playback and hasattr(tts.tts, "tts_streaming"):
-                            #tts.tts.tts_streaming(predicted_text)
-                            threading.Thread(
-                               target=tts.tts.tts_streaming,
-                               args=(predicted_text,)
-                            ).start()
-                        else:
-                            def play_tts_audio(tts_text):
-                                tts_wav, sample_rate = tts.tts.tts(tts_text)
-                                tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
-                            threading.Thread(
-                                target=play_tts_audio,
-                                args=(predicted_text,)
-                            ).start()
-                except Exception as e:
-                    print("Error while playing TTS audio: " + str(e))
+                        def play_tts_audio(tts_text):
+                            tts_wav, sample_rate = tts.tts.tts(tts_text)
+                            tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
+                        threading.Thread(
+                            target=play_tts_audio,
+                            args=(predicted_text,)
+                        ).start()
+            except Exception as e:
+                print("Error while playing TTS audio: " + str(e))
+
+    # Do last OSC - sending to not block other stuff
+    if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and predicted_text != "":
+        osc_notify = final_audio and settings.GetOption("osc_typing_indicator")
+
+        osc_send_type = settings.GetOption("osc_send_type")
+        osc_chat_limit = settings.GetOption("osc_chat_limit")
+        osc_time_limit = settings.GetOption("osc_time_limit")
+        osc_scroll_time_limit = settings.GetOption("osc_scroll_time_limit")
+        osc_initial_time_limit = settings.GetOption("osc_initial_time_limit")
+        osc_scroll_size = settings.GetOption("osc_scroll_size")
+        osc_max_scroll_size = settings.GetOption("osc_max_scroll_size")
 
         # delay sending message if it is the final audio and until TTS starts playing
         if final_audio and settings.GetOption("osc_delay_until_audio_playback"):
