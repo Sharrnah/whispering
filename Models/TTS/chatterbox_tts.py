@@ -3,6 +3,7 @@ import io
 import os
 import random
 import traceback
+import wave
 from pathlib import Path
 
 import numpy as np
@@ -963,18 +964,19 @@ class Chatterbox(metaclass=SingletonMeta):
             print(f"Noise reduction wrapper failed: {e}")
             return wav
 
-    def stream_tts_segments(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
+    def stream_tts_segments(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True, regenerate_section=None):
         """
         TTS chunk generator that yields (wav: torch.Tensor [1,N], voice_name: str, inserted_silence: bool) tuples.
         Args:
-            text:
-            ref_audio:
-            remove_silence:
-            silence_after_segments:
-            normalize:
+            text: str, input text with optional [voice_name] tags at start of lines
+            ref_audio: str, path to main voice reference audio file
+            remove_silence: bool, whether to apply VAD trimming per segment
+            silence_after_segments: float, seconds of silence to insert between segments
+            normalize: bool, whether to normalize audio levels
+            regenerate_section: dict, optional dict with 'voice_idx' and 'segment_idx' to only regenerate specific segment (indexed from 0)
 
         Returns:
-            Yields tuples of (wav: torch.Tensor [1,N], voice_name: str, inserted_silence: bool)
+            Yields tuples of (wav: torch.Tensor [1,N], voice_name: str, inserted_silence: bool, section_info: dict)
         """
         try:
             print("TTS chunk requested Chatterbox TTS")
@@ -988,10 +990,12 @@ class Chatterbox(metaclass=SingletonMeta):
             if not voice_sections:
                 if has_any_tags:
                     print("Found voice tags but no content associated; skipping tags and returning silence.")
-                    return torch.zeros(1, 0), None, True
+                    return torch.zeros(1, 0), None, True, None
                 voice_sections = [("main", text)]
 
-            for voice_name, voice_text in voice_sections:
+            for voice_idx, (voice_name, voice_text) in enumerate(voice_sections):
+                if regenerate_section is not None and voice_idx != regenerate_section.get("voice_idx", -1):
+                    continue  # skip non-matching voice sections
                 # Resolve voice audio, fallback to main if missing
                 voice_audio = voices_map.get(voice_name)
                 if voice_audio is None:
@@ -1010,6 +1014,8 @@ class Chatterbox(metaclass=SingletonMeta):
                 for idx, (segment) in enumerate(segments):
                     if not segment.strip():
                         continue
+                    if regenerate_section is not None and idx != regenerate_section.get("segment_idx", -1):
+                        continue  # skip non-matching segments
                     wav, sample_rate = self.tts_generator(segment, voice_audio, language=language)
                     # Apply VAD trimming per segment if enabled
                     if self.special_settings.get("use_vad", False):
@@ -1025,7 +1031,7 @@ class Chatterbox(metaclass=SingletonMeta):
                         wav = self._apply_asymmetric_edge_fade(wav, sample_rate, seg_edge_fade, fs, fe)
                     if isinstance(wav, torch.Tensor) and wav.numel() > 0:
                         wav = self._apply_final_noise_reduction(wav, sample_rate)
-                        yield wav, voice_name, False
+                        yield wav, voice_name, False, {"voice_idx": voice_idx, "segment_idx": idx, "text": segment}
                     # Insert voice-aware pause if there are more segments coming
                     if idx < len(segments) - 1:
                         next_voice = segments[idx + 1][0]
@@ -1038,18 +1044,18 @@ class Chatterbox(metaclass=SingletonMeta):
                             silence = self._make_silence(boundary_pause, self.sample_rate)
                             if silence.numel() > 0:
                                 inserted_silence = True
-                                yield silence, voice_name, inserted_silence
+                                yield silence, voice_name, inserted_silence, None
         except Exception as ex:
             print(f"TTS() failed: {ex}")
             traceback.print_exc()
-            yield torch.zeros(1, 0), None, False
+            yield torch.zeros(1, 0), None, False, None
 
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         try:
             print("TTS requested Chatterbox TTS")
             audio_chunks = []
             audio_chunk_voices = []  # track voice per chunk for boundary-aware pauses
-            for wav, voice_name, inserted_silence in self.stream_tts_segments(text, ref_audio, remove_silence, silence_after_segments, normalize):
+            for wav, voice_name, inserted_silence, _ in self.stream_tts_segments(text, ref_audio, remove_silence, silence_after_segments, normalize):
                 audio_chunks.append(wav)
                 audio_chunk_voices.append(voice_name)
 
@@ -1143,7 +1149,7 @@ class Chatterbox(metaclass=SingletonMeta):
 
             audio_chunks = []
             inserted_any_silence = False
-            for wav, voice_name, inserted_silence in self.stream_tts_segments(text, ref_audio):
+            for wav, voice_name, inserted_silence, _ in self.stream_tts_segments(text, ref_audio):
                 audio_chunks.append(wav)
                 if inserted_silence:
                     inserted_any_silence = True
@@ -1440,26 +1446,6 @@ class Chatterbox(metaclass=SingletonMeta):
         """
         print("TTS requested Chatterbox TTS (Streaming ONNX Tokens) — falling back to segment streaming")
         return self.tts_streaming_segments(text, ref_audio)
-
-    def generate_audiobook(self, text, ref_audio=None, target_path=None):
-        print("TTS requested Chatterbox TTS (Audiobook)")
-        self._ensure_special_settings()
-
-        language = self._use_language(text)
-
-        for wav, voice_name, inserted_silence in self.stream_tts_segments(text, ref_audio):
-            wav_bytes = self.return_pcm_audio(wav)
-            if wav_bytes and len(wav_bytes) > 0:
-                # write wav segment to file
-                project_file = os.path.join(target_path, "audiobook_output.wav")
-                os.makedirs(target_path, exist_ok=True)
-                try:
-                    with open(project_file, "ab") as f:
-                        f.write(wav_bytes)
-                    print("100% Finished. TTS file saved to:", project_file)
-                except Exception as e:
-                    print("Failed to save TTS file:", e)
-                    traceback.print_exc()
 
     def voice_conversion(self, audio, target_voice_path, settings_args=None):
         """
