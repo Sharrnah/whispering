@@ -1,4 +1,5 @@
 import io
+import struct
 import threading
 import traceback
 import wave
@@ -1453,3 +1454,101 @@ class AudioStreamer:
         self.p = None
         self.playback_thread = None
         print("Stopped audio streamer")
+
+
+class WavWriter:
+    """
+    General-purpose WAV writer that supports:
+      - PCM int:   int16, int24, int32  (format code 1)
+      - Float:     float32              (format code 3, IEEE_FLOAT)
+
+    You must feed it raw bytes in the correct format (little-endian).
+    """
+    def __init__(self, path: str, sample_rate: int, num_channels: int, sample_format: str):
+        """
+        sample_format: 'float32', 'int16', 'int24', 'int32'
+        """
+        self.path = path
+        self.sample_rate = sample_rate
+        self.num_channels = num_channels
+        self.sample_format = sample_format
+        self.bytes_written = 0
+
+        audio_format, bits_per_sample = self._resolve_format(sample_format)
+        self.audio_format = audio_format
+        self.bits_per_sample = bits_per_sample
+
+        self._f = open(path, "wb")
+        self._write_header_placeholder()
+
+    def _resolve_format(self, sample_format: str):
+        sf = sample_format.lower()
+        if sf == "float32":
+            # IEEE float
+            return 3, 32
+        elif sf == "int16":
+            return 1, 16
+        elif sf == "int24":
+            return 1, 24
+        elif sf == "int32":
+            return 1, 32
+        else:
+            raise ValueError(f"Unsupported sample_format: {sample_format!r} "
+                             "(use 'float32', 'int16', 'int24', or 'int32')")
+
+    def _write_header_placeholder(self):
+        f = self._f
+        num_channels = self.num_channels
+        sample_rate = self.sample_rate
+        bits_per_sample = self.bits_per_sample
+        audio_format = self.audio_format
+
+        block_align = num_channels * bits_per_sample // 8
+        byte_rate = sample_rate * block_align
+
+        # RIFF chunk descriptor
+        f.write(b"RIFF")
+        f.write(struct.pack("<I", 0))   # ChunkSize placeholder, patched on close
+        f.write(b"WAVE")
+
+        # fmt subchunk
+        f.write(b"fmt ")
+        f.write(struct.pack("<I", 16))  # Subchunk1Size for PCM/IEEE_FLOAT
+        f.write(struct.pack("<H", audio_format))
+        f.write(struct.pack("<H", num_channels))
+        f.write(struct.pack("<I", sample_rate))
+        f.write(struct.pack("<I", byte_rate))
+        f.write(struct.pack("<H", block_align))
+        f.write(struct.pack("<H", bits_per_sample))
+
+        # data subchunk header
+        f.write(b"data")
+        f.write(struct.pack("<I", 0))   # Subchunk2Size placeholder, patched on close
+
+    def write_frames(self, pcm_bytes: bytes):
+        """
+        Append raw sample bytes (already in the correct format, little-endian).
+        """
+        if not pcm_bytes:
+            return
+        self._f.write(pcm_bytes)
+        self.bytes_written += len(pcm_bytes)
+
+    def close(self):
+        if self._f is None:
+            return
+
+        f = self._f
+        data_size = self.bytes_written
+        riff_size = 36 + data_size  # 4 + (8+16) + (8+data_size)
+
+        # Patch RIFF ChunkSize at offset 4
+        f.seek(4)
+        f.write(struct.pack("<I", riff_size))
+
+        # Patch data Subchunk2Size at offset 40
+        f.seek(40)
+        f.write(struct.pack("<I", data_size))
+
+        f.close()
+        self._f = None
