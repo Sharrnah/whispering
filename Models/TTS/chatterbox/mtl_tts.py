@@ -280,6 +280,7 @@ class ChatterboxMultilingualTTS:
         repetition_penalty=2.0,
         min_p=0.05,
         top_p=1.0,
+        progress: bool=False,
     ):
         # Validate language_id
         if language_id and language_id.lower() not in SUPPORTED_LANGUAGES:
@@ -333,6 +334,7 @@ class ChatterboxMultilingualTTS:
                 repetition_penalty=repetition_penalty,
                 min_p=min_p,
                 top_p=top_p,
+                progress=progress,
             )
             # Extract only the conditional batch.
             speech_tokens = speech_tokens[0]

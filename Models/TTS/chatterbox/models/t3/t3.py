@@ -5,7 +5,6 @@ from typing import Union, Optional, List, Generator
 
 logger = logging.getLogger(__name__)
 
-from tqdm import tqdm
 import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
@@ -238,6 +237,7 @@ class T3(nn.Module):
         length_penalty=1.0,
         repetition_penalty=1.2,
         cfg_weight=0.5,
+        progress: bool=False,
     ):
         """
         Args:
@@ -342,7 +342,13 @@ class T3(nn.Module):
         past = output.past_key_values
 
         # ---- Generation Loop using kv_cache ----
-        for i in tqdm(range(max_new_tokens), desc="Sampling", dynamic_ncols=True):
+        # Use a plain range by default; wrap with tqdm only when progress is requested
+        iterator = range(max_new_tokens)
+        if progress:
+            from tqdm import tqdm  # local import to avoid hard dependency when unused
+            iterator = tqdm(iterator, desc="Sampling", dynamic_ncols=True)
+
+        for i in iterator:
             logits_step = output.logits[:, -1, :]
             # CFG combine  → (1, V)
             cond   = logits_step[0:1, :]
@@ -487,6 +493,7 @@ class T3(nn.Module):
         steps = max_new_tokens or self.hp.max_speech_tokens
         iterator = range(steps)
         if progress:
+            from tqdm import tqdm  # local import to avoid hard dependency when unused
             iterator = tqdm(iterator, desc="Sampling (stream)", dynamic_ncols=True)
 
         for i in iterator:

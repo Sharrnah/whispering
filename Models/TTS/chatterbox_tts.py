@@ -211,7 +211,7 @@ class Chatterbox(metaclass=SingletonMeta):
         "noise_reduction_per_segment": False,
         "noise_reduction_strength": 0.8,
         "audio_book_projects_path": "",
-        "reload_every": 5,  # reload model every N generations to fix slowdowns
+        "reload_every": 10,  # reload model every N generations to fix slowdowns
     }
 
     # Cache for prepared voice conditionals: key -> Conditionals
@@ -801,7 +801,7 @@ class Chatterbox(metaclass=SingletonMeta):
         self._onnx_mapping_path = None
         self._onnx_engine = None
 
-    def tts_generator(self, text, ref_audio=None, language="en"):
+    def tts_generator(self, text, ref_audio=None, language="en", progress=True):
         #with self.stop_flag_lock:
         #    self.stop_flag = False
         self._ensure_special_settings()
@@ -868,7 +868,7 @@ class Chatterbox(metaclass=SingletonMeta):
             text_in = self._fix_abbreviations(text)
 
             # Only pass language; avoid audio_prompt_path to prevent re-encoding
-            wav = self.model.generate(text_in, language_id=language, **generate_kwargs)
+            wav = self.model.generate(text_in, language_id=language, progress=progress, **generate_kwargs)
 
             if tts_normalize:
                 wav, _ = audio_tools.normalize_audio_lufs(
@@ -997,7 +997,7 @@ class Chatterbox(metaclass=SingletonMeta):
             print(f"Noise reduction wrapper failed: {e}")
             return wav
 
-    def stream_tts_segments(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True, regenerate_section=None):
+    def stream_tts_segments(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True, progress=True, regenerate_section=None):
         """
         TTS chunk generator that yields (wav: torch.Tensor [1,N], voice_name: str, inserted_silence: bool) tuples.
         Args:
@@ -1006,6 +1006,7 @@ class Chatterbox(metaclass=SingletonMeta):
             remove_silence: bool, whether to apply VAD trimming per segment
             silence_after_segments: float, seconds of silence to insert between segments
             normalize: bool, whether to normalize audio levels
+            progress: bool, whether to show progress during generation
             regenerate_section: dict, optional dict with 'voice_idx' and 'segment_idx' to only regenerate specific segment (indexed from 0)
 
         Returns:
@@ -1050,7 +1051,7 @@ class Chatterbox(metaclass=SingletonMeta):
                         continue
                     if regenerate_section is not None and idx != regenerate_section.get("segment_idx", -1):
                         continue  # skip non-matching segments
-                    wav, sample_rate = self.tts_generator(segment, voice_audio, language=language)
+                    wav, sample_rate = self.tts_generator(segment, voice_audio, language=language, progress=progress)
                     # Apply VAD trimming per segment if enabled
                     # Use remove_silence parameter if provided, otherwise fall back to use_vad setting
                     should_remove_silence = self.special_settings.get("use_vad", False)
@@ -2165,3 +2166,81 @@ class Chatterbox(metaclass=SingletonMeta):
             last = e
         out.append(text[last:])
         return "".join(out)
+
+    def estimate_remaining_time(self, total_segments, segment_times, segments_for_estimate=3, last_x_segments=None):
+        """
+        Estimates the remaining time based on the average time of specified segment times.
+
+        Parameters:
+        total_segments (int): Total number of segments.
+        segment_times (list): List of times taken for each segment.
+        segments_for_estimate (int): Minimum number of segments needed to start estimating.
+        last_x_segments (int, optional): Number of recent segments to use for estimating the average time.
+                                         If None, all available segments are used.
+
+        Returns:
+        str: Formatted string of estimated remaining time or "[estimating...]" if not enough data.
+        """
+        if len(segment_times) < segments_for_estimate:
+            return " [estimating...]"
+
+        if last_x_segments is not None:
+            # Use only the last x segments for estimation
+            relevant_segment_times = segment_times[-last_x_segments:]
+        else:
+            # Use all available segment times for estimation
+            relevant_segment_times = segment_times
+
+        # Calculate the average time per segment
+        avg_time_per_segment = sum(relevant_segment_times) / len(relevant_segment_times)
+
+        # Calculate the remaining segments
+        remaining_segments = total_segments - len(segment_times)
+
+        # Estimate the remaining time
+        estimated_remaining_time = avg_time_per_segment * remaining_segments
+
+        # Convert estimated time to hours, minutes, and seconds
+        hours, rem = divmod(estimated_remaining_time, 3600)
+        minutes, seconds = divmod(rem, 60)
+
+        # Format the estimated time
+        estimated_time_str = ""
+        if hours > 0:
+            estimated_time_str += f"{int(hours)} hrs. "
+        if minutes > 0:
+            estimated_time_str += f"{int(minutes)} min. "
+        estimated_time_str += f"{int(seconds)} sec."
+
+        if estimated_time_str:
+            return f" [~ {estimated_time_str} remaining]"
+        else:
+            return ""
+
+    def calculate_total_time(self, segment_times):
+        """
+        Calculates the total time taken for all segments.
+
+        Parameters:
+        segment_times (list): List of times taken for each segment.
+
+        Returns:
+        str: Formatted string of total time taken.
+        """
+        total_time = sum(segment_times)
+
+        # Convert total time to hours, minutes, and seconds
+        hours, rem = divmod(total_time, 3600)
+        minutes, seconds = divmod(rem, 60)
+
+        # Format the total time
+        total_time_str = ""
+        if hours > 0:
+            total_time_str += f"{int(hours)} hrs. "
+        if minutes > 0:
+            total_time_str += f"{int(minutes)} min. "
+        total_time_str += f"{int(seconds)} sec."
+        if total_time_str:
+            return f" [{total_time_str} total]"
+        else:
+            return ""

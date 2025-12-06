@@ -41,7 +41,21 @@ def drop_invalid_tokens(x):
 # TODO: global resampler cache
 @lru_cache(100)
 def get_resampler(src_sr, dst_sr, device):
-    return ta.transforms.Resample(src_sr, dst_sr).to(device)
+    """Return a cached torchaudio Resample transform.
+
+    The LRU cache key is normalized so that different representations of the
+    same device (e.g., torch.device("cuda:0") vs "cuda:0") do not create
+    separate cache entries, which could otherwise lead to unnecessary cache
+    growth over many inference calls.
+    """
+    # Normalize device to a stable string representation for the cache key
+    if isinstance(device, torch.device):
+        device_key = device.type if device.index is None else f"{device.type}:{device.index}"
+    else:
+        device_key = str(device)
+    # Reconstruct a torch.device from the normalized key
+    device_obj = torch.device(device_key)
+    return ta.transforms.Resample(src_sr, dst_sr).to(device_obj)
 
 
 class S3Token2Mel(torch.nn.Module):
