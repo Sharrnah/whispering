@@ -1009,6 +1009,7 @@ class Chatterbox(metaclass=SingletonMeta):
                     jitter=self.chunk_jitter,
                     custom_split_chars=self.chunk_custom_split_chars
                 )
+                # Use silence_after_segments parameter if provided, otherwise fall back to special_settings
                 pause_ms = int(self.special_settings.get("pause_between_segments_ms", 0))
                 pause_voice_change_ms = int(self.special_settings.get("pause_between_voice_change_ms", 0))
                 for idx, (segment) in enumerate(segments):
@@ -1018,7 +1019,9 @@ class Chatterbox(metaclass=SingletonMeta):
                         continue  # skip non-matching segments
                     wav, sample_rate = self.tts_generator(segment, voice_audio, language=language)
                     # Apply VAD trimming per segment if enabled
-                    if self.special_settings.get("use_vad", False):
+                    # Use remove_silence parameter if provided, otherwise fall back to use_vad setting
+                    should_remove_silence = self.special_settings.get("use_vad", False)
+                    if should_remove_silence:
                         try:
                             wav = self._apply_vad_trim(wav, sample_rate)
                         except Exception as e:
@@ -1032,19 +1035,23 @@ class Chatterbox(metaclass=SingletonMeta):
                     if isinstance(wav, torch.Tensor) and wav.numel() > 0:
                         wav = self._apply_final_noise_reduction(wav, sample_rate)
                         yield wav, voice_name, False, {"voice_idx": voice_idx, "segment_idx": idx, "text": segment}
-                    # Insert voice-aware pause if there are more segments coming
+
+                    # Insert pause after this segment if needed
+                    boundary_pause = 0
+
+                    # Check if there are more segments in the current voice section
                     if idx < len(segments) - 1:
-                        next_voice = segments[idx + 1][0]
-                        boundary_pause = 0
-                        if next_voice != voice_name and pause_voice_change_ms > 0:
-                            boundary_pause = pause_voice_change_ms
-                        else:
-                            boundary_pause = pause_ms
-                        if boundary_pause and boundary_pause > 0:
-                            silence = self._make_silence(boundary_pause, self.sample_rate)
-                            if silence.numel() > 0:
-                                inserted_silence = True
-                                yield silence, voice_name, inserted_silence, None
+                        # More segments in same voice - use regular pause
+                        boundary_pause = pause_ms
+                    elif voice_idx < len(voice_sections) - 1:
+                        # Last segment of current voice but there are more voice sections - use voice change pause
+                        boundary_pause = pause_voice_change_ms
+
+                    if boundary_pause and boundary_pause > 0:
+                        silence = self._make_silence(boundary_pause, self.sample_rate)
+                        if silence.numel() > 0:
+                            inserted_silence = True
+                            yield silence, voice_name, inserted_silence, None
         except Exception as ex:
             print(f"TTS() failed: {ex}")
             traceback.print_exc()
@@ -1765,10 +1772,10 @@ class Chatterbox(metaclass=SingletonMeta):
             if vad is None or not vad.is_loaded():
                 return wav if isinstance(wav, torch.Tensor) and wav.ndim == 2 else wav_t.unsqueeze(0)
 
-            # Configs
-            conf_thr = float(self.special_settings.get("vad_confidence", 0.5))
-            pad_ms = int(self.special_settings.get("vad_pad_ms", 20))
-            merge_gap_ms = int(self.special_settings.get("vad_gap_merge_ms", 40))
+            # Configs - adjusted defaults to be less aggressive and prevent cutting speech
+            conf_thr = float(self.special_settings.get("vad_confidence", 0.35))  # Lowered from 0.5 to catch more speech
+            pad_ms = int(self.special_settings.get("vad_pad_ms", 100))  # Increased from 20ms to 100ms for safety margin
+            merge_gap_ms = int(self.special_settings.get("vad_gap_merge_ms", 200))  # Increased from 40ms to 200ms
             frame_len_cfg = int(self.special_settings.get("vad_frame_len", 512))
             hop_len_cfg = int(self.special_settings.get("vad_hop_len", frame_len_cfg))
             crossfade_ms = int(self.special_settings.get("vad_crossfade_ms", 8))
