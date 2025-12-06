@@ -740,6 +740,41 @@ class KokoroTTS(metaclass=SingletonMeta):
     def get_last_generation(self):
         return self.last_generation["audio"], self.last_generation["sample_rate"]
 
+    def stream_tts_segments(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True, progress=True, regenerate_section=None):
+        """
+        TTS chunk generator that yields (wav: torch.Tensor [1,N], voice_name: str, inserted_silence: bool) tuples.
+        Args:
+            text: str, input text with optional [voice_name] tags at start of lines
+            ref_audio: str, path to main voice reference audio file
+            remove_silence: bool, whether to apply VAD trimming per segment
+            silence_after_segments: float, seconds of silence to insert between segments
+            normalize: bool, whether to normalize audio levels
+            progress: bool, whether to show progress during generation
+            regenerate_section: dict, optional dict with 'voice_idx' and 'segment_idx' to only regenerate specific segment (indexed from 0)
+
+        Returns:
+            Yields tuples of (wav: torch.Tensor [1,N], voice_name: str, inserted_silence: bool, section_info: dict)
+        """
+        tts_volume = settings.GetOption("tts_volume")
+        tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
+
+        voice_name = settings.GetOption('tts_voice') or "af_heart"
+        voice_tensor = self._get_voice_tensor(voice_name)
+        generator = self.pipeline(
+            text, voice=voice_tensor,
+            speed=tts_speed, split_pattern=self.split_patterns['fast']
+        )
+        for i, (gs, ps, audio) in enumerate(generator):
+            if tts_volume != 1.0:
+                audio = audio_tools.change_volume(audio, tts_volume)
+
+            # call custom plugin event method
+            plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': audio, 'sample_rate': self.sample_rate})
+            if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
+                audio = plugin_audio['audio']
+
+            yield audio, voice_name, False, {"voice_idx": 0, "segment_idx": i, "text": gs}
+
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         print("TTS requested Kokoro TTS")
 
@@ -748,31 +783,13 @@ class KokoroTTS(metaclass=SingletonMeta):
         lang = self.special_settings["language"]
         self.load(lang)
 
-        tts_volume = settings.GetOption("tts_volume")
-        tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
-
-        voice_name = settings.GetOption('tts_voice') or "af_heart"
-        voice_tensor = self._get_voice_tensor(voice_name)
-
-        generator = self.pipeline(
-            text, voice=voice_tensor,
-            speed=tts_speed, split_pattern=self.split_patterns['fast']
-        )
-
         audio_chunks = []
-        for i, (gs, ps, audio) in enumerate(generator):
-            if tts_volume != 1.0:
-                audio = audio_tools.change_volume(audio, tts_volume)
-            audio_chunks.append(audio)
+        for wav, voice_name, inserted_silence, _ in self.stream_tts_segments(text, ref_audio, False, False, False):
+            audio_chunks.append(wav)
 
         full_audio = np.concatenate(audio_chunks, axis=-1)
         # numpy array to torch.Tensor
         full_audio = torch.from_numpy(full_audio).float()
-
-        # call custom plugin event method
-        plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': full_audio, 'sample_rate': self.sample_rate})
-        if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
-            full_audio = plugin_audio['audio']
 
         # save last generation in memory
         self.last_generation = {"audio": full_audio, "sample_rate": self.sample_rate}
@@ -792,33 +809,13 @@ class KokoroTTS(metaclass=SingletonMeta):
 
         self.init_audio_stream_playback()
 
-        tts_volume = settings.GetOption("tts_volume")
-        tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
-
-
-        voice_name = settings.GetOption('tts_voice') or "af_heart"
-        voice_tensor = self._get_voice_tensor(voice_name)
-
-        generator = self.pipeline(
-            text, voice=voice_tensor,
-            speed=tts_speed, split_pattern=self.split_patterns['fast']
-        )
-
         audio_chunks = []
-        for i, (gs, ps, audio) in enumerate(generator):
+        for wav, voice_name, inserted_silence, _ in self.stream_tts_segments(text, ref_audio, False, False, False):
             if self.audio_streamer is None:
                 break
-            if tts_volume != 1.0:
-                audio = audio_tools.change_volume(audio, tts_volume)
-
-            # call custom plugin event method
-            plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': audio, 'sample_rate': self.sample_rate})
-            if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
-                audio = plugin_audio['audio']
-
-            audio_chunks.append(audio)
+            audio_chunks.append(wav)
             # torch tensor to pcm bytes
-            wav_bytes = self.return_pcm_audio(audio)
+            wav_bytes = self.return_pcm_audio(wav)
             if self.audio_streamer is not None:
                 self.audio_streamer.add_audio_chunk(wav_bytes)
 

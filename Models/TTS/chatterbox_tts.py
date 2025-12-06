@@ -5,6 +5,7 @@ import random
 import traceback
 import wave
 from pathlib import Path
+import time
 
 import numpy as np
 import torch
@@ -1027,6 +1028,28 @@ class Chatterbox(metaclass=SingletonMeta):
                     return torch.zeros(1, 0), None, True, None
                 voice_sections = [("main", text)]
 
+            # Progress tracking across all segments (for timing/ETA)
+            all_segments = []
+            for voice_idx_tmp, (voice_name_tmp, voice_text_tmp) in enumerate(voice_sections):
+                if regenerate_section is not None and voice_idx_tmp != regenerate_section.get("voice_idx", -1):
+                    continue
+                tmp_segments = self.chunk_up_text(
+                    voice_text_tmp,
+                    jitter=self.chunk_jitter,
+                    custom_split_chars=self.chunk_custom_split_chars,
+                )
+                # Only count non-empty segments that are eligible for regeneration
+                for seg_idx_tmp, seg_tmp in enumerate(tmp_segments):
+                    if not seg_tmp.strip():
+                        continue
+                    if regenerate_section is not None and seg_idx_tmp != regenerate_section.get("segment_idx", -1):
+                        continue
+                    all_segments.append((voice_idx_tmp, seg_idx_tmp))
+
+            total_segments = len(all_segments)
+            segment_times = []
+            completed_segments = 0
+
             for voice_idx, (voice_name, voice_text) in enumerate(voice_sections):
                 if regenerate_section is not None and voice_idx != regenerate_section.get("voice_idx", -1):
                     continue  # skip non-matching voice sections
@@ -1051,7 +1074,29 @@ class Chatterbox(metaclass=SingletonMeta):
                         continue
                     if regenerate_section is not None and idx != regenerate_section.get("segment_idx", -1):
                         continue  # skip non-matching segments
+
+                    seg_start_time = time.time()
+                    if total_segments <= 2:
+                        progress = True
+                    else:
+                        progress = False  # suppress per-segment progress for multi-segment
+
                     wav, sample_rate = self.tts_generator(segment, voice_audio, language=language, progress=progress)
+                    seg_elapsed = time.time() - seg_start_time
+                    # Only track timing for real generated segments
+                    if total_segments > 0 and seg_elapsed >= 0:
+                        segment_times.append(seg_elapsed)
+                        completed_segments = len(segment_times)
+                        if total_segments > 2:
+                            # Multi-segment: show global progress + ETA based on recent segments
+                            pct = int(100 * completed_segments / total_segments)
+                            eta_str = self.estimate_remaining_time(
+                                total_segments,
+                                segment_times,
+                                segments_for_estimate=3,
+                                last_x_segments=3,
+                            )
+                            print(f"Chatterbox TTS {completed_segments}/{total_segments} segments ({pct}%) finished" + eta_str)
                     # Apply VAD trimming per segment if enabled
                     # Use remove_silence parameter if provided, otherwise fall back to use_vad setting
                     should_remove_silence = self.special_settings.get("use_vad", False)
@@ -1098,6 +1143,11 @@ class Chatterbox(metaclass=SingletonMeta):
                             # Recreate model and ensure settings are re-applied
                             self.load()
                             self.segment_counter = 0
+
+            # Final summary once all segments are processed
+            if progress and total_segments > 0 and len(segment_times) > 0:
+                total_str = self.calculate_total_time(segment_times)
+                print(f"Chatterbox TTS generation finished 100%" + total_str)
         except Exception as ex:
             print(f"TTS() failed: {ex}")
             traceback.print_exc()
