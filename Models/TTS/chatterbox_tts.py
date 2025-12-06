@@ -211,10 +211,13 @@ class Chatterbox(metaclass=SingletonMeta):
         "noise_reduction_per_segment": False,
         "noise_reduction_strength": 0.8,
         "audio_book_projects_path": "",
+        "reload_every": 5,  # reload model every N generations to fix slowdowns
     }
 
     # Cache for prepared voice conditionals: key -> Conditionals
     voice_conds_cache = {}
+    _voice_cache_order = []  # maintain insertion order for simple LRU
+    _voice_cache_max_entries = 8
     _last_device_str = None
     # Track last loaded precision dtype to conditionally reload
     _loaded_precision_dtype = None
@@ -230,6 +233,8 @@ class Chatterbox(metaclass=SingletonMeta):
     # VAD (lazy)
     _vad_instance = None
     _nr_instance = None  # cache Noisereduce singleton
+
+    segment_counter = 0
 
     def __init__(self):
         self.set_compute_device(settings.GetOption("tts_ai_device"))
@@ -254,6 +259,7 @@ class Chatterbox(metaclass=SingletonMeta):
         # Clear cached conditionals if device changes (device-bound tensors)
         if prev_device is not None and prev_device != self.compute_device_str:
             self.voice_conds_cache.clear()
+            self._voice_cache_order.clear()
         self.compute_device = device
 
     def set_special_setting(self, special_settings):
@@ -448,6 +454,7 @@ class Chatterbox(metaclass=SingletonMeta):
             del self.model
         # Clear cached conditionals to avoid holding device tensors
         self.voice_conds_cache.clear()
+        self._voice_cache_order.clear()
         # Tear down ONNX resources
         self._release_onnx()
         if torch.cuda.is_available():
@@ -472,6 +479,9 @@ class Chatterbox(metaclass=SingletonMeta):
         self._loaded_precision_dtype = None
 
     def garbage_collect(self):
+        # Clear cached conditionals to avoid holding device tensors
+        self.voice_conds_cache.clear()
+        self._voice_cache_order.clear()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         gc.collect()
@@ -632,12 +642,21 @@ class Chatterbox(metaclass=SingletonMeta):
     def _ensure_voice_conditionals(self, ref_audio: str, exaggeration: float = 0.5):
         """Prepare or reuse cached conditionals for the given reference audio.
         Stores and reuses per-device cache to avoid repeated voice embedding work.
+        The cache is bounded (simple LRU) to avoid unbounded growth over long sessions.
         """
         if ref_audio is None:
             return
         key = self._voice_cache_key(ref_audio)
         cached = self.voice_conds_cache.get(key)
         if cached is not None:
+            # Move key to the end of the order list (most recently used)
+            try:
+                if key in self._voice_cache_order:
+                    self._voice_cache_order.remove(key)
+                self._voice_cache_order.append(key)
+            except Exception:
+                # Order maintenance failures are non-fatal
+                pass
             # Reuse cached conditionals
             self.model.conds = cached
             return
@@ -645,6 +664,20 @@ class Chatterbox(metaclass=SingletonMeta):
         self.model.prepare_conditionals(ref_audio, exaggeration=exaggeration)
         # Cache currently prepared conds (already on the correct device)
         self.voice_conds_cache[key] = self.model.conds
+        try:
+            self._voice_cache_order.append(key)
+            # Enforce simple LRU size bound
+            while len(self._voice_cache_order) > getattr(self, '_voice_cache_max_entries', 8):
+                oldest = self._voice_cache_order.pop(0)
+                try:
+                    # Drop reference so tensors can be freed by GC/empty_cache
+                    if oldest in self.voice_conds_cache:
+                        del self.voice_conds_cache[oldest]
+                except Exception:
+                    pass
+        except Exception:
+            # Cache order maintenance is best-effort only
+            pass
 
     # --- Voice-tag utilities ---
     def _resolve_main_voice_audio(self, ref_audio):
@@ -811,49 +844,49 @@ class Chatterbox(metaclass=SingletonMeta):
                 "repetition_penalty", 1.2,
             ))
 
-            with torch.inference_mode():
-                # Prepare/reuse voice conditionals once instead of per segment
-                if ref_audio is not None:
-                    try:
-                        self._ensure_voice_conditionals(ref_audio, exaggeration=exaggeration)
-                    except Exception:
-                        # Fallback: let generate handle assertion if no conds
-                        pass
+            #with torch.inference_mode():
+            # Prepare/reuse voice conditionals once instead of per segment
+            if ref_audio is not None:
+                try:
+                    self._ensure_voice_conditionals(ref_audio, exaggeration=exaggeration)
+                except Exception:
+                    # Fallback: let generate handle assertion if no conds
+                    pass
 
-                self.set_seed()
+            self.set_seed()
 
-                generate_kwargs = {
-                    "exaggeration": exaggeration,
-                    "temperature": temperature,
-                    "cfg_weight": cfg_weight,
-                    "max_new_tokens": max_new_tokens,
-                    # Align repetition handling with ONNX backend to curb trailing speech
-                    "repetition_penalty": repetition_penalty,
-                }
+            generate_kwargs = {
+                "exaggeration": exaggeration,
+                "temperature": temperature,
+                "cfg_weight": cfg_weight,
+                "max_new_tokens": max_new_tokens,
+                # Align repetition handling with ONNX backend to curb trailing speech
+                "repetition_penalty": repetition_penalty,
+            }
 
-                # Abbreviation fix before generation
-                text_in = self._fix_abbreviations(text)
+            # Abbreviation fix before generation
+            text_in = self._fix_abbreviations(text)
 
-                # Only pass language; avoid audio_prompt_path to prevent re-encoding
-                wav = self.model.generate(text_in, language_id=language, **generate_kwargs)
+            # Only pass language; avoid audio_prompt_path to prevent re-encoding
+            wav = self.model.generate(text_in, language_id=language, **generate_kwargs)
 
-                if tts_normalize:
-                    wav, _ = audio_tools.normalize_audio_lufs(
-                        wav, self.sample_rate, -24.0, -16.0,
-                        1.3, verbose=True
-                    )
+            if tts_normalize:
+                wav, _ = audio_tools.normalize_audio_lufs(
+                    wav, self.sample_rate, -24.0, -16.0,
+                    1.3, verbose=True
+                )
 
-                if tts_volume != 1.0:
-                    wav = audio_tools.change_volume(wav, tts_volume)
+            if tts_volume != 1.0:
+                wav = audio_tools.change_volume(wav, tts_volume)
 
-                # call custom plugin event method
-                plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': wav, 'sample_rate': self.sample_rate})
-                if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
-                    wav = plugin_audio['audio']
+            # call custom plugin event method
+            plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': wav, 'sample_rate': self.sample_rate})
+            if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
+                wav = plugin_audio['audio']
 
-                #self.garbage_collect()
+            #self.garbage_collect()
 
-                return wav, self.sample_rate
+            return wav, self.sample_rate
 
             # return empty audio on stop or error
         except Exception as e:
@@ -1052,6 +1085,18 @@ class Chatterbox(metaclass=SingletonMeta):
                         if silence.numel() > 0:
                             inserted_silence = True
                             yield silence, voice_name, inserted_silence, None
+
+                    reload_every = int(self.special_settings.get("reload_every", 5))
+                    if reload_every > 0:
+                        self.segment_counter += 1
+                        if self.segment_counter >= reload_every:
+                            try:
+                                self.release_model()
+                            except Exception:
+                                traceback.print_exc()
+                            # Recreate model and ensure settings are re-applied
+                            self.load()
+                            self.segment_counter = 0
         except Exception as ex:
             print(f"TTS() failed: {ex}")
             traceback.print_exc()
@@ -1484,16 +1529,17 @@ class Chatterbox(metaclass=SingletonMeta):
         #else:
         if self.audio_streamer is None:
             min_play_time = float(settings.GetOption("tts_streamed_min_play_time"))
-            self.audio_streamer = audio_tools.AudioStreamer(audio_device,
-                                                            source_sample_rate=self.sample_rate,
-                                                            start_playback_timeout=1.0,
-                                                            min_buffer_play_time=min_play_time,
-                                                            playback_channels=2,
-                                                            buffer_size=chunk_size,
-                                                            input_channels=1,
-                                                            dtype="float32",
-                                                            tag="tts",
-                                                            )
+            self.audio_streamer = audio_tools.AudioStreamer(
+                audio_device,
+                source_sample_rate=self.sample_rate,
+                start_playback_timeout=1.0,
+                min_buffer_play_time=min_play_time,
+                playback_channels=2,
+                buffer_size=chunk_size,
+                input_channels=1,
+                dtype="float32",
+                tag="tts",
+            )
 
     def play_audio(self, audio, device=None):
         source_channels = 1
