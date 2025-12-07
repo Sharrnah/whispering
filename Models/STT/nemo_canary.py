@@ -8,6 +8,7 @@ signal.SIGKILL = signal.SIGTERM
 import torch
 
 import yaml
+import nemo
 from nemo.collections.asr.models import EncDecMultiTaskModel
 import nemo.collections.asr as nemo_asr
 from Models.Singleton import SingletonMeta
@@ -60,10 +61,31 @@ PARAKEET_LANGUAGES = {
 }
 
 LANGUAGES = {
+    "bg": "Bulgarian",
+    "hr": "Croatian",
+    "cs": "Czech",
+    "da": "Danish",
+    "nl": "Dutch",
     "en": "English",
-    "de": "German",
+    "et": "Estonian",
+    "fi": "Finnish",
     "fr": "French",
+    "de": "German",
+    "el": "Greek",
+    "hu": "Hungarian",
+    "it": "Italian",
+    "lv": "Latvian",
+    "lt": "Lithuanian",
+    "mt": "Maltese",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "ro": "Romanian",
+    "sk": "Slovak",
+    "sl": "Slovenian",
     "es": "Spanish",
+    "sv": "Swedish",
+    "ru": "Russian",
+    "uk": "Ukrainian",
 }
 
 
@@ -89,6 +111,7 @@ class NemoCanary(metaclass=SingletonMeta):
     _debug_skip_dl = False
 
     def __init__(self, compute_type="float32", device="cpu"):
+        print("nemo-toolkit:", nemo.__version__)
         os.makedirs(self.model_cache_path, exist_ok=True)
         self.compute_type = compute_type
         self.compute_device = device
@@ -168,7 +191,7 @@ class NemoCanary(metaclass=SingletonMeta):
 
         self.currently_downloading = False
 
-    def load_model(self, model='canary-1b', compute_type="float32", device="cpu"):
+    def load_model(self, model='canary-1b-v2', compute_type="float32", device="cpu"):
         #self.model = EncDecMultiTaskModel.from_pretrained('nvidia/canary-1b')
         #if self.model is None:
 
