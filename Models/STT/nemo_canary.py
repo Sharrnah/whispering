@@ -281,7 +281,7 @@ class NemoCanary(metaclass=SingletonMeta):
                 taskname = "asr"
             # translation
             else:
-                taskname = "s2t_translation"
+                taskname = "ast"
 
             self.model.change_decoding_strategy(None)
             decode_cfg = self.model.cfg.decoding
