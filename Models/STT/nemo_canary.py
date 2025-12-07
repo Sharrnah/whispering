@@ -8,6 +8,7 @@ signal.SIGKILL = signal.SIGTERM
 import torch
 
 import yaml
+import nemo
 from nemo.collections.asr.models import EncDecMultiTaskModel
 import nemo.collections.asr as nemo_asr
 from Models.Singleton import SingletonMeta
@@ -60,10 +61,31 @@ PARAKEET_LANGUAGES = {
 }
 
 LANGUAGES = {
+    "bg": "Bulgarian",
+    "hr": "Croatian",
+    "cs": "Czech",
+    "da": "Danish",
+    "nl": "Dutch",
     "en": "English",
-    "de": "German",
+    "et": "Estonian",
+    "fi": "Finnish",
     "fr": "French",
+    "de": "German",
+    "el": "Greek",
+    "hu": "Hungarian",
+    "it": "Italian",
+    "lv": "Latvian",
+    "lt": "Lithuanian",
+    "mt": "Maltese",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "ro": "Romanian",
+    "sk": "Slovak",
+    "sl": "Slovenian",
     "es": "Spanish",
+    "sv": "Swedish",
+    "ru": "Russian",
+    "uk": "Ukrainian",
 }
 
 
@@ -89,6 +111,7 @@ class NemoCanary(metaclass=SingletonMeta):
     _debug_skip_dl = False
 
     def __init__(self, compute_type="float32", device="cpu"):
+        print("nemo-toolkit:", nemo.__version__)
         os.makedirs(self.model_cache_path, exist_ok=True)
         self.compute_type = compute_type
         self.compute_device = device
@@ -168,7 +191,7 @@ class NemoCanary(metaclass=SingletonMeta):
 
         self.currently_downloading = False
 
-    def load_model(self, model='canary-1b', compute_type="float32", device="cpu"):
+    def load_model(self, model='canary-1b-v2', compute_type="float32", device="cpu"):
         #self.model = EncDecMultiTaskModel.from_pretrained('nvidia/canary-1b')
         #if self.model is None:
 
@@ -282,7 +305,7 @@ class NemoCanary(metaclass=SingletonMeta):
 
             # -------------------------------
 
-            # Prepare the manifest data
+            # Prepare the multitask prompt/config (no audio here)
             config_kwargs = {
                 "task": taskname,
                 "source_lang": source_lang,
@@ -294,29 +317,75 @@ class NemoCanary(metaclass=SingletonMeta):
             }
 
         result_text = ""
+        segment_list = []
 
         compute_type = self._str_to_dtype_dict(self.compute_type).get('dtype', torch.float32)
 
-        segment_list = []
-
         if model.startswith("canary-"):
-            # Transcribe using the model
-            if not self.compute_device.startswith("cuda"):
-                predicted_text = self.model.transcribe([audio_sample], batch_size=16, verbose=False, **config_kwargs)
-            else:
-                with torch.cuda.amp.autocast(dtype=compute_type):
-                    predicted_text = self.model.transcribe([audio_sample], batch_size=16, verbose=False, **config_kwargs)
+            # Canary path: write audio_sample to a temporary WAV file and let NeMo
+            # handle the usual file-based transcription pipeline.
+            import numpy as np
+            import soundfile as sf
+            import tempfile
+
+            # Normalize to 1D float32 mono numpy at self.sample_rate.
+            waveform = audio_sample
+            if torch.is_tensor(waveform):
+                waveform = waveform.detach().cpu().numpy()
+            waveform = np.asarray(waveform)
+
+            # Downmix multi-channel to mono if needed
+            if waveform.ndim == 2:
+                if waveform.shape[0] <= 4 and waveform.shape[0] < waveform.shape[1]:
+                    waveform = waveform.mean(axis=0)
+                else:
+                    waveform = waveform.mean(axis=1)
+
+            waveform = waveform.reshape(-1).astype("float32")
+
+            # Write to a temporary WAV file
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp_path = tmp.name
+            sf.write(tmp_path, waveform, self.sample_rate)
+
+            try:
+                if not self.compute_device.startswith("cuda"):
+                    predicted_text = self.model.transcribe(
+                        [tmp_path],
+                        batch_size=1,
+                        verbose=False,
+                        **config_kwargs,
+                    )
+                else:
+                    with torch.cuda.amp.autocast(dtype=compute_type):
+                        predicted_text = self.model.transcribe(
+                            [tmp_path],
+                            batch_size=1,
+                            verbose=False,
+                            **config_kwargs,
+                        )
+            finally:
+                # Clean up temp file
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
 
             if len(predicted_text) > 0:
                 result_text = predicted_text[0].text
 
-            if not without_timestamps:
+            if not without_timestamps and len(predicted_text) > 0 and hasattr(predicted_text[0], 'timestamp'):
                 timestamp = predicted_text[0].timestamp
-                segments = timestamp['segment']
+                segments = timestamp.get('segment', []) if isinstance(timestamp, dict) else []
                 for single_segment in segments:
-                    segment_list.append({'text': single_segment['segment'], 'start': single_segment['start'], 'end': single_segment['end']})
+                    segment_list.append({
+                        'text': single_segment.get('segment', ''),
+                        'start': single_segment.get('start', 0.0),
+                        'end': single_segment.get('end', 0.0),
+                    })
 
         elif model.startswith("parakeet-"):
+            # Parakeet path unchanged: it works with in-memory arrays directly.
             config_kwargs = {}
             if not without_timestamps:
                 config_kwargs["timestamps"] = True
@@ -324,7 +393,11 @@ class NemoCanary(metaclass=SingletonMeta):
                 timestamp = predicted_text[0].timestamp
                 segments = timestamp['segment']
                 for single_segment in segments:
-                    segment_list.append({'text': single_segment['segment'], 'start': single_segment['start'], 'end': single_segment['end']})
+                    segment_list.append({
+                        'text': single_segment['segment'],
+                        'start': single_segment['start'],
+                        'end': single_segment['end'],
+                    })
             else:
                 predicted_text = self.model.transcribe([audio_sample], verbose=False)
             result_text = predicted_text[0].text
@@ -333,9 +406,8 @@ class NemoCanary(metaclass=SingletonMeta):
             'text': result_text,
             'type': "transcribe",
             'language': source_lang,
-            'target_lang': target_lang
+            'target_lang': target_lang,
         }
-        # add segments if they exist
         if len(segment_list) > 0:
             result['segments'] = segment_list
 
