@@ -35,7 +35,7 @@ class ChatterboxVC:
             }
 
     @classmethod
-    def from_local(cls, ckpt_dir, device, dtype = torch.float16) -> 'ChatterboxVC':
+    def from_local(cls, ckpt_dir, device, meanflow = False, dtype = torch.float16) -> 'ChatterboxVC':
         ckpt_dir = Path(ckpt_dir)
         
         # Always load to CPU first for non-CUDA devices to handle CUDA-saved models
@@ -49,9 +49,12 @@ class ChatterboxVC:
             states = torch.load(builtin_voice, map_location=map_location)
             ref_dict = states['gen']
 
-        s3gen = S3Gen()
+        s3gen = S3Gen(meanflow=meanflow)
+        s3gen_path = ckpt_dir / "s3gen.safetensors"
+        if meanflow:
+            s3gen_path = ckpt_dir / "s3gen_meanflow.safetensors"
         s3gen.load_state_dict(
-            load_file(ckpt_dir / "s3gen.safetensors"), strict=False
+            load_file(s3gen_path), strict=False
         )
         s3gen.to(device)
         # Keep S3Gen in float32 to preserve ref embedding quality

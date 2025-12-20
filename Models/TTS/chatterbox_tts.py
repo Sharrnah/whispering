@@ -19,6 +19,8 @@ import settings
 # from .chatterbox.tts import ChatterboxTTS
 from .chatterbox import SUPPORTED_LANGUAGES
 from .chatterbox.mtl_tts import ChatterboxMultilingualTTS, punc_norm
+from .chatterbox.tts import ChatterboxTTS
+from .chatterbox.tts_turbo import ChatterboxTurboTTS
 from .chatterbox.vc import ChatterboxVC
 from .chatterbox.models.s3tokenizer import SPEECH_VOCAB_SIZE
 from .. import languageClassification
@@ -43,6 +45,27 @@ os.makedirs(voices_path, exist_ok=True)
 
 TTS_MODEL_LINKS = {
     # Models
+    "chatterbox-turbo": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/chatterbox-turbo.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/chatterbox-tts/chatterbox-turbo.zip",
+            "https://s3.libs.space:9000/ai-models/chatterbox-tts/chatterbox-turbo.zip",
+        ],
+        "checksum": "96b803ff7e0ddcc6ad9b50ed60deedc2f1a06b86b89307879ea95a4feba270e0",
+        "file_checksums": {
+            "added_tokens.json": "72e4ab6acb0d9309ac3df4b526ae5fd80a2da5bc5ab7bb02d85096a374f69193",
+            "conds.pt": "b1852099306fd6a7814eb9d0bd10186caba7249596cc23868f78a0eefbfa5033",
+            "s3gen.safetensors": "2b78103c654207393955e4900aac14a12de8ef25f4b09424f1ef91941f161d4e",
+            "s3gen_meanflow.safetensors": "d65cb687a2ed581ee6cc297e919ffefa63386944f42364ae13b78a594945514f",
+            "special_tokens_map.json": "92ba8063bf40aa163eadebbfe0de07c2aebe44cf0d4a9e8726580b0781fd2640",
+            "t3_turbo_v1.safetensors": "fcf1f8c1d651bb7e3acd69ee5be269b4ac10c02980b7708213d598bc9f7cdf87",
+            "t3_turbo_v1.yaml": "57623237f5072148a138a47fd93da1241bc5069fd0df7f1850c00053391c50de",
+            "tokenizer_config.json": "bca16a2ac1ddbd78b8d6228f0031884cc74b6ea54b967d6f6d2ebae9ccde23e6",
+            "ve.safetensors": "f0921cab452fa278bc25cd23ffd59d36f816d7dc5181dd1bef9751a7fb61f63c",
+            "vocab.json": "f6bd25a65e4e63ca31360e9fb11c7e4f9a391a78385d640acd814092dd6eee4f"
+        },
+        "path": "chatterbox-turbo",
+    },
     "chatterbox-multilingual": {
         "urls": [
             "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/chatterbox-multilingual.zip",
@@ -84,6 +107,25 @@ TTS_MODEL_LINKS = {
             "ve.safetensors": "f0921cab452fa278bc25cd23ffd59d36f816d7dc5181dd1bef9751a7fb61f63c"
         },
         "path": "chatterbox-czech",
+    },
+    "chatterbox-german": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/chatterbox-german.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/chatterbox-tts/chatterbox-german.zip",
+            "https://s3.libs.space:9000/ai-models/chatterbox-tts/chatterbox-german.zip",
+        ],
+        "checksum": "a136e4c3dfcfcf8de1e105d2bd50f8dd163c1d53a1ae33c2ce10cd4f6e07c770",
+        "file_checksums": {
+            "conds.pt": "6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e",
+            "s3gen.safetensors": "50b80bdf648d5aa39bd7998be642bd92adc21d5e44ad7862a7ac75cf76ea6f6f",
+            "t3_cfg.safetensors": "cd52061db8e13764fc0fd2802edbac0fcbcdce11d6dcc98ad7ca141da398879d",
+            "tokenizer.json": "d71e3a44eabb1784df9a68e9f95b251ecbf1a7af6a9f50835856b2ca9d8c14a5",
+            "ve.safetensors": "f0921cab452fa278bc25cd23ffd59d36f816d7dc5181dd1bef9751a7fb61f63c"
+        },
+        "path": "chatterbox-german",
+        "info": {
+            "single_language": True
+         },
     },
     "chatterbox-multilingual-onnx": {
         "urls": [
@@ -144,7 +186,9 @@ TTS_MODEL_LINKS = {
 
 model_list = {
     "Default": ["chatterbox-multilingual"],
+    "English": ["chatterbox-turbo"],
     "Czech": ["chatterbox-czech"],
+    "German": ["chatterbox-german"],
     "ONNX": ["chatterbox-multilingual-onnx"],
 }
 
@@ -558,6 +602,10 @@ class Chatterbox(metaclass=SingletonMeta):
             desired_precision = self.special_settings.get("precision", "float32")
             dtype = self._precision_string_to_dtype(desired_precision)
 
+        is_multilingual = True
+        if "info" in TTS_MODEL_LINKS[model] and "single_language" in TTS_MODEL_LINKS[model]["info"] and TTS_MODEL_LINKS[model]["info"]["single_language"]:
+            is_multilingual = False
+
         # If device cannot handle selected precision, fallback handled in helper
         self.release_model()
         if model.endswith("-onnx"):
@@ -567,14 +615,20 @@ class Chatterbox(metaclass=SingletonMeta):
         else:
             if self.model is None:
                 print(f"Loading Chatterbox TTS model {model} on device {self.compute_device_str} with precision {dtype}")
-                self.model = ChatterboxMultilingualTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype, do_compile=False)
-                #self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
+                if model.endswith("-turbo"):
+                    self.model = ChatterboxTurboTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
+                else:
+                    if not is_multilingual:
+                        self.model = ChatterboxTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
+                    else:
+                        self.model = ChatterboxMultilingualTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype, do_compile=False)
+                    #self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
                 self._loaded_precision_dtype = dtype
                 print("Chatterbox TTS model loaded.")
 
-    def load_vc_model(self, dtype=None):
+    def load_vc_model(self, model_type="multilingual", dtype=None):
         print(f"Loading VC model on device {self.compute_device_str} with precision {dtype}")
-        model = self._get_model_name()
+        model = "chatterbox-" + model_type
         self.set_compute_device(settings.GetOption('tts_ai_device'))
         if "custom" not in model:
             model_directory = Path(cache_path / TTS_MODEL_LINKS[model]["path"])
@@ -590,7 +644,11 @@ class Chatterbox(metaclass=SingletonMeta):
             desired_precision = self.special_settings.get("precision", "float32")
             dtype = self._precision_string_to_dtype(desired_precision)
 
-        self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
+        meanflow = False
+        if model_type == "turbo":
+            meanflow = True
+
+        self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, meanflow=meanflow, dtype=dtype)
         print("VC model loaded.")
 
     def list_models(self):

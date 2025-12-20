@@ -84,8 +84,8 @@ class Conditionals:
     t3: T3Cond
     gen: dict
 
-    def to(self, device):
-        self.t3 = self.t3.to(device=device)
+    def to(self, device, dtype=None):
+        self.t3 = self.t3.to(device=device, dtype=dtype)
         for k, v in self.gen.items():
             if torch.is_tensor(v):
                 self.gen[k] = v.to(device=device)
@@ -128,7 +128,7 @@ class ChatterboxTurboTTS:
         self.conds = conds
 
     @classmethod
-    def from_local(cls, ckpt_dir, device) -> 'ChatterboxTurboTTS':
+    def from_local(cls, ckpt_dir, device, dtype = torch.float16) -> 'ChatterboxTurboTTS':
         ckpt_dir = Path(ckpt_dir)
 
         # Always load to CPU first for non-CUDA devices to handle CUDA-saved models
@@ -141,7 +141,10 @@ class ChatterboxTurboTTS:
         ve.load_state_dict(
             load_file(ckpt_dir / "ve.safetensors")
         )
-        ve.to(device).eval()
+        ve.to(device)
+        if device in ["cuda"]:
+            ve.to(dtype)
+        ve.eval()
 
         # Turbo specific hp
         hp = T3Config(text_tokens_dict_size=50276)
@@ -158,14 +161,20 @@ class ChatterboxTurboTTS:
             t3_state = t3_state["model"][0]
         t3.load_state_dict(t3_state)
         del t3.tfmr.wte
-        t3.to(device).eval()
+        t3.to(device)
+        if device in ["cuda"]:
+            t3.to(dtype)
+        t3.eval()
 
         s3gen = S3Gen(meanflow=True)
         weights = load_file(ckpt_dir / "s3gen_meanflow.safetensors")
         s3gen.load_state_dict(
             weights, strict=True
         )
-        s3gen.to(device).eval()
+        s3gen.to(device)
+        if device in ["cuda"]:
+            s3gen.to(dtype)
+        s3gen.eval()
 
         tokenizer = AutoTokenizer.from_pretrained(ckpt_dir)
         if tokenizer.pad_token is None:
@@ -176,7 +185,7 @@ class ChatterboxTurboTTS:
         conds = None
         builtin_voice = ckpt_dir / "conds.pt"
         if builtin_voice.exists():
-            conds = Conditionals.load(builtin_voice, map_location=map_location).to(device)
+            conds = Conditionals.load(builtin_voice, map_location=map_location).to(device=device, dtype=(dtype if device in ["cuda"] else None))
 
         return cls(t3, s3gen, ve, tokenizer, device, conds=conds)
 
@@ -244,24 +253,25 @@ class ChatterboxTurboTTS:
         self.conds = Conditionals(t3_cond, s3gen_ref_dict)
 
     def generate(
-            self,
-            text,
-            repetition_penalty=1.2,
-            min_p=0.00,
-            top_p=0.95,
-            audio_prompt_path=None,
-            exaggeration=0.0,
-            cfg_weight=0.0,
-            temperature=0.8,
-            top_k=1000,
-            norm_loudness=True,
+        self,
+        text,
+        repetition_penalty=1.2,
+        min_p=0.00,
+        top_p=0.95,
+        audio_prompt_path=None,
+        exaggeration=0.0,
+        cfg_weight=0.0,
+        temperature=0.8,
+        top_k=1000,
+        norm_loudness=True,
+        **kwargs,
     ):
         if audio_prompt_path:
             self.prepare_conditionals(audio_prompt_path, exaggeration=exaggeration, norm_loudness=norm_loudness)
         else:
             assert self.conds is not None, "Please `prepare_conditionals` first or specify `audio_prompt_path`"
 
-        if cfg_weight > 0.0 or exaggeration > 0.0 or min_p > 0.0:
+        if (cfg_weight > 0.0 or exaggeration > 0.0 or min_p > 0.0) and kwargs.get("verbose", False):
             logger.warning("CFG, min_p and exaggeration are not supported by Turbo version and will be ignored.")
 
         # Norm and tokenize text
@@ -281,13 +291,13 @@ class ChatterboxTurboTTS:
         # Remove OOV tokens and add silence to end
         speech_tokens = speech_tokens[speech_tokens < 6561]
         speech_tokens = speech_tokens.to(self.device)
-        silence = torch.tensor([S3GEN_SIL, S3GEN_SIL, S3GEN_SIL]).long().to(self.device)
-        speech_tokens = torch.cat([speech_tokens, silence])
+        #silence = torch.tensor([S3GEN_SIL, S3GEN_SIL, S3GEN_SIL]).long().to(self.device)
+        #speech_tokens = torch.cat([speech_tokens, silence])
 
         wav, _ = self.s3gen.inference(
             speech_tokens=speech_tokens,
             ref_dict=self.conds.gen,
-            n_cfm_timesteps=2,
+            n_timesteps=2,
         )
         wav = wav.squeeze(0).detach().cpu().numpy()
         return torch.from_numpy(wav).unsqueeze(0)

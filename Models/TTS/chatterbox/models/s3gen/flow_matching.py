@@ -16,7 +16,6 @@ import torch
 import torch.nn.functional as F
 from .matcha.flow_matching import BASECFM
 from .configs import CFM_PARAMS
-from tqdm import tqdm
 
 
 def cast_all(*args, dtype):
@@ -193,7 +192,20 @@ class CausalConditionalCFM(ConditionalCFM):
         self.rand_noise = None
 
     @torch.inference_mode()
-    def forward(self, mu, mask, n_timesteps, temperature=1.0, spks=None, cond=None, noised_mels=None, meanflow=False):
+    def forward(
+        self,
+        mu,
+        mask,
+        n_timesteps,
+        temperature=1.0,
+        spks=None,
+        cond=None,
+        noised_mels=None,
+        meanflow=False,
+        flow_cfg_scale=None,
+        show_progress: bool = False,
+        **kwargs,
+    ):
         """Forward diffusion
 
         Args:
@@ -207,10 +219,20 @@ class CausalConditionalCFM(ConditionalCFM):
                 shape: (batch_size, spk_emb_dim)
             cond: Not used but kept for future purposes
             noised_mels: gt mels noised a time t
+            flow_cfg_scale: optional CFG scale override for inference (aka inference_cfg_rate)
+            show_progress: if True, shows a tqdm progress bar during meanflow sampling
         Returns:
             sample: generated mel-spectrogram
                 shape: (batch_size, n_feats, mel_timesteps)
         """
+
+        # Allow call sites to pass flow_cfg_scale even if older configs/models didn't.
+        # For non-meanflow sampling, this maps to the inference CFG rate.
+        if (not meanflow) and (flow_cfg_scale is not None):
+            try:
+                self.inference_cfg_rate = float(flow_cfg_scale)
+            except (TypeError, ValueError):
+                pass
 
         B = mu.size(0)
         z = torch.randn_like(mu)
@@ -228,16 +250,31 @@ class CausalConditionalCFM(ConditionalCFM):
         #   because they were distilled with CFG outputs. We would need to add another hparam and
         #   change the conditional logic here if we want to use CFG inference with a meanflow model.
         if meanflow:
-            return self.basic_euler(z, t_span=t_span, mu=mu, mask=mask, spks=spks, cond=cond), None
+            return self.basic_euler(
+                z, t_span=t_span, mu=mu, mask=mask, spks=spks, cond=cond, show_progress=show_progress
+            ), None
 
         return self.solve_euler(z, t_span=t_span, mu=mu, mask=mask, spks=spks, cond=cond, meanflow=meanflow), None
 
-    def basic_euler(self, x, t_span, mu, mask, spks, cond):
+    def basic_euler(self, x, t_span, mu, mask, spks, cond, show_progress: bool = False):
         in_dtype = x.dtype
         x, t_span, mu, mask, spks, cond = cast_all(x, t_span, mu, mask, spks, cond, dtype=self.estimator.dtype)
 
-        print("S3 Token -> Mel Inference...")
-        for t, r in tqdm(zip(t_span[..., :-1], t_span[..., 1:]), total=t_span.shape[-1] - 1):
+        iterator = zip(t_span[..., :-1], t_span[..., 1:])
+        total = t_span.shape[-1] - 1
+
+        if show_progress:
+            # tqdm is optional; only import it when progress is requested.
+            try:
+                from tqdm import tqdm  # type: ignore
+
+                print("S3 Token -> Mel Inference...")
+                iterator = tqdm(iterator, total=total)
+            except Exception:
+                # If tqdm isn't available for some reason, just run silently.
+                pass
+
+        for t, r in iterator:
             t, r = t[None], r[None]
             dxdt = self.estimator.forward(x, mask=mask, mu=mu, t=t, spks=spks, cond=cond, r=r)
             dt = r - t
