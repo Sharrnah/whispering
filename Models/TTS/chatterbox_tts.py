@@ -87,6 +87,44 @@ TTS_MODEL_LINKS = {
         },
         "path": "chatterbox-multilingual",
     },
+    "chatterbox-english": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/chatterbox-english.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/chatterbox-tts/chatterbox-english.zip",
+            "https://s3.libs.space:9000/ai-models/chatterbox-tts/chatterbox-english.zip",
+        ],
+        "checksum": "7c4a456bd5d808c5f589ae704eae0db85e5756959b8dc6a003b59578ae7876fe",
+        "file_checksums": {
+            "conds.pt": "6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e",
+            "s3gen.safetensors": "2b78103c654207393955e4900aac14a12de8ef25f4b09424f1ef91941f161d4e",
+            "t3_cfg.safetensors": "914cb1696f47527fe8852ca8f1fe1fa63cb34f76f9c715e84e067b744dd0da81",
+            "tokenizer.json": "d71e3a44eabb1784df9a68e9f95b251ecbf1a7af6a9f50835856b2ca9d8c14a5",
+            "ve.safetensors": "f0921cab452fa278bc25cd23ffd59d36f816d7dc5181dd1bef9751a7fb61f63c"
+        },
+        "path": "chatterbox-english",
+        "info": {
+            "single_language": True
+        },
+    },
+    "chatterbox-french": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/chatterbox-french.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/chatterbox-tts/chatterbox-french.zip",
+            "https://s3.libs.space:9000/ai-models/chatterbox-tts/chatterbox-french.zip",
+        ],
+        "checksum": "62016c596b2dfc912fffca9c0b048d8bf6a86b5f84151a9aa884fdb221936138",
+        "file_checksums": {
+            "conds.pt": "6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e",
+            "s3gen.safetensors": "2b78103c654207393955e4900aac14a12de8ef25f4b09424f1ef91941f161d4e",
+            "t3_cfg.safetensors": "2e1066369c4ba2e0351199ceff2fcb5098e4b7233bba3dbbc12f1f9a78aa741c",
+            "tokenizer.json": "d71e3a44eabb1784df9a68e9f95b251ecbf1a7af6a9f50835856b2ca9d8c14a5",
+            "ve.safetensors": "f0921cab452fa278bc25cd23ffd59d36f816d7dc5181dd1bef9751a7fb61f63c"
+        },
+        "path": "chatterbox-french",
+        "info": {
+            "single_language": True
+        },
+    },
     "chatterbox-czech": {
         "urls": [
             "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/chatterbox-czech.zip",
@@ -186,7 +224,8 @@ TTS_MODEL_LINKS = {
 
 model_list = {
     "Default": ["chatterbox-multilingual"],
-    "English": ["chatterbox-turbo"],
+    "English": ["chatterbox-english", "chatterbox-turbo"],
+    "French": ["chatterbox-french"],
     "Czech": ["chatterbox-czech"],
     "German": ["chatterbox-german"],
     "ONNX": ["chatterbox-multilingual-onnx"],
