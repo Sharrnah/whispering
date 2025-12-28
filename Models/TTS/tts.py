@@ -5,6 +5,7 @@ from Models.TTS.f5_tts import F5TTS
 from Models.TTS.zonos_tts import ZonosTTS
 from Models.TTS.kokoro_tts import KokoroTTS
 from Models.TTS.chatterbox_tts import Chatterbox
+from Models.TTS.maya1_tts import MayaOne
 
 tts = None
 failed = None
@@ -44,6 +45,12 @@ def init():
                 return False
         case "chatterbox":
             tts = Chatterbox()
+            if not failed:
+                return True
+            else:
+                return False
+        case "maya1":
+            tts = MayaOne()
             if not failed:
                 return True
             else:
