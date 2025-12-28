@@ -8,7 +8,6 @@ signal.SIGKILL = signal.SIGTERM
 import torch
 
 import yaml
-import nemo
 from nemo.collections.asr.models import EncDecMultiTaskModel
 import nemo.collections.asr as nemo_asr
 from Models.Singleton import SingletonMeta
@@ -111,6 +110,7 @@ class NemoCanary(metaclass=SingletonMeta):
     _debug_skip_dl = False
 
     def __init__(self, compute_type="float32", device="cpu"):
+        import nemo
         print("nemo-toolkit:", nemo.__version__)
         os.makedirs(self.model_cache_path, exist_ok=True)
         self.compute_type = compute_type
