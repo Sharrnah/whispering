@@ -116,6 +116,7 @@ class AudioProcessor:
                  push_to_talk_key=None,
                  keyboard_rec_force_stop=None,
                  vad_model=None,
+                 turn_model=None,
                  needs_sample_rate_conversion=False,
                  recorded_sample_rate=None,
                  input_channel_num=2,
@@ -150,6 +151,7 @@ class AudioProcessor:
         self.keyboard_rec_force_stop = keyboard_rec_force_stop
 
         self.vad_model = vad_model
+        self.turn_model = turn_model
 
         self.needs_sample_rate_conversion = needs_sample_rate_conversion
         self.recorded_sample_rate = recorded_sample_rate
@@ -182,6 +184,8 @@ class AudioProcessor:
 
         self._new_speaker = False
         self.new_speaker_audio = None
+
+        self.speaker_turn_detected = False
 
         self.before_callback_called_func = before_callback_called_func
         self.before_recording_send_to_queue_callback_func = before_recording_send_to_queue_callback_func
@@ -324,6 +328,8 @@ class AudioProcessor:
             if phrase_time_limit == 0:
                 phrase_time_limit = None
 
+            vad_smart_turn_enabled = bool(self.settings.GetOption("vad_smart_turn_enabled"))
+
             silence_cutting_enabled = self.settings.GetOption("silence_cutting_enabled")
             silence_offset = self.settings.GetOption("silence_offset")
             max_silence_length = self.settings.GetOption("max_silence_length")
@@ -417,6 +423,23 @@ class AudioProcessor:
                     try:
                         new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.default_sample_rate,
                                                                      self.vad_model)
+                        if vad_smart_turn_enabled and self.turn_model is not None:
+                            min_turn_audio_length = self.settings.GetOption("vad_smart_turn_min_length")
+                            turn_pause_length = float(self.settings.GetOption("vad_smart_turn_pause_length"))
+                            self.turn_model.set_min_audio_length(min_turn_audio_length)
+                            if new_confidence >= confidence_threshold and (
+                                    time.time() - self.pause_time) > turn_pause_length > 0.0:
+                                turn_probability_threshold = self.settings.GetOption("vad_smart_turn_probability_threshold")
+                                turn_result = self.turn_model.predict(
+                                    int2float(np.frombuffer(test_audio_chunk, np.int16)),
+                                    probability_threshold=turn_probability_threshold
+                                )
+                                if turn_result["prediction"]:
+                                    self.speaker_turn_detected = True
+                                    self.turn_model.clear_session()
+                                    if self.verbose:
+                                        print("Speaker turn detected.")
+
                     except Exception as e:
                         print(f"Error processing audio_chunk: {e}")
                         traceback.print_exc()
@@ -424,10 +447,12 @@ class AudioProcessor:
             # put frames with recognized speech into a list and send to whisper
             if (clip_duration is not None and len(self.frames) > fps) or (
                     elapsed_time > pause > 0.0 and len(self.frames) > 0) or (
+                    self.speaker_turn_detected) or (
                     self.keyboard_rec_force_stop and self.push_to_talk_key is not None and not keyboard.is_pressed(
                 self.push_to_talk_key) and len(self.frames) > 0) or (
                     use_speaker_diarization and self._new_speaker and self.diarization_model is not None and len(
                 self.frames) > 0):
+
                 if self.before_recording_send_to_queue_callback_func is not None and callable(self.before_recording_send_to_queue_callback_func):
                     self.before_recording_send_to_queue_callback_func(self)
 
@@ -541,6 +566,9 @@ class AudioProcessor:
                 self.start_time = time.time()
                 self.intermediate_time_start = time.time()
                 self.keyboard_rec_force_stop = False
+                self.speaker_turn_detected = False
+                if vad_smart_turn_enabled and self.turn_model is not None:
+                    self.turn_model.clear_session()
                 if self.new_speaker_audio is not None:
                     print("Added new speaker audio of new speaker to new audio recording chunk")
                     self.frames.append(self.new_speaker_audio)
@@ -729,6 +757,9 @@ class AudioProcessor:
                                           pause,
                                           keyboard_key=self.push_to_talk_key):
                 self.start_rec_on_volume_threshold = False
+                self.speaker_turn_detected = False
+                if vad_smart_turn_enabled and self.turn_model is not None:
+                    self.turn_model.clear_session()
                 self.intermediate_time_start = time.time()
                 if self.push_to_talk_key is not None and not keyboard.is_pressed(
                         self.push_to_talk_key) and self.keyboard_rec_force_stop:

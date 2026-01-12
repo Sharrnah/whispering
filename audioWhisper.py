@@ -110,6 +110,7 @@ if __name__ == '__main__':
     from Models.STS import DeepFilterNet
     from Models.STS import Noisereduce
     from Models.STS import VAD
+    from Models.STS import SmartTurn
 
     def save_to_wav(data, filename, sample_rate, channels=1):
         with wave.open(filename, 'wb') as wf:
@@ -614,6 +615,12 @@ if __name__ == '__main__':
         if vad_enabled:
             vad_model = VAD.VAD(vad_thread_num)
 
+        vad_smart_turn_enabled = settings.SETTINGS.GetOption("vad_smart_turn_enabled")
+        turn_model = None
+        if vad_smart_turn_enabled and vad_model is not None and turn_model is None:
+            smart_turn_min_length = settings.SETTINGS.GetOption("vad_smart_turn_min_length")
+            turn_model = SmartTurn.SmartTurn(min_audio_length=smart_turn_min_length)
+
         # initialize plugins
         import Plugins
         print("initializing plugins...")
@@ -679,6 +686,7 @@ if __name__ == '__main__':
                 push_to_talk_key=push_to_talk_key,
                 keyboard_rec_force_stop=keyboard_rec_force_stop,
                 vad_model=vad_model,
+                turn_model=turn_model,
                 plugins=Plugins.plugins,
                 audio_enhancer=audio_enhancer,
                 osc_ip=osc_ip,

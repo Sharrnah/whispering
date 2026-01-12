@@ -90,6 +90,10 @@ class SettingsManager:
             "vad_confidence_threshold": 0.4,  # Voice activity detection (VAD) confidence threshold. Can be 0-1
             "vad_frames_per_buffer": 512,  # Voice activity detection (VAD) sample size (how many audio samples should be tested). Values other than 512, 256 are not supported. (default: 512)
             "vad_thread_num": 1,  # number of threads to use for VAD.
+            "vad_smart_turn_enabled": False,  # Enable Smart Turn detection for VAD.
+            "vad_smart_turn_min_length": 2,  # Smart Turn minimum audio length in seconds before Smart Turn detection is applied.
+            "vad_smart_turn_probability_threshold": 0.5,  # Smart Turn probability threshold for detecting speech turn.
+            "vad_smart_turn_pause_length": 0.5,  # Smart Turn probability threshold for detecting speech turn.
             "push_to_talk_key": "",  # Push to talk key. (empty or None to disable)
             "word_timestamps": False,  # if enabled, Whisper will add timestamps to the transcribed text.
             "faster_without_timestamps": False,  # if enabled, faster whisper will only sample text tokens. (only when using stt_type=faster_whisper)
