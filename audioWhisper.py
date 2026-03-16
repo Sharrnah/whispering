@@ -100,6 +100,7 @@ if __name__ == '__main__':
 
     torch.backends.cudnn.benchmark = True
 
+    import transformers
     import audio_tools
     import audio_processing_recording
 
@@ -443,6 +444,7 @@ if __name__ == '__main__':
         print("path: " + str(Path.cwd()))
         print("running Python: " + platform.python_implementation() + " / v" + platform.python_version())
         print("using Torch: " + torch.__version__)
+        print("using Transformer: " + transformers.__version__)
         print("cuDNN-Version:", torch.backends.cudnn.version())
         print("using Audio API: " + audio_api_name)
         print("")
