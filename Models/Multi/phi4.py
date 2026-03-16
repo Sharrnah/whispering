@@ -9,16 +9,111 @@ import torch
 import transformers
 from PIL import Image
 from transformers import AutoModelForCausalLM, AutoProcessor, GenerationConfig, BitsAndBytesConfig
-import types  # for dynamic method binding of fallback
 
 import Plugins
 import downloader
 import settings
 from Models.Singleton import SingletonMeta
 
-# monkey patching imports
-import importlib.util
-import sys
+import importlib
+
+# DO NOT USE THIS MODEUL UNTIL COMPATIBILITY IS CONFIRMED FOR TRANSFORMERS >4.48.0
+# https://huggingface.co/microsoft/Phi-4-multimodal-instruct/discussions/71
+
+# @TODO: monkey patch for transformers v5.2.0+
+def monkeypatch_sliding_window_cache():
+    """
+    Phi-4-MM remote code imports SlidingWindowCache from transformers.cache_utils.
+    If it's missing in your Transformers build, we inject a type-only stub so
+    the import + isinstance(...) checks work.
+    """
+    import transformers.cache_utils as cu
+
+    if hasattr(cu, "SlidingWindowCache"):
+        return
+
+    # If Cache base exists, inherit for nicer isinstance / typing behavior.
+    CacheBase = getattr(cu, "Cache", object)
+
+    class SlidingWindowCache(CacheBase):  # noqa: N801
+        """Compatibility stub; Phi4MM uses this only in isinstance checks."""
+        pass
+
+    cu.SlidingWindowCache = SlidingWindowCache
+
+def patch_phi4_nemo_convsubsampling_cpu_default():
+    """
+    Phi-4 multimodal audio code creates torch.tensor(feat_in) inside NemoConvSubsampling.__init__.
+    Under meta init contexts this becomes a meta tensor and int(out_length) crashes.
+    Force default device to CPU just for this __init__.
+    """
+    try:
+        sce = importlib.import_module("transformers_modules.phi4.speech_conformer_encoder")
+    except ModuleNotFoundError:
+        # If the module name differs in your cache, import after the first trust_remote_code import,
+        # but BEFORE model instantiation. In most setups this exact name matches the traceback.
+        return
+
+    NemoConvSubsampling = sce.NemoConvSubsampling
+    orig_init = NemoConvSubsampling.__init__
+
+    if getattr(NemoConvSubsampling.__init__, "_phi4_patched", False):
+        return
+
+    def patched_init(self, *args, **kwargs):
+        # torch.set_default_device exists in newer PyTorch; use it if available
+        set_default = getattr(torch, "set_default_device", None)
+        get_default = getattr(torch, "get_default_device", None)
+
+        if set_default is None or get_default is None:
+            # Fallback: just run original (or patch the source file instead)
+            return orig_init(self, *args, **kwargs)
+
+        prev = get_default()
+        try:
+            set_default("cpu")
+            return orig_init(self, *args, **kwargs)
+        finally:
+            set_default(prev)
+
+    patched_init._phi4_patched = True
+    NemoConvSubsampling.__init__ = patched_init
+
+class _TensorCPUWhenMeta:
+    """
+    Temporary monkey-patch: if torch default device is 'meta' and the caller
+    did not specify a device, force torch.tensor(...) to create a CPU tensor.
+
+    This prevents Phi-4's NemoConvSubsampling init from creating meta tensors
+    and later calling int(out_length) on them.
+    """
+    def __init__(self, device="cpu"):
+        self._orig_tensor = torch.tensor
+        self._has_get_default = hasattr(torch, "get_default_device")
+        self._device = device
+
+    def __enter__(self):
+        orig = self._orig_tensor
+        has_get_default = self._has_get_default
+
+        def tensor_patched(*args, **kwargs):
+            # Only intervene when device is not explicitly provided
+            if "device" not in kwargs and has_get_default:
+                try:
+                    if torch.get_default_device() == "meta":
+                        kwargs["device"] = self._device
+                except Exception:
+                    # If anything odd happens, fall back to original behavior
+                    pass
+            return orig(*args, **kwargs)
+
+        torch.tensor = tensor_patched
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        torch.tensor = self._orig_tensor
+        return False  # don't suppress exceptions
+
 
 supported_audio_languages = {
     "en": "English",
@@ -202,122 +297,15 @@ class Phi4(metaclass=SingletonMeta):
             device = torch_directml.device(device_id)
         self.compute_device = device
 
-    def _hf_compat_patches(self):
-        """
-        - Create a dynamic package 'transformers_modules.phi4' pointing to the local model dir
-          so we can patch classes BEFORE from_pretrained() runs.
-        - Patch:
-            * Phi4MMProcessor.__init__(..., **kwargs)
-            * Phi4MMModel.prepare_inputs_for_generation(...)
-            * DynamicCache.get_usable_length(...) (HF cache API drift)
-        """
-        model_dir = Path(self.model_path).resolve()
-
-        # ---- ensure dynamic parent package exists ----
-        if "transformers_modules" not in sys.modules:
-            tm = types.ModuleType("transformers_modules")
-            tm.__path__ = []  # namespace
-            sys.modules["transformers_modules"] = tm
-
-        repo_name = model_dir.name or "phi4"
-        candidates = [repo_name, "phi4", "Phi-4-multimodal-instruct"]
-
-        def _ensure_pkg(repo: str) -> str:
-            fq_pkg = f"transformers_modules.{repo}"
-            if fq_pkg not in sys.modules:
-                pkg = types.ModuleType(fq_pkg)
-                pkg.__path__ = [str(model_dir)]
-                sys.modules[fq_pkg] = pkg
-            return fq_pkg
-
-        def _import_under_pkg(fq_pkg: str, basename: str):
-            fqmn = f"{fq_pkg}.{basename}"
-            if fqmn in sys.modules:
-                return sys.modules[fqmn]
-            file_path = model_dir / f"{basename}.py"
-            if not file_path.exists():
-                return None
-            spec = importlib.util.spec_from_file_location(fqmn, str(file_path))
-            if not spec or not spec.loader:
-                return None
-            mod = importlib.util.module_from_spec(spec)
-            mod.__package__ = fq_pkg  # allow "from .x import Y"
-            sys.modules[fqmn] = mod
-            spec.loader.exec_module(mod)
-            return mod
-
-        processing_mod = None
-        modeling_mod = None
-        for repo in candidates:
-            fq_pkg = _ensure_pkg(repo)
-            _import_under_pkg(fq_pkg, "configuration_phi4mm")
-            processing_mod = _import_under_pkg(fq_pkg, "processing_phi4mm")
-            modeling_mod   = _import_under_pkg(fq_pkg, "modeling_phi4mm")
-            if processing_mod and modeling_mod:
-                break
-
-        # ---- processor __init__ **kwargs shim ----
-        if processing_mod and hasattr(processing_mod, "Phi4MMProcessor"):
-            Processor = processing_mod.Phi4MMProcessor
-            if not getattr(Processor, "__wrapped_with_kwargs__", False):
-                _orig_init = Processor.__init__
-                def _init_with_kwargs(self, image_processor, audio_processor, tokenizer, **kwargs):
-                    return _orig_init(self, image_processor, audio_processor, tokenizer)
-                Processor.__init__ = _init_with_kwargs
-                Processor.__wrapped_with_kwargs__ = True  # mark as wrapped
-
-        # ---- model: add prepare_inputs_for_generation on CLASS ----
-        if modeling_mod and hasattr(modeling_mod, "Phi4MMModel"):
-            ModelCls = modeling_mod.Phi4MMModel
-            if not hasattr(ModelCls, "prepare_inputs_for_generation"):
-                def prepare_inputs_for_generation(self, input_ids=None, **kwargs):
-                    if input_ids is not None:
-                        kwargs["input_ids"] = input_ids
-                    return kwargs
-                setattr(ModelCls, "prepare_inputs_for_generation", prepare_inputs_for_generation)
-
-        # ---- cache: add get_usable_length shim if missing ----
-        try:
-            from transformers.cache_utils import DynamicCache
-        except Exception:
-            try:
-                from transformers.generation.cache_utils import DynamicCache  # older path
-            except Exception:
-                DynamicCache = None
-
-        if DynamicCache is not None and not hasattr(DynamicCache, "get_usable_length"):
-            def get_usable_length(self, new_seq_len, layer_idx):
-                # Try best-effort introspection of current cache length for this layer.
-                try:
-                    # Newer HF may have per-layer query:
-                    if hasattr(self, "get_seq_length") and callable(self.get_seq_length):
-                        return int(self.get_seq_length(layer_idx))
-                except Exception:
-                    pass
-                try:
-                    k = getattr(self, "key_cache", None)
-                    if k is not None:
-                        kk = k[layer_idx]
-                        if isinstance(kk, (list, tuple)) and kk:
-                            kk = kk[0]
-                        if hasattr(kk, "shape"):
-                            return int(kk.shape[-2])  # seq len dim
-                except Exception:
-                    pass
-                try:
-                    return int(len(self))  # may be implemented
-                except Exception:
-                    pass
-                return 0  # safe fallback
-            setattr(DynamicCache, "get_usable_length", get_usable_length)
-
     @torch.no_grad()
     def load_model(self, model='small', compute_type="float32", device="cpu"):
         if self.model is not None and self.processor is not None:
             return
         self.download_model("Phi-4")
 
-        self._hf_compat_patches()
+        # apply patches before loading
+        #monkeypatch_sliding_window_cache()
+        #patch_phi4_nemo_convsubsampling_cpu_default()
 
         self.processor = AutoProcessor.from_pretrained(self.model_path.resolve(), trust_remote_code=True, use_fast=False)
 
@@ -343,27 +331,33 @@ class Phi4(metaclass=SingletonMeta):
             elif (self.compute_type == "float16" or self.compute_type == "bfloat16") and transformers.utils.is_flash_attn_2_available():
                 attention_implementation = 'flash_attention_2'
 
+            #with _TensorCPUWhenMeta(self.compute_device):
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_path.resolve(),
                 trust_remote_code=True,
-                device_map=None,
+                device_map=self.compute_device,
                 dtype=main_torch_dtype,
                 _attn_implementation=attention_implementation,
                 quantization_config=quantization_config,
+                _fast_init=False,
+                low_cpu_mem_usage=False,
             )
-            self.model.to(self.compute_device)
+            #self.model.to(self.compute_device)
 
             if quantization_config is None:
                 self.model = self.model.cuda()
         else:
+            #with _TensorCPUWhenMeta(self.compute_device):
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_path.resolve(),
                 trust_remote_code=True,
-                device_map=None,
+                device_map=self.compute_device,
                 dtype=main_torch_dtype,
                 _attn_implementation='sdpa',
+                _fast_init=False,
+                low_cpu_mem_usage=False,
             )
-            self.model.to(self.compute_device)
+            #self.model.to(self.compute_device)
 
         self.generation_config = GenerationConfig.from_pretrained(self.model_path.resolve(), 'generation_config.json')
 
