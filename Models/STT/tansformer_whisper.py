@@ -201,7 +201,7 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 # print("result")
                 # print(result)
 
-                predicted_ids = self.model.generate(inputs=input_features,
+                predicted_ids = self.model.generate(input_features=input_features,
                                                     task=task, language=language, num_beams=beam_size,
                                                     return_timestamps=True,
                                                     forced_decoder_ids=None,
