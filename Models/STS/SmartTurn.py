@@ -62,12 +62,14 @@ class SmartTurn:
 
     sample_rate = 16000
     min_audio_length = 2  # in seconds
+    max_buffer_seconds = 8  # keep last N seconds in memory to avoid unbounded growth
 
     download_state = {"is_downloading": False}
 
-    def __init__(self, sample_rate=16000, min_audio_length=2):
+    def __init__(self, sample_rate=16000, min_audio_length=2, max_buffer_seconds: int = 8):
         self.sample_rate = sample_rate
         self.min_audio_length = min_audio_length
+        self.max_buffer_seconds = max_buffer_seconds
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -120,22 +122,28 @@ class SmartTurn:
         """Clear the current audio session."""
         self.audio_array = np.array([])  # Reset audio array to empty
 
-    def predict(self, audio_array: np.ndarray, probability_threshold: float = 0.5) -> dict:
-        """
-        Predict whether an audio segment is complete (turn ended) or incomplete.
-
-        Args:
-            probability_threshold: Threshold for classifying completion
-            audio_array: Numpy array containing audio samples at 16kHz
-
-        Returns:
-            Dictionary containing prediction results:
-            - prediction: 1 for complete, 0 for incomplete
-            - probability: Probability of completion (sigmoid output)
-        """
-        # Append new audio to existing audio array
+    def add_audio(self, audio_array: np.ndarray) -> None:
+        """Append audio samples to the current session buffer."""
+        if audio_array is None:
+            return
+        # Ensure 1-D float/np array
+        audio_array = np.asarray(audio_array).reshape(-1)
+        if audio_array.size == 0:
+            return
         self.audio_array = np.concatenate((self.audio_array, audio_array), axis=0)
 
+        # Keep buffer bounded to avoid unbounded memory usage
+        try:
+            max_seconds = int(self.max_buffer_seconds) if self.max_buffer_seconds is not None else 0
+        except Exception:
+            max_seconds = 0
+        if max_seconds and max_seconds > 0:
+            max_samples = max_seconds * self.sample_rate
+            if len(self.audio_array) > max_samples:
+                self.audio_array = self.audio_array[-max_samples:]
+
+    def predict_from_buffer(self, probability_threshold: float = 0.5) -> dict:
+        """Run prediction using the currently buffered audio (does not append new audio)."""
         # Check if audio length is sufficient
         if len(self.audio_array) < self.min_audio_length * self.sample_rate:
             return {
@@ -143,16 +151,22 @@ class SmartTurn:
                 "probability": 0.0,
             }
 
-        # Truncate to 8 seconds (keeping the end) or pad to 8 seconds
-        self.audio_array = truncate_audio_to_last_n_seconds(self.audio_array, n_seconds=8, sample_rate=self.sample_rate)
+        # Truncate/pad to the configured buffer window
+        try:
+            infer_seconds = int(self.max_buffer_seconds) if self.max_buffer_seconds is not None else 8
+        except Exception:
+            infer_seconds = 8
+        if infer_seconds <= 0:
+            infer_seconds = 8
+        audio_for_infer = truncate_audio_to_last_n_seconds(self.audio_array, n_seconds=infer_seconds, sample_rate=self.sample_rate)
 
         # Process audio using Whisper's feature extractor
         inputs = self.feature_extractor(
-            audio_array,
+            audio_for_infer,
             sampling_rate=self.sample_rate,
             return_tensors="np",
             padding="max_length",
-            max_length=8 * self.sample_rate,
+            max_length=infer_seconds * self.sample_rate,
             truncation=True,
             do_normalize=True,
         )
@@ -174,3 +188,20 @@ class SmartTurn:
             "prediction": prediction,
             "probability": probability,
         }
+
+    def predict(self, audio_array: np.ndarray, probability_threshold: float = 0.5) -> dict:
+        """
+        Predict whether an audio segment is complete (turn ended) or incomplete.
+
+        Args:
+            probability_threshold: Threshold for classifying completion
+            audio_array: Numpy array containing audio samples at 16kHz
+
+        Returns:
+            Dictionary containing prediction results:
+            - prediction: 1 for complete, 0 for incomplete
+            - probability: Probability of completion (sigmoid output)
+        """
+        # Backward compatible: append audio then infer from buffered session
+        self.add_audio(audio_array)
+        return self.predict_from_buffer(probability_threshold=probability_threshold)

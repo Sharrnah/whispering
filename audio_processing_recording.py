@@ -427,18 +427,32 @@ class AudioProcessor:
                             min_turn_audio_length = self.settings.GetOption("vad_smart_turn_min_length")
                             turn_pause_length = float(self.settings.GetOption("vad_smart_turn_pause_length"))
                             self.turn_model.set_min_audio_length(min_turn_audio_length)
-                            if new_confidence >= confidence_threshold and (
-                                    time.time() - self.pause_time) > turn_pause_length > 0.0:
+
+                            # Always accumulate audio while we consider it speech.
+                            # Inference is only triggered after a pause (see below).
+                            if new_confidence >= confidence_threshold:
+                                try:
+                                    self.turn_model.add_audio(int2float(np.frombuffer(test_audio_chunk, np.int16)))
+                                except Exception as e:
+                                    print(f"Error adding audio to SmartTurn buffer: {e}")
+
+                            # Only evaluate SmartTurn after we've had a continuous pause (no speech) for turn_pause_length.
+                            # self.pause_time is updated on speech (see below), so this measures time since last speech.
+                            if (
+                                 #len(self.frames) > 0
+                                 #and turn_pause_length > 0.0
+                                 new_confidence < confidence_threshold
+                                 and (time.time() - self.pause_time) > turn_pause_length
+                             ):
                                 turn_probability_threshold = self.settings.GetOption("vad_smart_turn_probability_threshold")
-                                turn_result = self.turn_model.predict(
-                                    int2float(np.frombuffer(test_audio_chunk, np.int16)),
+                                turn_result = self.turn_model.predict_from_buffer(
                                     probability_threshold=turn_probability_threshold
                                 )
                                 if turn_result["prediction"]:
                                     self.speaker_turn_detected = True
                                     self.turn_model.clear_session()
-                                    if self.verbose:
-                                        print("Speaker turn detected.")
+                                    #if self.verbose:
+                                    print("Speaker turn detected.")
 
                     except Exception as e:
                         print(f"Error processing audio_chunk: {e}")
@@ -599,6 +613,8 @@ class AudioProcessor:
 
             # append audio frame to the list if the recording var is set and voice confidence is above the threshold (So it only adds the audio parts with speech)
             if self.start_rec_on_volume_threshold and new_confidence >= confidence_threshold:
+                # keep pause_time aligned with the most recent detected speech so pause calculations are continuous-silence based
+                self.pause_time = time.time()
                 if self.before_recording_running_callback_func is not None and callable(self.before_recording_running_callback_func):
                     self.before_recording_running_callback_func(self)
                 if self.verbose:
