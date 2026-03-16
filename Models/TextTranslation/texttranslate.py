@@ -6,6 +6,7 @@ import pykakasi
 from Models.TextTranslation import texttranslateM2M100_CTranslate2
 from Models.TextTranslation import texttranslateNLLB200
 from Models.TextTranslation import texttranslateNLLB200_CTranslate2
+from Models.TextTranslation import texttranslate_hunyuan
 from Models.Multi.seamless_m4t import SeamlessM4T
 from Models.Multi.phi4 import Phi4
 from Models.Multi.voxtral import Voxtral
@@ -46,6 +47,9 @@ def InstallLanguages():
             texttranslateNLLB200.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "NLLB200_CT2":
             texttranslateNLLB200_CTranslate2.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
+        case "hunyuan_mt":
+            texttranslate_hunyuan.set_device(settings.GetOption("txt_translator_device"))
+            texttranslate_hunyuan.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "seamless_m4t":
             txt_translator_instance = SeamlessM4T(
                 model=settings.GetOption("txt_translator_size"),
@@ -74,6 +78,8 @@ def GetInstalledLanguageNames():
             return texttranslateNLLB200.get_installed_language_names()
         case "NLLB200_CT2":
             return texttranslateNLLB200_CTranslate2.get_installed_language_names()
+        case "hunyuan_mt":
+            return texttranslate_hunyuan.get_installed_language_names()
         case "seamless_m4t":
             return SeamlessM4T.get_languages()
         case "phi4":
@@ -110,6 +116,12 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
         case "NLLB200_CT2":
             try:
                 translation_text, from_code, to_code = texttranslateNLLB200_CTranslate2.translate_language(text, from_code, to_code, as_iso1)
+            except Exception as e:
+                print("Error: " + str(e))
+                traceback.print_exc()
+        case "hunyuan_mt":
+            try:
+                translation_text, from_code, to_code = texttranslate_hunyuan.translate_language(text, from_code, to_code, as_iso1)
             except Exception as e:
                 print("Error: " + str(e))
                 traceback.print_exc()
