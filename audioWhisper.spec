@@ -75,7 +75,7 @@ for pkg in [
     'flash_attn', 'mistral_common', 'espeakng_loader', 'unidic_lite',
     'mamba_ssm', 'audiotools', 'x_transformers', 'snac',
     'triton.runtime.jit', 'triton.runtime.autotuner', 'triton.runtime.driver',
-    's3tokenizer', 'spacy-pkuseg', 'spacy_pkuseg'
+    's3tokenizer', 'spacy-pkuseg', 'spacy_pkuseg', 'compressed-tensors', 'gguf', 'ffmpeg'
 ]:
     d, b, h = collect_all(pkg)
     datas += d
