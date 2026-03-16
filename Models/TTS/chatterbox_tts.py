@@ -663,6 +663,10 @@ class Chatterbox(metaclass=SingletonMeta):
                         self.model = ChatterboxMultilingualTTS.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype, do_compile=False)
                     #self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
                 self._loaded_precision_dtype = dtype
+
+                # Enable Flash Attention 2 on the TTS S3Gen decoder if supported
+                self._enable_flash_attn_tts()
+
                 print("Chatterbox TTS model loaded.")
 
     def load_vc_model(self, model_type="multilingual", dtype=None):
@@ -688,7 +692,88 @@ class Chatterbox(metaclass=SingletonMeta):
             meanflow = True
 
         self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, meanflow=meanflow, dtype=dtype)
+
+        # Enable Flash Attention 2 on the VC decoder if supported
+        self._enable_flash_attn_vc()
+
         print("VC model loaded.")
+
+    @staticmethod
+    def _check_flash_attn_support(device_str: str) -> bool:
+        """Check whether Flash Attention 2 (via PyTorch SDPA) can be used on the current device."""
+        if not device_str.startswith("cuda") or not torch.cuda.is_available():
+            return False
+        # PyTorch >= 2.0 exposes scaled_dot_product_attention which auto-dispatches
+        # to the Flash Attention / memory-efficient backend on CUDA.
+        if not hasattr(torch.nn.functional, "scaled_dot_product_attention"):
+            return False
+        return True
+
+    @staticmethod
+    def _enable_flash_attn_s3gen(s3gen, label: str = "S3Gen") -> int:
+        """Enable Flash Attention 2 (SDPA) on the ConditionalDecoder inside an S3Gen instance.
+
+        The decoder uses ``diffusers.models.attention_processor.Attention`` modules
+        inside its BasicTransformerBlocks. Swapping their processor to
+        ``AttnProcessor2_0`` makes them use ``F.scaled_dot_product_attention`` which
+        automatically dispatches to the Flash Attention 2 / memory-efficient CUDA
+        kernel when available.
+
+        The Conformer encoder uses custom relative-position attention that is
+        incompatible with Flash Attention, so it is left untouched.
+
+        Returns the number of attention modules updated.
+        """
+        from diffusers.models.attention_processor import Attention, AttnProcessor2_0
+
+        # Target only the CFM decoder (estimator) inside s3gen.flow
+        estimator = s3gen.flow.decoder.estimator
+        count = 0
+        for module in estimator.modules():
+            if isinstance(module, Attention):
+                module.set_processor(AttnProcessor2_0())
+                count += 1
+        return count
+
+    def _enable_flash_attn_vc(self):
+        """Enable Flash Attention 2 on the VC model's S3Gen decoder."""
+        if self.vc_model is None:
+            return
+        if not self._check_flash_attn_support(self.compute_device_str):
+            return
+        try:
+            count = self._enable_flash_attn_s3gen(self.vc_model.s3gen, label="VC")
+            if count > 0:
+                print(f"Flash Attention 2 (SDPA) enabled on VC decoder: {count} attention module(s) updated.")
+            else:
+                print("Flash Attention 2: no eligible attention modules found in VC decoder.")
+        except Exception as e:
+            print(f"Flash Attention 2 could not be enabled on VC model: {e}")
+
+    def _enable_flash_attn_tts(self):
+        """Enable Flash Attention 2 on the TTS model's S3Gen decoder.
+
+        The TTS model shares the same S3Gen architecture as the VC model (ConditionalDecoder
+        with diffusers Attention modules). This enables SDPA on those modules.
+
+        The T3 (LLaMA) backbone is left untouched because its non-streaming inference path
+        requires ``output_attentions=True`` which is incompatible with SDPA/Flash Attention.
+        """
+        if self.model is None:
+            return
+        if not self._check_flash_attn_support(self.compute_device_str):
+            return
+        try:
+            s3gen = getattr(self.model, "s3gen", None)
+            if s3gen is None:
+                return
+            count = self._enable_flash_attn_s3gen(s3gen, label="TTS")
+            if count > 0:
+                print(f"Flash Attention 2 (SDPA) enabled on TTS decoder: {count} attention module(s) updated.")
+            else:
+                print("Flash Attention 2: no eligible attention modules found in TTS decoder.")
+        except Exception as e:
+            print(f"Flash Attention 2 could not be enabled on TTS model: {e}")
 
     def list_models(self):
         return model_list
