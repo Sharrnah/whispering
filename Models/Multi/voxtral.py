@@ -5,6 +5,7 @@ from pathlib import Path
 import torch
 import transformers
 from transformers import VoxtralForConditionalGeneration, AutoProcessor, BitsAndBytesConfig
+from transformers import VoxtralRealtimeForConditionalGeneration
 
 import downloader
 import settings
@@ -42,6 +43,7 @@ supported_audio_languages = {
     "zh": "Chinese (Mandarin/Simplified)",
     "ja": "Japanese",
     "ko": "Korean",
+    "ru": "Russian",
 }
 
 transcribe_ignore_results = [
@@ -67,6 +69,24 @@ MODEL_LINKS = {
             "tekken.json": "4aaf3836c2a5332f029ce85a7a62255c966f47b6797ef81dedd0ade9c862e4a8"
         },
         "path": "Voxtral-Mini-3B-2507",
+    },
+    "Voxtral-Mini-4B-Realtime-2602": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/voxtral/Voxtral-Mini-4B-Realtime-2602.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/voxtral/Voxtral-Mini-4B-Realtime-2602.zip",
+            "https://s3.libs.space:9000/ai-models/voxtral/Voxtral-Mini-4B-Realtime-2602.zip",
+        ],
+        "checksum": "b6b349bc80fe9d3a43338a0f6c504d3abe90fc0bd48498a76f09f94bb1f2955c",
+        "file_checksums": {
+            "config.json": "96582f5809ad179531d47f9f89d76c696058fbdeff608d6611dcb7e076ea7e93",
+            #"consolidated.safetensors": "263f178fe752c90a2ae58f037a95ed092db8b14768b0978b8c48f66979c8345d",
+            "generation_config.json": "1fabdbadf2e0ea9e2c36e2a8460a53caa694c1324136e4158032b0a32ff6beec",
+            "model.safetensors": "e745e4902df6a4c48f29f2f8dc1f6d0fb4cc73c7156bc45923451a5bcdfcd1d6",
+            "params.json": "2ace010ebf7f0b62c60747d91c6d140e3c7238632d3e9c63d60a2bd2065ea301",
+            "processor_config.json": "5fbc4247e0b3b72c1b501b872c4fd6432b1f0fcc1939dcdf1fa5142c6d2ce070",
+            "tekken.json": "8434af1d39eba99f0ef46cf1450bf1a63fa941a26933a1ef5dbbf4adf0d00e44"
+        },
+        "path": "Voxtral-Mini-4B-Realtime-2602",
     },
 }
 
@@ -163,6 +183,8 @@ class Voxtral(metaclass=SingletonMeta):
 
         self.download_model(model)
 
+        self.model_type = "realtime" if "realtime" in model.lower() else "normal"
+
         self.processor = AutoProcessor.from_pretrained(Path(self.model_path / model).resolve(), trust_remote_code=True)
 
         attention_implementation = 'sdpa'
@@ -186,25 +208,46 @@ class Voxtral(metaclass=SingletonMeta):
             elif (self.compute_type == "float16" or self.compute_type == "bfloat16") and transformers.utils.is_flash_attn_2_available():
                 attention_implementation = 'flash_attention_2'
 
-            self.model = VoxtralForConditionalGeneration.from_pretrained(
-                Path(self.model_path / model).resolve(),
-                trust_remote_code=True,
-                device_map=self.compute_device_str,
-                dtype=main_torch_dtype,
-                _attn_implementation=attention_implementation,
-                quantization_config=quantization_config,
-            )
+            print(f"Using attention implementation: {attention_implementation} for compute type: {self.compute_type}")
+
+            if self.model_type == "realtime":
+                self.model = VoxtralRealtimeForConditionalGeneration.from_pretrained(
+                    Path(self.model_path / model).resolve(),
+                    trust_remote_code=True,
+                    device_map=self.compute_device_str,
+                    dtype=main_torch_dtype,
+                    _attn_implementation=attention_implementation,
+                    quantization_config=quantization_config,
+                )
+            else:
+                self.model = VoxtralForConditionalGeneration.from_pretrained(
+                    Path(self.model_path / model).resolve(),
+                    trust_remote_code=True,
+                    device_map=self.compute_device_str,
+                    dtype=main_torch_dtype,
+                    _attn_implementation=attention_implementation,
+                    quantization_config=quantization_config,
+                )
 
             if quantization_config is None:
                 self.model = self.model.cuda()
         else:
-            self.model = VoxtralForConditionalGeneration.from_pretrained(
-                Path(self.model_path / model).resolve(),
-                trust_remote_code=True,
-                device_map=self.compute_device_str,
-                dtype=main_torch_dtype,
-                _attn_implementation='sdpa',
-            ).cpu()
+            if self.model_type == "realtime":
+                self.model = VoxtralRealtimeForConditionalGeneration.from_pretrained(
+                    Path(self.model_path / model).resolve(),
+                    trust_remote_code=True,
+                    device_map=self.compute_device_str,
+                    dtype=main_torch_dtype,
+                    _attn_implementation='sdpa',
+                ).cpu()
+            else:
+                self.model = VoxtralForConditionalGeneration.from_pretrained(
+                    Path(self.model_path / model).resolve(),
+                    trust_remote_code=True,
+                    device_map=self.compute_device_str,
+                    dtype=main_torch_dtype,
+                    _attn_implementation='sdpa',
+                ).cpu()
 
     def _numpy_to_wav(self, audio_sample):
         # serialize NumPy array to WAV in-memory
@@ -227,29 +270,35 @@ class Voxtral(metaclass=SingletonMeta):
         #### alternative way to transcribe using the mistral helper directly
         wav_buffer = self._numpy_to_wav(audio_sample)
 
-        # build "OpenAI" request using mistral-common helper
-        openai_req = {
-            "model": str(Path(self.model_path / self.current_model).resolve()),
-            "file":  wav_buffer,
-            "temperature": 0.0,
-            **additional_args,
-        }
-        tr = TranscriptionRequest.from_openai(openai_req)
+        if self.model_type == "realtime":
+            inputs = self.processor(audio_sample, return_tensors="pt")
+            inputs = inputs.to(self.model.device, dtype=self.model.dtype)
+            outputs = self.model.generate(**inputs)
+            response = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
+        else:
+            # build "OpenAI" request using mistral-common helper
+            openai_req = {
+                "model": str(Path(self.model_path / self.current_model).resolve()),
+                "file":  wav_buffer,
+                "temperature": 0.0,
+                **additional_args,
+            }
+            tr = TranscriptionRequest.from_openai(openai_req)
 
-        # Tokenise + feature‑extract like the helper does, but by hand
-        tok = self.processor.tokenizer.tokenizer.encode_transcription(tr)
-        audio_feats = self.processor.feature_extractor(
-            audio_sample, sampling_rate=16000, return_tensors="pt"
-        ).input_features.to(self.model.device)
+            # Tokenise + feature‑extract like the helper does, but by hand
+            tok = self.processor.tokenizer.tokenizer.encode_transcription(tr)
+            audio_feats = self.processor.feature_extractor(
+                audio_sample, sampling_rate=16000, return_tensors="pt"
+            ).input_features.to(self.model.device)
 
-        # Generate
-        ids = self.model.generate(
-            input_features=audio_feats,
-            input_ids     = torch.tensor([tok.tokens], device=self.model.device),
-            max_new_tokens=500,
-            num_beams=1
-        )
-        response = self.processor.batch_decode(ids, skip_special_tokens=True)[0]
+            # Generate
+            ids = self.model.generate(
+                input_features=audio_feats,
+                input_ids     = torch.tensor([tok.tokens], device=self.model.device),
+                max_new_tokens=500,
+                num_beams=1
+            )
+            response = self.processor.batch_decode(ids, skip_special_tokens=True)[0]
 
         ####### Original Huggingface Transformer code. (commented out until language argument is optional)
         # # prepare inputs in-memory
