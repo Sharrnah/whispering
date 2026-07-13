@@ -167,6 +167,15 @@ class ChatterboxMultilingualTTS:
     def from_local(cls, ckpt_dir, device, dtype = torch.float16, do_compile = False) -> 'ChatterboxMultilingualTTS':
         ckpt_dir = Path(ckpt_dir)
 
+        def versioned_weight(*names):
+            for name in names:
+                candidate = ckpt_dir / name
+                if candidate.is_file():
+                    return candidate
+            raise FileNotFoundError(
+                f"None of the supported Chatterbox weights exist in {ckpt_dir}: {', '.join(names)}"
+            )
+
         ve = VoiceEncoder()
         ve.load_state_dict(
             load_safetensors(ckpt_dir / "ve.safetensors")
@@ -181,7 +190,9 @@ class ChatterboxMultilingualTTS:
             ve = torch.compile(ve)
 
         t3 = T3(T3Config.multilingual())
-        t3_state = load_safetensors(ckpt_dir / "t3_mtl23ls_v2.safetensors")
+        t3_state = load_safetensors(versioned_weight(
+            "t3_mtl23ls_v3.safetensors", "t3_mtl23ls_v2.safetensors"
+        ))
         if "model" in t3_state.keys():
             t3_state = t3_state["model"][0]
         t3.load_state_dict(t3_state)
@@ -195,7 +206,9 @@ class ChatterboxMultilingualTTS:
 
         s3gen = S3Gen()
         s3gen.load_state_dict(
-            load_safetensors(ckpt_dir / "s3gen.safetensors"), strict=False
+            load_safetensors(versioned_weight(
+                "s3gen_v3.safetensors", "s3gen.safetensors"
+            )), strict=False
         )
         s3gen.to(device)
         # Keep S3Gen stack in float32 to preserve ref embedding quality

@@ -479,6 +479,10 @@ if __name__ == '__main__':
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.phi4_get_languages())
         elif settings.SETTINGS.GetOption("stt_type") == "voxtral":
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.voxtral_get_languages())
+        elif settings.SETTINGS.GetOption("stt_type") == "vibevoice_asr":
+            settings.SETTINGS.SetOption("whisper_languages", audioprocessor.vibevoice_asr_get_languages())
+        elif settings.SETTINGS.GetOption("stt_type") == "higgs_audio":
+            settings.SETTINGS.SetOption("whisper_languages", audioprocessor.higgs_audio_asr_get_languages())
         else:
             # show no language if unspecified STT type
             settings.SETTINGS.SetOption("whisper_languages", ({"code": "", "name": ""},))

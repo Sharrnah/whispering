@@ -23,7 +23,7 @@ hiddenimports = [
     'pyannote.pipeline', 'pyloudnorm', 'future', 'noisereduce', 'frozendict', 'torch_directml', 'x_transformers', 'inflect', 'backoff',
     'language_tags', 'spacy', 'en_core_web_sm', 'misaki', 'fugashi', 'mojimoji', 'unidic', 'unidic-lite', 'ordered_set', 'phonemizer',
     'flash_attn', 'mistral_common', 'snac', 'peft', 'conformer', 'diffusers', 'spacy-pkuseg', 'spacy_pkuseg', 's3tokenizer'
-    'espeakng_loader', 'unidic_lite', 'mamba_ssm', 'audiotools'
+    'espeakng_loader', 'unidic_lite', 'mamba_ssm', 'audiotools', 'past', 'future'
 ]
 hiddenimports += [
     *collect_submodules('triton.backends'),
@@ -73,9 +73,10 @@ for pkg in [
     'frozendict', 'torch_directml', 'inflect', 'language_tags', 'spacy',
     'en_core_web_sm', 'misaki', 'unidic', 'unidic-lite', 'backoff', 'triton',
     'flash_attn', 'mistral_common', 'espeakng_loader', 'unidic_lite',
-    'mamba_ssm', 'audiotools', 'x_transformers', 'snac',
+    'mamba_ssm', 'audiotools', 'x_transformers', 'snac', 'pyctcdecode',
     'triton.runtime.jit', 'triton.runtime.autotuner', 'triton.runtime.driver',
-    's3tokenizer', 'spacy-pkuseg', 'spacy_pkuseg', 'compressed-tensors', 'gguf', 'ffmpeg'
+    's3tokenizer', 'spacy-pkuseg', 'spacy_pkuseg', 'compressed-tensors', 'gguf', 'ffmpeg',
+    'resemblyzer', 'dacite'
 ]:
     d, b, h = collect_all(pkg)
     datas += d

@@ -32,10 +32,13 @@ import Models.STT.medusa_whisper as medusa_whisper
 #import Models.STT.tensorrt_whisper as tensorrt_whisper
 import Models.STT.wav2vec_bert as wav2vec_bert
 import Models.STT.nemo_canary as nemo_canary
+import Models.STT.vibevoice_asr as vibevoice_asr
+import Models.STT.higgs_audio as higgs_audio
 import Models.Multi.seamless_m4t as seamless_m4t
 import Models.Multi.mms as mms
 import Models.Multi.phi4 as phi4
 import Models.Multi.voxtral as voxtral
+#import Models.Multi.phi4_onnx as phi4_onnx
 # import Models.STT.whisperx as whisperx
 import csv
 
@@ -130,6 +133,18 @@ def voxtral_get_languages():
     languages = {
         "": "Auto",
         **voxtral.supported_audio_languages
+    }
+    return tuple([{"code": code, "name": language} for code, language in languages.items()])
+
+def vibevoice_asr_get_languages():
+    languages = {
+        "": "Auto",
+    }
+    return tuple([{"code": code, "name": language} for code, language in languages.items()])
+
+def higgs_audio_asr_get_languages():
+    languages = {
+        "": "Auto",
     }
     return tuple([{"code": code, "name": language} for code, language in languages.items()])
 
@@ -565,6 +580,24 @@ def load_whisper(model, ai_device):
         model = voxtral.Voxtral(compute_type=compute_dtype, device=ai_device)
         model.load_model(stt_model_size)
         return model
+    elif stt_type == "vibevoice_asr":
+        compute_dtype = main_settings.GetOption("whisper_precision")
+        try:
+            return vibevoice_asr.TransformerVibeVoiceASR(compute_type=compute_dtype, device=ai_device)
+        except Exception as e:
+            print("Failed to load VibeVoice ASR model. Application exits. " + str(e))
+    elif stt_type == "higgs_audio":
+        compute_dtype = main_settings.GetOption("whisper_precision")
+        try:
+            return higgs_audio.HiggsAudio(compute_type=compute_dtype, device=ai_device)
+        except Exception as e:
+            print("Failed to load Higgs Audio ASR model. Application exits. " + str(e))
+    #elif stt_type == "phi4-onnx":
+    #    compute_dtype = main_settings.GetOption("whisper_precision")
+    #    #try:
+    #    return phi4_onnx.Phi4_onnx(compute_type=compute_dtype, device=ai_device)
+    #    #except Exception as e:
+    #    #    print("Failed to load Phi4 model. Application exits. " + str(e))
 
     # return None if no stt model is loaded
     return None
@@ -613,6 +646,16 @@ def load_realtime_whisper(model, ai_device):
         model = voxtral.Voxtral(compute_type=compute_dtype, device=ai_device)
         model.load_model(stt_model_size)
         return model
+    elif main_settings.GetOption("stt_type") == "vibevoice_asr":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
+        return vibevoice_asr.TransformerVibeVoiceASR(compute_type=compute_dtype, device=ai_device)
+    elif main_settings.GetOption("stt_type") == "higgs_audio":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
+        return higgs_audio.HiggsAudio(compute_type=compute_dtype, device=ai_device)
+
+    #elif main_settings.GetOption("stt_type") == "phi4-onnx":
+    #    compute_dtype = main_settings.GetOption("realtime_whisper_precision")
+    #    return phi4_onnx.Phi4_onnx(compute_type=compute_dtype, device=ai_device)
 
 
 def convert_audio(audio_bytes: bytes):
@@ -982,6 +1025,37 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                             language=whisper_language,
                                             beam_size=whisper_beam_size,
                                             )
+        elif settings.GetOption("stt_type") == "phi4-onnx":
+            # Phi4
+            audio_model.set_compute_type(settings.GetOption("whisper_precision"))
+            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            result = audio_model.transcribe(audio_data_numpy,
+                                            task=whisper_task,
+                                            language=whisper_language,
+                                            beam_size=whisper_beam_size,
+                                            )
+        elif settings.GetOption("stt_type") == "vibevoice_asr":
+            # VibeVoice ASR
+            audio_model.set_compute_type(settings.GetOption("whisper_precision"))
+            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            result = audio_model.transcribe(audio_data_numpy,
+                                            task=whisper_task,
+                                            language=whisper_language,
+                                            return_timestamps=whisper_word_timestamps,
+                                            beam_size=whisper_beam_size
+                                            )
+        elif settings.GetOption("stt_type") == "higgs_audio":
+            # VibeVoice ASR
+            model_size = settings.GetOption("model")
+            audio_model.set_compute_type(settings.GetOption("whisper_precision"))
+            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            result = audio_model.transcribe(audio_data_numpy,
+                                            task=whisper_task,
+                                            language=whisper_language,
+                                            return_timestamps=whisper_word_timestamps,
+                                            beam_size=whisper_beam_size,
+                                            model=model_size,
+                                            )
         else:
             # process audio by plugin for Speech-to-Text
             threading.Thread(target=plugin_process_stt_processing, args=(
@@ -992,6 +1066,35 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
         if result is None or (result.get('text') is not None and last_whisper_result == result.get('text').strip() and not final_audio):
             print("skipping... result: ", result)
             return
+
+        #print(result)
+        # @todo segments splitting (should also split recorded audio somehow from the audio_processing_recording logic
+        # if "segments" in result and len(result["segments"]) > 1 and not final_audio:
+        #     while not q.empty():
+        #         try:
+        #             q.get_nowait()
+        #         except queue.Empty:
+        #             break
+        #     # Combine all segments except the first one
+        #     combined_audio = convert_numpy_to_audio_bytes(np.concatenate([
+        #         audio_data_numpy[
+        #         int(segment["start"] * whisper.audio.SAMPLE_RATE):int(segment["end"] * whisper.audio.SAMPLE_RATE)
+        #         ]
+        #         for segment in result["segments"][1:]  # Skip the first segment
+        #     ]))
+        #     q.put({
+        #         "data": combined_audio,
+        #         "final": final_audio,
+        #         "time": current_audio_timestamp,
+        #         "settings": settings,
+        #         "plugins": plugins
+        #     })
+        #
+        #     # split audio_data_numpy at segments["start"] and segments["end"]
+        #     #for i in range(len(result["segments"]) - 1):
+        #     #    audio_data_numpy_split = audio_data_numpy[int(result["segments"][i]["start"] * whisper.audio.SAMPLE_RATE):
+        #     #                                int(result["segments"][i]["end"] * whisper.audio.SAMPLE_RATE)]
+
 
         whisper_result_thread(result, current_audio_timestamp, final_audio, settings, plugins)
 

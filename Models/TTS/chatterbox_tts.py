@@ -45,6 +45,24 @@ os.makedirs(voices_path, exist_ok=True)
 
 TTS_MODEL_LINKS = {
     # Models
+    "chatterbox-multilingual-v3": {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/chatterbox-multilingual-v3.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/chatterbox-tts/chatterbox-multilingual-v3.zip",
+            "https://s3.libs.space:9000/ai-models/chatterbox-tts/chatterbox-multilingual-v3.zip",
+        ],
+        "checksum": "b352ded6e8426cfa1d14eec8a26501fccae4e901cef52dd48fc95480d4a15da3",
+        "file_checksums": {
+            "Cangjie5_TC.json": "7073fd9de919443ae88e0bd2449917a65fe54898a4413ed1edcc4b67f28bce8c",
+            "grapheme_mtl_merged_expanded_v1.json": "69632f47220a788a52ce2661d096453c5655e9bf25289d89a8d832c46ee07dbf",
+            "mtl_tokenizer.json": "e7f9364e2c279b2de19f417a83624d9887532a56daec2ddddac470cc71693253",
+            "s3gen_v3.safetensors": "4a46190f3dccc2230fbb3488a930bccc925862ee68f2662433dfcfe93ce6c2cb",
+            "t3_mtl23ls_v3.safetensors": "5abca8321ede76f8e61f1cc0d19aea6c946b28871017ce8726f8a69203f05953",
+            "tokenizer.json": "d71e3a44eabb1784df9a68e9f95b251ecbf1a7af6a9f50835856b2ca9d8c14a5",
+            "ve.safetensors": "f0921cab452fa278bc25cd23ffd59d36f816d7dc5181dd1bef9751a7fb61f63c"
+        },
+        "path": "chatterbox-multilingual-v3",
+    },
     "chatterbox-turbo": {
         "urls": [
             "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/chatterbox-turbo.zip",
@@ -223,7 +241,7 @@ TTS_MODEL_LINKS = {
 }
 
 model_list = {
-    "Default": ["chatterbox-multilingual"],
+    "Default": ["chatterbox-multilingual-v3", "chatterbox-multilingual"],
     "English": ["chatterbox-english", "chatterbox-turbo"],
     "French": ["chatterbox-french"],
     "Czech": ["chatterbox-czech"],

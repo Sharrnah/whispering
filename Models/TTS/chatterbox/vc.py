@@ -50,9 +50,21 @@ class ChatterboxVC:
             ref_dict = states['gen']
 
         s3gen = S3Gen(meanflow=meanflow)
-        s3gen_path = ckpt_dir / "s3gen.safetensors"
         if meanflow:
             s3gen_path = ckpt_dir / "s3gen_meanflow.safetensors"
+        else:
+            s3gen_path = next(
+                (path for path in (
+                    ckpt_dir / "s3gen_v3.safetensors",
+                    ckpt_dir / "s3gen.safetensors",
+                ) if path.is_file()),
+                None,
+            )
+            if s3gen_path is None:
+                raise FileNotFoundError(
+                    f"No supported Chatterbox VC weight found in {ckpt_dir} "
+                    "(expected s3gen_v3.safetensors or s3gen.safetensors)"
+                )
         s3gen.load_state_dict(
             load_file(s3gen_path), strict=False
         )

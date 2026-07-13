@@ -162,7 +162,7 @@ class ChineseCangjieConverter:
         self.cj2word = {}
         self.segmenter = None
         self._load_cangjie_mapping(model_dir)
-        self._init_segmenter(model_dir)
+        self._init_segmenter()
     
     def _load_cangjie_mapping(self, model_dir=None):
         """Load Cangjie mapping from HuggingFace model repository."""        
@@ -189,16 +189,18 @@ class ChineseCangjieConverter:
         except Exception as e:
             logger.warning(f"Could not load Cangjie mapping: {e}")
     
-    def _init_segmenter(self, model_dir=None):
-        """Initialize pkuseg segmenter."""
+    def _init_segmenter(self):
+        """Initialize pkuseg with its packaged model data.
+
+        The Chatterbox checkpoint contains the Cangjie mapping, but it does not
+        contain a complete pkuseg model. Word segmentation is optional; Cangjie
+        conversion can safely continue character-by-character without it.
+        """
         try:
             from spacy_pkuseg import pkuseg
-            spacy_model = "spacy_ontonotes"
-            if model_dir is not None:
-                spacy_model = str(Path(model_dir / "spacy_ontonotes").resolve())
-            self.segmenter = pkuseg(spacy_model)
-        except ImportError:
-            logger.warning("pkuseg not available - Chinese segmentation will be skipped")
+            self.segmenter = pkuseg()
+        except Exception as exc:
+            logger.warning("pkuseg unavailable (%s) - Chinese word segmentation will be skipped", exc)
             self.segmenter = None
     
     def _cangjie_encode(self, glyph: str):
