@@ -513,6 +513,67 @@ class T3(nn.Module):
         return all_tokens
 
     @torch.inference_mode()
+    def inference_stream_turbo(
+        self,
+        t3_cond,
+        text_tokens,
+        temperature=0.8,
+        top_k=1000,
+        top_p=0.95,
+        repetition_penalty=1.2,
+        max_gen_len=1000,
+    ) -> Generator[int, None, None]:
+        """Yield Turbo speech tokens using the same GPT-2 sampling path as ``inference_turbo``."""
+        logits_processors = LogitsProcessorList()
+        if temperature > 0 and temperature != 1.0:
+            logits_processors.append(TemperatureLogitsWarper(temperature))
+        if top_k > 0:
+            logits_processors.append(TopKLogitsWarper(top_k))
+        if top_p < 1.0:
+            logits_processors.append(TopPLogitsWarper(top_p))
+        if repetition_penalty != 1.0:
+            logits_processors.append(RepetitionPenaltyLogitsProcessor(repetition_penalty))
+
+        speech_start_token = self.hp.start_speech_token * torch.ones_like(text_tokens[:, :1])
+        embeds, _ = self.prepare_input_embeds(
+            t3_cond=t3_cond,
+            text_tokens=text_tokens,
+            speech_tokens=speech_start_token,
+            cfg_weight=0.0,
+        )
+
+        llm_outputs = self.tfmr(inputs_embeds=embeds, use_cache=True)
+        past_key_values = llm_outputs.past_key_values
+        speech_logits = self.speech_head(llm_outputs[0][:, -1:])[:, -1, :]
+        history = speech_start_token
+        generated_speech_tokens = []
+
+        for _ in range(max_gen_len):
+            processed_logits = logits_processors(history, speech_logits)
+            if torch.all(processed_logits == -float("inf")):
+                logger.warning("All Turbo streaming logits are -inf; stopping generation.")
+                break
+
+            probs = F.softmax(processed_logits, dim=-1)
+            next_speech_token = torch.multinomial(probs, num_samples=1)
+            next_id = int(next_speech_token.item())
+            if next_id == self.hp.stop_speech_token:
+                break
+
+            yield next_id
+            generated_speech_tokens.append(next_speech_token)
+            history = torch.cat(generated_speech_tokens, dim=1)
+
+            current_speech_embed = self.speech_emb(next_speech_token)
+            llm_outputs = self.tfmr(
+                inputs_embeds=current_speech_embed,
+                past_key_values=past_key_values,
+                use_cache=True,
+            )
+            past_key_values = llm_outputs.past_key_values
+            speech_logits = self.speech_head(llm_outputs[0])[:, -1, :]
+
+    @torch.inference_mode()
     def inference_stream(
         self,
         *,
@@ -586,7 +647,7 @@ class T3(nn.Module):
             inputs_embeds=inputs_embeds,
             past_key_values=None,
             use_cache=True,
-            output_attentions=False,
+            output_attentions=self.patched_model.alignment_stream_analyzer is not None,
             output_hidden_states=True,
             return_dict=True,
         )
@@ -636,7 +697,7 @@ class T3(nn.Module):
             output = self.patched_model(
                 inputs_embeds=next_token_embed,
                 past_key_values=past,
-                output_attentions=False,
+                output_attentions=self.patched_model.alignment_stream_analyzer is not None,
                 output_hidden_states=True,
                 return_dict=True,
             )

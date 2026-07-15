@@ -3,6 +3,7 @@ from Models.TTS.orpheus_tts import OrpheusTTS
 from Models.TTS.silero import Silero
 from Models.TTS.f5_tts import F5TTS
 from Models.TTS.zonos_tts import ZonosTTS
+from Models.TTS.zonos2_tts import Zonos2TTS
 from Models.TTS.kokoro_tts import KokoroTTS
 from Models.TTS.chatterbox_tts import Chatterbox
 from Models.TTS.maya1_tts import MayaOne
@@ -27,6 +28,12 @@ def init():
                 return False
         case "zonos":
             tts = ZonosTTS()
+            if not failed:
+                return True
+            else:
+                return False
+        case "zonos2":
+            tts = Zonos2TTS()
             if not failed:
                 return True
             else:

@@ -682,7 +682,7 @@ class Chatterbox(metaclass=SingletonMeta):
                     #self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, dtype=dtype)
                 self._loaded_precision_dtype = dtype
 
-                # Enable Flash Attention 2 on the TTS S3Gen decoder if supported
+                # Enable PyTorch SDPA on the TTS S3Gen decoder if supported
                 self._enable_flash_attn_tts()
 
                 print("Chatterbox TTS model loaded.")
@@ -711,31 +711,30 @@ class Chatterbox(metaclass=SingletonMeta):
 
         self.vc_model = ChatterboxVC.from_local(ckpt_dir=str(Path(model_directory).resolve()), device=self.compute_device_str, meanflow=meanflow, dtype=dtype)
 
-        # Enable Flash Attention 2 on the VC decoder if supported
+        # Enable PyTorch SDPA on the VC decoder if supported
         self._enable_flash_attn_vc()
 
         print("VC model loaded.")
 
     @staticmethod
     def _check_flash_attn_support(device_str: str) -> bool:
-        """Check whether Flash Attention 2 (via PyTorch SDPA) can be used on the current device."""
+        """Check whether PyTorch scaled-dot-product attention can be used on the current device."""
         if not device_str.startswith("cuda") or not torch.cuda.is_available():
             return False
-        # PyTorch >= 2.0 exposes scaled_dot_product_attention which auto-dispatches
-        # to the Flash Attention / memory-efficient backend on CUDA.
+        # PyTorch >= 2.0 exposes scaled_dot_product_attention and chooses an
+        # available CUDA backend at runtime. This does not guarantee FlashAttention.
         if not hasattr(torch.nn.functional, "scaled_dot_product_attention"):
             return False
         return True
 
     @staticmethod
     def _enable_flash_attn_s3gen(s3gen, label: str = "S3Gen") -> int:
-        """Enable Flash Attention 2 (SDPA) on the ConditionalDecoder inside an S3Gen instance.
+        """Enable PyTorch SDPA on the ConditionalDecoder inside an S3Gen instance.
 
         The decoder uses ``diffusers.models.attention_processor.Attention`` modules
         inside its BasicTransformerBlocks. Swapping their processor to
-        ``AttnProcessor2_0`` makes them use ``F.scaled_dot_product_attention`` which
-        automatically dispatches to the Flash Attention 2 / memory-efficient CUDA
-        kernel when available.
+        ``AttnProcessor2_0`` makes them use ``F.scaled_dot_product_attention``;
+        PyTorch selects an available CUDA attention backend at runtime.
 
         The Conformer encoder uses custom relative-position attention that is
         incompatible with Flash Attention, so it is left untouched.
@@ -754,7 +753,7 @@ class Chatterbox(metaclass=SingletonMeta):
         return count
 
     def _enable_flash_attn_vc(self):
-        """Enable Flash Attention 2 on the VC model's S3Gen decoder."""
+        """Enable PyTorch SDPA on the VC model's S3Gen decoder."""
         if self.vc_model is None:
             return
         if not self._check_flash_attn_support(self.compute_device_str):
@@ -762,20 +761,20 @@ class Chatterbox(metaclass=SingletonMeta):
         try:
             count = self._enable_flash_attn_s3gen(self.vc_model.s3gen, label="VC")
             if count > 0:
-                print(f"Flash Attention 2 (SDPA) enabled on VC decoder: {count} attention module(s) updated.")
+                print(f"PyTorch SDPA enabled on VC decoder: {count} attention module(s) updated; backend selected at runtime.")
             else:
-                print("Flash Attention 2: no eligible attention modules found in VC decoder.")
+                print("PyTorch SDPA: no eligible attention modules found in VC decoder.")
         except Exception as e:
-            print(f"Flash Attention 2 could not be enabled on VC model: {e}")
+            print(f"PyTorch SDPA could not be enabled on VC model: {e}")
 
     def _enable_flash_attn_tts(self):
-        """Enable Flash Attention 2 on the TTS model's S3Gen decoder.
+        """Enable PyTorch SDPA on the TTS model's S3Gen decoder.
 
         The TTS model shares the same S3Gen architecture as the VC model (ConditionalDecoder
         with diffusers Attention modules). This enables SDPA on those modules.
 
         The T3 (LLaMA) backbone is left untouched because its non-streaming inference path
-        requires ``output_attentions=True`` which is incompatible with SDPA/Flash Attention.
+        requires ``output_attentions=True`` and therefore remains on eager attention.
         """
         if self.model is None:
             return
@@ -787,11 +786,11 @@ class Chatterbox(metaclass=SingletonMeta):
                 return
             count = self._enable_flash_attn_s3gen(s3gen, label="TTS")
             if count > 0:
-                print(f"Flash Attention 2 (SDPA) enabled on TTS decoder: {count} attention module(s) updated.")
+                print(f"PyTorch SDPA enabled on TTS decoder: {count} attention module(s) updated; backend selected at runtime.")
             else:
-                print("Flash Attention 2: no eligible attention modules found in TTS decoder.")
+                print("PyTorch SDPA: no eligible attention modules found in TTS decoder.")
         except Exception as e:
-            print(f"Flash Attention 2 could not be enabled on TTS model: {e}")
+            print(f"PyTorch SDPA could not be enabled on TTS model: {e}")
 
     def list_models(self):
         return model_list
@@ -1493,7 +1492,6 @@ class Chatterbox(metaclass=SingletonMeta):
             # Ensure model precision matches current setting
             self._ensure_model_for_precision()
             # Initialize audio streamer playback
-            chunk_size = settings.GetOption("tts_streamed_chunk_size")
             self.init_audio_stream_playback()
             # Forward to the unified implementation
             return self._tts_streaming_tokens_impl(text, ref_audio)
@@ -1509,17 +1507,22 @@ class Chatterbox(metaclass=SingletonMeta):
             # Ensure runtime settings and playback are initialized
             self._ensure_special_settings()
             self._ensure_model_for_precision()
-            chunk_size = settings.GetOption("tts_streamed_chunk_size")
             self.init_audio_stream_playback()
 
             # Pull runtime audio settings
             tts_volume = settings.GetOption("tts_volume")
-            token_batch_size = settings.GetOption("tts_streamed_token_batch_size")
-            if token_batch_size is None or token_batch_size <= 0:
-                token_batch_size = 12
-            min_start_tokens = settings.GetOption("tts_streamed_min_start_tokens")
-            if min_start_tokens is None or min_start_tokens <= 0:
-                min_start_tokens = 6
+            tts_volume = 1.0 if tts_volume is None else float(tts_volume)
+
+            # S3 speech tokens represent about 40 ms of output. Eight output tokens
+            # give the player roughly 320 ms at a time, while three right-context
+            # tokens match S3Gen's lookahead and six left-context tokens keep
+            # transitions from being decoded as unrelated clips.
+            token_batch_size = 8
+            right_context_tokens = 3
+            left_context_tokens = 6
+            samples_per_token = int(round(self.sample_rate * 0.04))
+            stream_crossfade_samples = int(round(self.sample_rate * 0.012))
+            is_turbo = isinstance(self.model, ChatterboxTurboTTS)
 
             exaggeration = self.special_settings["exaggeration"]
             temperature = self.special_settings["temperature"]
@@ -1569,7 +1572,6 @@ class Chatterbox(metaclass=SingletonMeta):
             # For final return, also build the full waveform as we stream
             segment_wavs = []
             last_voice_audio = None
-            inserted_any_silence = False
 
             for idx, (voice_name, voice_audio, segment) in enumerate(flat_segments):
                 # Ensure conditionals for this voice (once per voice switch)
@@ -1585,36 +1587,135 @@ class Chatterbox(metaclass=SingletonMeta):
 
                 # Text preprocessing and tokenization
                 seg_text = punc_norm(self._fix_abbreviations(segment))
-                text_tokens = self.model.tokenizer.text_to_tokens(seg_text, language_id=language.lower()).to(self.model.device)
-                # CFG duplication
-                text_tokens = torch.cat([text_tokens, text_tokens], dim=0)
-                # Add SOT/EOT
-                sot = self.model.t3.hp.start_text_token
-                eot = self.model.t3.hp.stop_text_token
-                text_tokens = torch.nn.functional.pad(text_tokens, (1, 0), value=sot)
-                text_tokens = torch.nn.functional.pad(text_tokens, (0, 1), value=eot)
+                if is_turbo:
+                    text_tokens = self.model.tokenizer(
+                        seg_text,
+                        return_tensors="pt",
+                        padding=True,
+                        truncation=True,
+                    ).input_ids.to(self.model.device)
+                else:
+                    text_tokens = self.model.tokenizer.text_to_tokens(
+                        seg_text,
+                        language_id=language.lower(),
+                    ).to(self.model.device)
+                    # Multilingual T3 uses a conditional/unconditional pair for CFG.
+                    text_tokens = torch.cat([text_tokens, text_tokens], dim=0)
+                    sot = self.model.t3.hp.start_text_token
+                    eot = self.model.t3.hp.stop_text_token
+                    text_tokens = torch.nn.functional.pad(text_tokens, (1, 0), value=sot)
+                    text_tokens = torch.nn.functional.pad(text_tokens, (0, 1), value=eot)
 
-                # Streaming decode for this text chunk
-                emitted_samples = 0
-                cache_source = torch.zeros(1, 1, 0, device=self.model.device)
-                token_stream = self.model.t3.inference_stream(
-                    t3_cond=self.model.conds.t3,
-                    text_tokens=text_tokens,
-                    max_new_tokens=max_new_tokens,
-                    stop_on_eos=True,
-                    do_sample=True,
-                    temperature=temperature,
-                    top_p=1.0,
-                    min_p=0.05,
-                    repetition_penalty=repetition_penalty,
-                    cfg_weight=cfg_weight,
-                    progress=False,
-                )
+                # T3 produces the speech-token sequence continuously. S3Gen has no
+                # stateful streamer in this local runtime, so decode bounded windows
+                # with context instead of regenerating the full utterance each time.
+                if is_turbo:
+                    token_stream = self.model.t3.inference_stream_turbo(
+                        t3_cond=self.model.conds.t3,
+                        text_tokens=text_tokens,
+                        max_gen_len=max_new_tokens,
+                        temperature=temperature,
+                        top_k=1000,
+                        top_p=0.95,
+                        repetition_penalty=repetition_penalty,
+                    )
+                else:
+                    token_stream = self.model.t3.inference_stream(
+                        t3_cond=self.model.conds.t3,
+                        text_tokens=text_tokens,
+                        max_new_tokens=max_new_tokens,
+                        stop_on_eos=True,
+                        do_sample=True,
+                        temperature=temperature,
+                        top_p=1.0,
+                        min_p=0.05,
+                        repetition_penalty=repetition_penalty,
+                        cfg_weight=cfg_weight,
+                        progress=False,
+                    )
 
-                # Accumulate the synthesized audio for this segment
+                # Accumulate exactly the audio sent to playback for the final return.
                 seg_audio = []
                 collected_tokens = []
-                last_synth_tok_count = 0
+                output_token_cursor = 0
+                pending_tail = None
+
+                def send_audio_chunk(chunk):
+                    if chunk is None or chunk.numel() == 0:
+                        return
+                    ready = chunk.detach().reshape(-1).to(device="cpu", dtype=torch.float32).clamp(-1.0, 1.0).contiguous()
+                    if ready.numel() == 0:
+                        return
+                    seg_audio.append(ready)
+                    if self.audio_streamer is not None:
+                        pcm_bytes = self.return_pcm_audio(ready.unsqueeze(0))
+                        if pcm_bytes:
+                            self.audio_streamer.add_audio_chunk(pcm_bytes)
+
+                def queue_audio_chunk(chunk):
+                    """Crossfade adjacent decoder windows before sending them to playback."""
+                    nonlocal pending_tail
+                    if chunk is None or chunk.numel() == 0:
+                        return
+
+                    chunk = chunk.detach().reshape(-1).to(dtype=torch.float32)
+                    if tts_volume != 1.0:
+                        chunk = chunk * tts_volume
+
+                    if pending_tail is not None and pending_tail.numel() > 0:
+                        overlap = min(stream_crossfade_samples, pending_tail.numel(), chunk.numel())
+                        if overlap > 0:
+                            fade_in = torch.linspace(0.0, 1.0, overlap, device=chunk.device, dtype=chunk.dtype)
+                            mixed = pending_tail[-overlap:].to(chunk.device) * (1.0 - fade_in) + chunk[:overlap] * fade_in
+                            chunk = torch.cat((mixed, chunk[overlap:]), dim=-1)
+                        else:
+                            chunk = torch.cat((pending_tail.to(chunk.device), chunk), dim=-1)
+                        pending_tail = None
+
+                    if stream_crossfade_samples > 0 and chunk.numel() > stream_crossfade_samples:
+                        send_audio_chunk(chunk[:-stream_crossfade_samples])
+                        pending_tail = chunk[-stream_crossfade_samples:].detach()
+                    else:
+                        pending_tail = chunk.detach()
+
+                def flush_audio_tail():
+                    nonlocal pending_tail
+                    if pending_tail is not None and pending_tail.numel() > 0:
+                        tail = pending_tail
+                        pending_tail = None
+                        send_audio_chunk(tail)
+
+                def synthesize_window(output_start, output_count):
+                    """Decode one bounded S3Gen window and return only its new center audio."""
+                    if output_count <= 0:
+                        return None
+                    window_start = max(0, output_start - left_context_tokens)
+                    window_end = min(
+                        len(collected_tokens),
+                        output_start + output_count + right_context_tokens,
+                    )
+                    if window_end <= window_start:
+                        return None
+
+                    speech_tokens = torch.tensor(
+                        collected_tokens[window_start:window_end],
+                        dtype=torch.long,
+                        device=self.model.device,
+                    ).unsqueeze(0)
+                    window_wav, _ = self.model.s3gen.inference(
+                        speech_tokens=speech_tokens,
+                        ref_dict=self.model.conds.gen,
+                        n_timesteps=2 if is_turbo else 10,
+                    )
+                    if window_wav is None or window_wav.numel() == 0:
+                        return None
+
+                    window_wav = window_wav.detach().reshape(-1)
+                    crop_start = (output_start - window_start) * samples_per_token
+                    crop_end = min(window_wav.numel(), crop_start + output_count * samples_per_token)
+                    if crop_end <= crop_start:
+                        return None
+                    return window_wav[crop_start:crop_end]
 
                 for tid in token_stream:
                     # Skip SoS/EoS and out-of-range
@@ -1622,78 +1723,25 @@ class Chatterbox(metaclass=SingletonMeta):
                         continue
                     collected_tokens.append(int(tid))
 
-                    # Warm-up: wait until we have a few tokens to avoid empty frames
-                    if len(collected_tokens) < min_start_tokens:
+                    required_tokens = output_token_cursor + token_batch_size + right_context_tokens
+                    if len(collected_tokens) < required_tokens:
                         continue
 
-                    # Synthesize only when we have a full batch of new tokens
-                    if (len(collected_tokens) - last_synth_tok_count) < token_batch_size:
-                        continue
+                    queue_audio_chunk(synthesize_window(output_token_cursor, token_batch_size))
+                    output_token_cursor += token_batch_size
 
-                    # Run incremental synthesis for current tokens
-                    stoks = torch.tensor(collected_tokens, dtype=torch.long, device=self.model.device).unsqueeze(0)
+                # Flush the tokens withheld as lookahead, plus any short final batch.
+                remaining_tokens = len(collected_tokens) - output_token_cursor
+                if remaining_tokens > 0:
+                    queue_audio_chunk(synthesize_window(output_token_cursor, remaining_tokens))
+                flush_audio_tail()
 
-                    wav, cache_source = self.model.s3gen.inference(
-                        speech_tokens=stoks,
-                        ref_dict=self.model.conds.gen,
-                        cache_source=cache_source,
-                        finalize=False,
-                    )
-                    wav = wav.squeeze(0).detach()
-
-                    # Emit only the newly synthesized portion since last push
-                    if wav.size(-1) > emitted_samples:
-                        new_chunk = wav[..., emitted_samples:]
-                        emitted_samples = wav.size(-1)
-                        if new_chunk.numel() > 0:
-                            if tts_volume != 1.0:
-                                new_chunk = new_chunk * float(tts_volume)
-                            seg_audio.append(new_chunk.cpu())
-                            if self.audio_streamer is not None:
-                                pcm_bytes = self.return_pcm_audio(new_chunk.unsqueeze(0))
-                                if pcm_bytes and len(pcm_bytes) > 0:
-                                    self.audio_streamer.add_audio_chunk(pcm_bytes)
-
-                    last_synth_tok_count = len(collected_tokens)
-
-                # Finalize to flush the model tail for this segment
-                if len(collected_tokens) > 0:
-                    stoks = torch.tensor(collected_tokens, dtype=torch.long, device=self.model.device).unsqueeze(0)
-                    wav, _ = self.model.s3gen.inference(
-                        speech_tokens=stoks,
-                        ref_dict=self.model.conds.gen,
-                        cache_source=cache_source,
-                        finalize=True,
-                    )
-                    wav = wav.squeeze(0).detach()
-                    if wav.size(-1) > emitted_samples:
-                        new_chunk = wav[..., emitted_samples:]
-                        if new_chunk.numel() > 0:
-                            if tts_volume != 1.0:
-                                new_chunk = new_chunk * float(tts_volume)
-                            seg_audio.append(new_chunk.cpu())
-                            if self.audio_streamer is not None:
-                                pcm_bytes = self.return_pcm_audio(new_chunk.unsqueeze(0))
-                                if pcm_bytes and len(pcm_bytes) > 0:
-                                    self.audio_streamer.add_audio_chunk(pcm_bytes)
-
-                # Build per-segment waveform and optional VAD/edge fade
+                # Retrospective VAD/edge processing cannot alter audio already played.
+                # Token streaming therefore returns the exact live waveform here.
                 if len(seg_audio) > 0:
                     seg_wave = torch.cat(seg_audio, dim=-1).unsqueeze(0)
                 else:
                     seg_wave = torch.zeros(1, 0)
-
-                if self.special_settings.get("use_vad", False) and seg_wave.numel() > 0:
-                    try:
-                        seg_wave = self._apply_vad_trim(seg_wave, self.sample_rate)
-                    except Exception as e:
-                        print(f"VAD trim (streaming tokens segment) error: {e}")
-
-                seg_edge_fade = int(self.special_settings.get("vad_edge_fade_ms", 0))
-                if seg_edge_fade > 0 and seg_wave is not None and seg_wave.numel() > 0:
-                    fs = bool(self.special_settings.get("vad_trim_start", False))
-                    fe = bool(self.special_settings.get("vad_trim_end", True))
-                    seg_wave = self._apply_asymmetric_edge_fade(seg_wave, self.sample_rate, seg_edge_fade, fs, fe)
 
                 if seg_wave is not None and seg_wave.numel() > 0:
                     segment_wavs.append(seg_wave)
@@ -1708,7 +1756,6 @@ class Chatterbox(metaclass=SingletonMeta):
                     if boundary_pause and boundary_pause > 0:
                         silence = self._make_silence(boundary_pause, self.sample_rate)
                         if silence.numel() > 0:
-                            inserted_any_silence = True
                             segment_wavs.append(silence)
                             if self.audio_streamer is not None:
                                 sil_bytes = self.return_pcm_audio(silence)
@@ -1721,17 +1768,8 @@ class Chatterbox(metaclass=SingletonMeta):
             if len(segment_wavs) == 0:
                 final_wave = torch.zeros(1, self.sample_rate // 10)  # 0.1s silence fallback
             else:
-                seg_crossfade_ms = int(self.special_settings.get("segment_crossfade_ms", 0))
-                if inserted_any_silence:
-                    # Already interleaved with silences; do not crossfade
-                    safe_wavs = [w if w.ndim == 2 else w.reshape(1, -1) for w in segment_wavs if isinstance(w, torch.Tensor) and w.numel() > 0]
-                    final_wave = torch.cat(safe_wavs, dim=-1) if safe_wavs else torch.zeros(1, 0)
-                else:
-                    if seg_crossfade_ms > 0:
-                        final_wave = self._concat_with_crossfade(segment_wavs, self.sample_rate, seg_crossfade_ms)
-                    else:
-                        safe_wavs = [w if w.ndim == 2 else w.reshape(1, -1) for w in segment_wavs if isinstance(w, torch.Tensor) and w.numel() > 0]
-                        final_wave = torch.cat(safe_wavs, dim=-1) if safe_wavs else torch.zeros(1, 0)
+                safe_wavs = [w if w.ndim == 2 else w.reshape(1, -1) for w in segment_wavs if isinstance(w, torch.Tensor) and w.numel() > 0]
+                final_wave = torch.cat(safe_wavs, dim=-1) if safe_wavs else torch.zeros(1, 0)
 
             self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
             print("TTS generation finished (streaming)")
