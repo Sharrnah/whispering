@@ -140,6 +140,7 @@ osc_initial_time_limit: 15.0,  # defines the initial time after the first messag
 osc_scroll_size: 3,  # defines the scroll size for scrolling OSC messages. (only used when osc_send_type is set to "scroll")
 osc_max_scroll_size: 30,  # defines the maximum scroll size for scrolling OSC messages. ~30 to scroll on only a single line (only used when osc_send_type is set to "scroll")
 osc_send_type: "chunks",  # defines the type of OSC messages are send. Can be "scroll", "full_or_scroll", "chunks" or "full". Where "scroll" sends the text scrollung until all is send, "full_or_scroll" to only scroll if it is too long, "chunks" sends the text in chunks and "full" sends the whole text at once.
+osc_chat_prioritize_latest: true,  # skip queued/unfinished final messages when a newer final chat message arrives. false enables strict FIFO.
 osc_auto_processing_enabled: True,  # Toggle auto sending of OSC messages on WhisperAI results. (not saved)
 osc_type_transfer: "translation_result",  # defines which type of data to send. Can be "source", "translation_result" or "both".
 osc_type_transfer_split: " 🌐 ",  # defines how source and translation results are split. (only used when osc_type_transfer is set to "both")

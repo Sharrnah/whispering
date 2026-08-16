@@ -448,6 +448,7 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
         osc_initial_time_limit = settings.GetOption("osc_initial_time_limit")
         osc_scroll_size = settings.GetOption("osc_scroll_size")
         osc_max_scroll_size = settings.GetOption("osc_max_scroll_size")
+        osc_chat_prioritize_latest = settings.GetOption("osc_chat_prioritize_latest")
 
         # delay sending message if it is the final audio and until TTS starts playing
         if final_audio and settings.GetOption("osc_delay_until_audio_playback"):
@@ -462,33 +463,43 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
         if osc_send_type == "full":
             VRC_OSCLib.Chat(message, True, osc_notify, osc_address,
                             IP=osc_ip, PORT=osc_port,
-                            convert_ascii=settings.GetOption("osc_convert_ascii"))
+                            convert_ascii=settings.GetOption("osc_convert_ascii"),
+                            replaceable=not final_audio,
+                            prioritize_latest=osc_chat_prioritize_latest)
         elif osc_send_type == "chunks":
             VRC_OSCLib.Chat_chunks(message,
                                    nofify=osc_notify, address=osc_address, ip=osc_ip, port=osc_port,
                                    chunk_size=osc_chat_limit, delay=osc_time_limit,
                                    initial_delay=osc_initial_time_limit,
-                                   convert_ascii=settings.GetOption("osc_convert_ascii"))
+                                   convert_ascii=settings.GetOption("osc_convert_ascii"),
+                                   replaceable=not final_audio,
+                                   prioritize_latest=osc_chat_prioritize_latest)
         elif osc_send_type == "scroll":
             VRC_OSCLib.Chat_scrolling_chunks(message,
                                              nofify=osc_notify, address=osc_address, ip=osc_ip, port=osc_port,
                                              chunk_size=osc_max_scroll_size, delay=osc_scroll_time_limit,
                                              initial_delay=osc_initial_time_limit,
                                              scroll_size=osc_scroll_size,
-                                             convert_ascii=settings.GetOption("osc_convert_ascii"))
+                                             convert_ascii=settings.GetOption("osc_convert_ascii"),
+                                             replaceable=not final_audio,
+                                             prioritize_latest=osc_chat_prioritize_latest)
         elif osc_send_type == "full_or_scroll":
             # send full if message fits in osc_chat_limit, otherwise send scrolling chunks
             if len(message.encode('utf-16le')) <= osc_chat_limit * 2:
                 VRC_OSCLib.Chat(message, True, osc_notify, osc_address,
                                 IP=osc_ip, PORT=osc_port,
-                                convert_ascii=settings.GetOption("osc_convert_ascii"))
+                                convert_ascii=settings.GetOption("osc_convert_ascii"),
+                                replaceable=not final_audio,
+                                prioritize_latest=osc_chat_prioritize_latest)
             else:
                 VRC_OSCLib.Chat_scrolling_chunks(message,
                                                  nofify=osc_notify, address=osc_address, ip=osc_ip, port=osc_port,
                                                  chunk_size=osc_chat_limit, delay=osc_scroll_time_limit,
                                                  initial_delay=osc_initial_time_limit,
                                                  scroll_size=osc_scroll_size,
-                                                 convert_ascii=settings.GetOption("osc_convert_ascii"))
+                                                 convert_ascii=settings.GetOption("osc_convert_ascii"),
+                                                 replaceable=not final_audio,
+                                                 prioritize_latest=osc_chat_prioritize_latest)
 
         settings.SetOption("plugin_timer_stopped", True)
 

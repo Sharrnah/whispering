@@ -231,39 +231,45 @@ def osc_request(msgObj, websocket):
     osc_initial_time_limit = settings.GetOption("osc_initial_time_limit")
     osc_scroll_size = settings.GetOption("osc_scroll_size")
     osc_max_scroll_size = settings.GetOption("osc_max_scroll_size")
+    osc_chat_prioritize_latest = settings.GetOption("osc_chat_prioritize_latest")
 
     #VRC_OSCLib.set_min_time_between_messages(settings.GetOption("osc_min_time_between_messages"))
 
     if osc_ip != "0":
         if osc_send_type == "full":
             VRC_OSCLib.Chat(msgObj["value"]["text"], True, osc_notify, osc_address, IP=osc_ip, PORT=osc_port,
-                            convert_ascii=settings.GetOption("osc_convert_ascii"))
+                            convert_ascii=settings.GetOption("osc_convert_ascii"),
+                            prioritize_latest=osc_chat_prioritize_latest)
         elif osc_send_type == "chunks":
             VRC_OSCLib.Chat_chunks(msgObj["value"]["text"],
                                    nofify=osc_notify, address=osc_address, ip=osc_ip, port=osc_port,
                                    chunk_size=osc_chat_limit, delay=osc_time_limit,
                                    initial_delay=osc_initial_time_limit,
-                                   convert_ascii=settings.GetOption("osc_convert_ascii"))
+                                   convert_ascii=settings.GetOption("osc_convert_ascii"),
+                                   prioritize_latest=osc_chat_prioritize_latest)
         elif osc_send_type == "scroll":
             VRC_OSCLib.Chat_scrolling_chunks(msgObj["value"]["text"],
                                              nofify=osc_notify, address=osc_address, ip=osc_ip, port=osc_port,
                                              chunk_size=osc_max_scroll_size, delay=osc_scroll_time_limit,
                                              initial_delay=osc_initial_time_limit,
                                              scroll_size=osc_scroll_size,
-                                             convert_ascii=settings.GetOption("osc_convert_ascii"))
+                                             convert_ascii=settings.GetOption("osc_convert_ascii"),
+                                             prioritize_latest=osc_chat_prioritize_latest)
         elif osc_send_type == "full_or_scroll":
             # send full if message fits in osc_chat_limit, otherwise send scrolling chunks
             if len(msgObj["value"]["text"].encode('utf-16le')) <= osc_chat_limit * 2:
                 VRC_OSCLib.Chat(msgObj["value"]["text"], True, osc_notify, osc_address,
                                 IP=osc_ip, PORT=osc_port,
-                                convert_ascii=settings.GetOption("osc_convert_ascii"))
+                                convert_ascii=settings.GetOption("osc_convert_ascii"),
+                                prioritize_latest=osc_chat_prioritize_latest)
             else:
                 VRC_OSCLib.Chat_scrolling_chunks(msgObj["value"]["text"],
                                                  nofify=osc_notify, address=osc_address, ip=osc_ip, port=osc_port,
                                                  chunk_size=osc_chat_limit, delay=osc_scroll_time_limit,
                                                  initial_delay=osc_initial_time_limit,
                                                  scroll_size=osc_scroll_size,
-                                                 convert_ascii=settings.GetOption("osc_convert_ascii"))
+                                                 convert_ascii=settings.GetOption("osc_convert_ascii"),
+                                                 prioritize_latest=osc_chat_prioritize_latest)
 
         settings.SetOption("plugin_timer_stopped", True)
 
