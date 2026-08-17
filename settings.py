@@ -1,10 +1,14 @@
 # noinspection PyPackageRequirements
 
-import yaml
+import copy
 import os
-from pathlib import Path
-from click import core
+import tempfile
 import threading
+from pathlib import Path
+
+import yaml
+from click import core
+
 import Utilities
 
 DEFAULT_SETTINGS_PATH = Path(Path.cwd() / "Profiles" / 'settings.yaml')
@@ -199,22 +203,45 @@ class SettingsManager:
             "plugin_current_timer": 0.0
         }
         self._save_timer = None
+        self._save_lock = threading.RLock()
+        # The Fyne UI and Python backend can both write the selected profile.
+        # Remember which values this process actually changed so a delayed
+        # backend save cannot replace newer UI values with its stale snapshot.
+        self._dirty_settings = {}
+        self._persisted_settings = {}
+
+    @staticmethod
+    def _file_signature(path):
+        try:
+            file_stat = Path(path).stat()
+            return file_stat.st_mtime_ns, file_stat.st_size, file_stat.st_ino
+        except (FileNotFoundError, OSError):
+            return None
 
     def set_option(self, setting, value):
-        prev = self.translate_settings.get(setting, None)
-        changed = True
-        if setting in self.translate_settings:
-            # Treat in-place mutations of mutable types as a change
-            if isinstance(prev, (dict, list, set)):
-                changed = (prev is value) or (prev != value)
-            else:
-                changed = prev != value
+        save_path = None
+        with self._save_lock:
+            prev = self.translate_settings.get(setting, None)
+            changed = True
+            if setting in self.translate_settings:
+                # Treat in-place mutations of mutable types as a change
+                if isinstance(prev, (dict, list, set)):
+                    changed = (prev is value) or (prev != value)
+                else:
+                    changed = prev != value
 
-        if changed:
-            self.translate_settings[setting] = value
-            # Save settings
-            if setting not in NON_PERSISTENT_SETTINGS and (self.settings_path is not None and not self.immutable):
-                self.debounced_save_yaml(self.settings_path)
+            if changed:
+                self.translate_settings[setting] = value
+                # Save settings
+                if setting not in NON_PERSISTENT_SETTINGS and (self.settings_path is not None and not self.immutable):
+                    # Capture which disk revision existed when this value was
+                    # changed. If the UI writes a newer value for the same key
+                    # before the debounce fires, that later profile save wins.
+                    self._dirty_settings[setting] = self._file_signature(self.settings_path)
+                    save_path = self.settings_path
+
+        if save_path is not None:
+            self.debounced_save_yaml(save_path)
         return value
 
     def get_option(self, setting):
@@ -224,42 +251,119 @@ class SettingsManager:
         return self.translate_settings
 
     def load_yaml(self, path):
-        self.settings_path = path
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                loaded_data = yaml.safe_load(f)
-                sanitized_data = Utilities.handle_bytes(loaded_data)
-                self.translate_settings.update(sanitized_data)
+        with self._save_lock:
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+                self._save_timer = None
+            self._dirty_settings.clear()
+            self.settings_path = path
+            self._persisted_settings = {}
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    loaded_data = yaml.safe_load(f)
+                    sanitized_data = Utilities.handle_bytes(loaded_data)
+                    if sanitized_data:
+                        self.translate_settings.update(sanitized_data)
+                        self._persisted_settings = copy.deepcopy(sanitized_data)
 
     def debounced_save_yaml(self, path):
-        # Cancel the existing timer if it exists
-        if self._save_timer is not None:
-            self._save_timer.cancel()
+        with self._save_lock:
+            # Cancel the existing timer if it exists
+            if self._save_timer is not None:
+                self._save_timer.cancel()
 
-        # Start a new timer
-        self._save_timer = threading.Timer(DEBOUNCE_TIME, self.save_yaml, [path])
-        self._save_timer.start()
+            # Start a new timer
+            self._save_timer = threading.Timer(DEBOUNCE_TIME, self.save_yaml, [path])
+            self._save_timer.start()
 
     def save_yaml(self, path):
-        # If this function was called directly, cancel the timer
-        if self._save_timer is not None:
-            self._save_timer.cancel()
-            self._save_timer = None
+        with self._save_lock:
+            # If this function was called directly, cancel the timer
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+                self._save_timer = None
 
-        # Do not save if the path is None or settings set to immutable
-        if self.settings_path is None or self.immutable:
-            print("Not saved. - No path set or immutable")
-            return
+            # Do not save if the path is None or settings set to immutable
+            if self.settings_path is None or self.immutable:
+                print("Not saved. - No path set or immutable")
+                return
 
-        to_save_settings = self.translate_settings.copy()
+            requested_path = Path(path).resolve()
+            active_path = Path(self.settings_path).resolve()
+            if requested_path != active_path:
+                # A timer belonging to a previously loaded profile may already
+                # have started when it was cancelled. Never let it save into
+                # that old profile.
+                return
 
-        # Remove settings that are in NON_PERSISTENT_SETTINGS
-        for setting in NON_PERSISTENT_SETTINGS:
-            if setting in to_save_settings:
-                del to_save_settings[setting]
+            dirty_settings = dict(self._dirty_settings)
+            if not dirty_settings:
+                return
 
-        with open(path, "w", encoding="utf-8") as f:
-            yaml.dump(to_save_settings, f)
+            if requested_path.exists():
+                with open(requested_path, "r", encoding="utf-8") as f:
+                    to_save_settings = yaml.safe_load(f)
+                if to_save_settings is None:
+                    to_save_settings = {}
+                if not isinstance(to_save_settings, dict):
+                    raise ValueError(f"Settings file must contain a YAML object: {requested_path}")
+                to_save_settings = Utilities.handle_bytes(to_save_settings)
+                current_file_signature = self._file_signature(requested_path)
+            else:
+                # A new profile needs a complete initial document. Existing
+                # profiles are merged below to preserve changes made by the UI.
+                to_save_settings = copy.deepcopy(self.translate_settings)
+                current_file_signature = None
+
+            missing = object()
+            for setting, signature_when_changed in dirty_settings.items():
+                disk_value = to_save_settings.get(setting, missing)
+                persisted_value = self._persisted_settings.get(setting, missing)
+                backend_value = self.translate_settings[setting]
+                disk_key_changed = disk_value != persisted_value
+                disk_changed_after_setting = current_file_signature != signature_when_changed
+
+                if disk_key_changed and disk_changed_after_setting and disk_value != backend_value:
+                    # The profile editor saved this same key after the backend
+                    # changed it. Keep the newer UI value and synchronize the
+                    # in-memory copy instead of writing stale state back later.
+                    if disk_value is missing:
+                        self.translate_settings.pop(setting, None)
+                    else:
+                        self.translate_settings[setting] = copy.deepcopy(disk_value)
+                    continue
+
+                to_save_settings[setting] = copy.deepcopy(backend_value)
+
+            # Remove settings that are in NON_PERSISTENT_SETTINGS
+            for setting in NON_PERSISTENT_SETTINGS:
+                to_save_settings.pop(setting, None)
+
+            requested_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary_path = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    dir=requested_path.parent,
+                    prefix=f".{requested_path.name}.",
+                    suffix=".tmp",
+                    delete=False,
+                ) as temporary_file:
+                    temporary_path = Path(temporary_file.name)
+                    yaml.dump(to_save_settings, temporary_file)
+                    temporary_file.flush()
+                    os.fsync(temporary_file.fileno())
+                os.replace(temporary_path, requested_path)
+                temporary_path = None
+            finally:
+                if temporary_path is not None and temporary_path.exists():
+                    temporary_path.unlink()
+
+            self._persisted_settings = copy.deepcopy(to_save_settings)
+            for setting, signature_when_changed in dirty_settings.items():
+                if self._dirty_settings.get(setting) == signature_when_changed:
+                    self._dirty_settings.pop(setting, None)
 
     @staticmethod
     def is_argument_setting(ctx, argument_name):
@@ -316,7 +420,7 @@ class SettingsManager:
             "whisper_task": ["transcribe", "translate", "transcribe_translate"],
             "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "medusa_whisper", "qwen3_asr", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", "phi4", "voxtral", "phi4-onnx", "vibevoice_asr", "higgs_audio", ""],
             #"tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "parler", ""],
-            "tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "chatterbox", "maya1", ""],
+            "tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "chatterbox", "index_tts", "maya1", ""],
             "tts_ai_device": ["cuda", "cpu"],
             "txt_translator_device": ["cuda", "cpu"],
             "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "hunyuan_mt", "milmmt", "seamless_m4t", "phi4"],
