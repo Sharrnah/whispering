@@ -221,7 +221,8 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
                 (settings.GetOption("txt_translate_realtime_sync") and settings.GetOption("realtime"))
                 or settings.GetOption("txt_translate_realtime")
         )
-        if do_txt_translate and (realtime_translate or final_audio):
+        model_translation = str(result.get("txt_translation") or "").strip()
+        if do_txt_translate and not model_translation and (realtime_translate or final_audio):
             from_lang = settings.GetOption("src_lang")
             to_lang = settings.GetOption("trg_lang")
             to_romaji = settings.GetOption("txt_romaji")
@@ -249,10 +250,20 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
             # combine all translations second_translation_texts to result with wrap
             if second_translation_enabled and second_translation_texts:
                 result["txt_second_translation"] = second_translation_texts
+        elif model_translation:
+            # Some multimodal STT models return the transcript and translation
+            # in one inference. Treat that translation as the outgoing text in
+            # the same way as the separate text-translation pipeline, while
+            # retaining the source transcript in result["text"].
+            predicted_text = model_translation
 
         if final_audio:
             if "txt_translation" in result:
-                translation_text = predicted_text
+                # A multimodal STT backend can provide a translation in the
+                # same inference pass even when the separate text-translator
+                # toggle is disabled. Persist that model-provided value rather
+                # than accidentally duplicating the source transcript.
+                translation_text = result["txt_translation"]
             else:
                 translation_text = ""
 

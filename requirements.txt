@@ -8,8 +8,9 @@ tqdm==4.67.1
 rich==13.5.3
 more-itertools==10.3.0
 librosa==0.11.0
-compressed-tensors==0.14.0.1
-transformers==v5.5.3
+compressed-tensors==0.15.0.1
+transformers==v5.14.1
+safetensors==0.8.0
 #transformers @ https://github.com/Sharrnah/transformers/archive/refs/heads/audioflamingo3_v4.57.zip
 tokenizers==0.22.2
 gguf==0.18.0
@@ -53,7 +54,7 @@ protobuf==3.20.3
 progressbar2==4.3.2
 fasttext-wheel
 #best-download
-robust-downloader @ https://github.com/fedebotu/robust-downloader/archive/refs/heads/main.zip
+robust-downloader @ https://github.com/fedebotu/robust-downloader/archive/940b2a2c6b87d5e4f83cc71cf92b403cb9ed3236.zip
 # pywin32 required for easyOCR
 pywin32
 #easyocr==1.7.0

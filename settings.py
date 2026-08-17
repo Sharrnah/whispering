@@ -34,8 +34,8 @@ class SettingsManager:
             "src_lang": "auto",  # source language for text translator (Whisper A.I. in translation mode always translates to "en")
             "trg_lang": "fra_Latn",  # target language for text translator
             "txt_romaji": False,  # if enabled, text translator will convert text to romaji.
-            "txt_translator": "NLLB200_CT2",  # can be "NLLB200", "NLLB200_CT2" or "M2M100"
-            "txt_translator_size": "small",  # for M2M100 model size: Can be "small" or "large", for NLLB200 model size: Can be "small", "medium", "large".
+            "txt_translator": "NLLB200_CT2",  # text translation backend identifier.
+            "txt_translator_size": "small",  # model identifier/size selected for the active text translator.
             "txt_translator_precision": "float32",  # for ctranwslate based: can be "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
             "txt_translate_realtime": False,  # use text translator in realtime mode
             "txt_translate_realtime_sync": True,  # if enabled, txt_translate_realtime will be synchronized with realtime setting.
@@ -67,21 +67,21 @@ class SettingsManager:
             "current_language": None,  # can be None (auto) or any Whisper supported language.
             "target_language": "eng",  # can be any M4T supported language.
             "model": "small",  # Whisper model size. Can be "tiny", "base", "small", "medium" or "large"
-            "condition_on_previous_text": False,  # if enabled, Whisper will condition on previous text. (more prone to loops or getting stuck)
-            "prompt_reset_on_temperature": 0.5,  # after which temperature fallback step the prompt with the previous text should be reset (default value is 0.5)
+            "condition_on_previous_text": False,  # Whisper-only. Qwen uses initial_prompt as explicit context.
+            "prompt_reset_on_temperature": 0.5,  # Whisper-only fallback/history control.
             "energy": 300,  # energy of audio volume to start whisper processing. Can be 0-1000
             "phrase_time_limit": 0,  # time limit for Whisper to generate a phrase. (0 = no limit)
             "pause": 1.0,  # pause between phrases.
             "initial_prompt": "",  # initial prompt for Whisper. for example "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking." will give more filler words.
             "logprob_threshold": "-1.0",
             "no_speech_threshold": "0.6",
-            "length_penalty": 1.0,
-            "beam_search_patience": 1.0,
-            "repetition_penalty": 1.0,  # penalize the score of previously generated tokens (set > 1 to penalize)
-            "no_repeat_ngram_size": 0,  # prevent repetitions of ngrams with this size
+            "length_penalty": 1.0,  # Also used by Qwen when beam_size > 1.
+            "beam_search_patience": 1.0,  # CTranslate2/Whisper-only; not mapped to Qwen.
+            "repetition_penalty": 1.0,  # Also used by Qwen; 1 is neutral and > 1 penalizes repetition.
+            "no_repeat_ngram_size": 0,  # Also used by Qwen; 0 disables it.
             "whisper_precision": "float32",  # for original Whisper can be "float16" or "float32", for faster-whisper "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
             "stt_type": "faster_whisper",  # can be "faster_whisper", "original_whisper", "transformer_whisper", "speech_t5", "seamless_m4t" etc.
-            "temperature_fallback": True,  # Set to False to disable temperature fallback which is the reason for some slowdowns, but decreases quality.
+            "temperature_fallback": True,  # Whisper-only retry loop; Qwen always performs one deterministic pass.
             "beam_size": 5,  # Beam size for beam search. (higher = more accurate, but slower)
             "whisper_cpu_threads": 0,  # Number of threads to use when running on CPU (4 by default)
             "whisper_num_workers": 1,  # When transcribe() is called from multiple Python threads
@@ -130,7 +130,7 @@ class SettingsManager:
             "realtime_whisper_model": "",  # model used for realtime transcription. (empty for using same model as model setting)
             "realtime_whisper_precision": "float16",  # precision used for realtime transcription model. (only used when realtime_whisper_model is set)
             "realtime_whisper_beam_size": 1,  # beam size used for realtime transcription model.
-            "realtime_temperature_fallback": False,  # Set to False to disable temperature fallback for realtime transcription. (see temperature_fallback setting)
+            "realtime_temperature_fallback": False,  # Whisper-only; has no effect on Qwen realtime requests.
             "realtime_frame_multiply": 15,  # Only sends the audio clip to Whisper every X frames (and if its minimum this length, to prevent partial frames). (higher = less whisper updates and less processing time)
             "realtime_frequency_time": 1.0,  # Only sends the audio clip to Whisper every X seconds. (higher = less whisper updates and less processing time)
 
@@ -273,6 +273,8 @@ class SettingsManager:
 
     def get_available_models(self):
         available_models_list = []
+        if self.get_option("stt_type") == "qwen3_asr":
+            available_models_list = ["Qwen3-ASR-0.6B-hf", "Qwen3-ASR-1.7B-hf", "custom"]
         if '_whisper' in self.get_option("stt_type"):
             from whisper import available_models
             available_models_list = available_models()
@@ -311,14 +313,14 @@ class SettingsManager:
         possible_settings = {
             "ai_device": ["None", "cuda", "cpu", "direct-ml:0", "direct-ml:1"],
             "model": self.get_available_models(),
-            "whisper_task": ["transcribe", "translate"],
-            "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "medusa_whisper", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", "phi4", "voxtral", "phi4-onnx", "vibevoice_asr", "higgs_audio", ""],
+            "whisper_task": ["transcribe", "translate", "transcribe_translate"],
+            "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "medusa_whisper", "qwen3_asr", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", "phi4", "voxtral", "phi4-onnx", "vibevoice_asr", "higgs_audio", ""],
             #"tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "parler", ""],
             "tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "chatterbox", "maya1", ""],
             "tts_ai_device": ["cuda", "cpu"],
             "txt_translator_device": ["cuda", "cpu"],
-            "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "hunyuan_mt", "seamless_m4t", "phi4"],
-            "txt_translator_size": ["small", "medium", "large"],
+            "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "hunyuan_mt", "milmmt", "seamless_m4t", "phi4"],
+            "txt_translator_size": ["small", "medium", "large", "MiLMMT-46-1B-v1.0", "MiLMMT-46-4B-v1.0", "MiLMMT-46-12B-v1.0", "custom"],
             "txt_translator_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit"],
             "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
             "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
