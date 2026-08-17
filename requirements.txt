@@ -231,10 +231,6 @@ dacite==1.9.2
 
 
 # Index TTS dependencies
-# cn2an==0.5.22
-# g2p-en==2.1.0
-# jieba==0.42.1
-# keras==2.9.0
-# vocos==0.1.0
-# pypinyin
-# WeTextProcessing
+munch==4.0.0
+# Includes the KaldiFST-backed English/Chinese text-normalization runtime.
+wetext==0.0.9

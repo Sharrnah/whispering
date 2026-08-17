@@ -7,6 +7,13 @@ from PyInstaller.utils.hooks import collect_dynamic_libs
 import os
 import sys ; sys.setrecursionlimit(sys.getrecursionlimit() * 5)
 
+project_root = os.path.abspath(os.path.dirname(SPEC))
+indextts_parent = os.path.join(project_root, 'Models', 'TTS')
+# IndexTTS keeps the upstream package name for compatibility with its absolute
+# imports. Make that local package visible while PyInstaller evaluates hooks.
+if indextts_parent not in sys.path:
+    sys.path.insert(0, indextts_parent)
+
 datas = []
 binaries = []
 # Collect dynamic libraries from onnxruntime
@@ -22,9 +29,11 @@ hiddenimports = [
     'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio',
     'pyannote.pipeline', 'pyloudnorm', 'future', 'noisereduce', 'frozendict', 'torch_directml', 'x_transformers', 'inflect', 'backoff',
     'language_tags', 'spacy', 'en_core_web_sm', 'misaki', 'fugashi', 'mojimoji', 'unidic', 'unidic-lite', 'ordered_set', 'phonemizer',
-    'flash_attn', 'mistral_common', 'snac', 'peft', 'conformer', 'diffusers', 'spacy-pkuseg', 'spacy_pkuseg', 's3tokenizer'
-    'espeakng_loader', 'unidic_lite', 'mamba_ssm', 'audiotools', 'past', 'future'
+    'flash_attn', 'mistral_common', 'snac', 'peft', 'conformer', 'diffusers', 'spacy-pkuseg', 'spacy_pkuseg', 's3tokenizer',
+    'espeakng_loader', 'unidic_lite', 'mamba_ssm', 'audiotools', 'past', 'future',
+    'indextts', 'munch', 'wetext', 'kaldifst'
 ]
+hiddenimports += collect_submodules('indextts')
 hiddenimports += [
     *collect_submodules('triton.backends'),
     *collect_submodules('triton.runtime'),
@@ -38,6 +47,7 @@ datas += collect_data_files('backoff')
 datas += collect_data_files('triton')
 datas += collect_data_files('mistral_common')
 datas += collect_data_files('spacy_pkuseg')
+datas += collect_data_files('wetext')
 datas += copy_metadata('rich')
 datas += copy_metadata('torch')
 datas += copy_metadata('tqdm')
@@ -60,6 +70,16 @@ datas += copy_metadata('spacy')
 datas += copy_metadata('en_core_web_sm')
 datas += copy_metadata('misaki')
 datas += copy_metadata('backoff')
+datas += copy_metadata('munch')
+datas += copy_metadata('wetext')
+datas += copy_metadata('kaldifst')
+
+# Preserve the upstream model-use terms in standalone distributions. Model
+# weights remain in the separately hosted/downloaded archive.
+for license_name in ['LICENSE', 'LICENSE_ZH.txt', 'DISCLAIMER']:
+    license_path = os.path.join(indextts_parent, 'indextts', license_name)
+    if os.path.isfile(license_path):
+        datas.append((license_path, 'indextts'))
 
 # ---- Bundle these as real modules (code + extensions) ----
 for pkg in [
@@ -76,7 +96,7 @@ for pkg in [
     'mamba_ssm', 'audiotools', 'x_transformers', 'snac', 'pyctcdecode',
     'triton.runtime.jit', 'triton.runtime.autotuner', 'triton.runtime.driver',
     's3tokenizer', 'spacy-pkuseg', 'spacy_pkuseg', 'compressed-tensors', 'gguf', 'ffmpeg',
-    'resemblyzer', 'dacite'
+    'resemblyzer', 'dacite', 'fugashi', 'munch', 'wetext', 'kaldifst'
 ]:
     d, b, h = collect_all(pkg)
     datas += d
@@ -144,7 +164,7 @@ runtime_hooks = [
 
 a = Analysis(
     ['audioWhisper.py'],
-    pathex=['C:\\src\\', workdir],
+    pathex=['C:\\src\\', workdir, project_root, indextts_parent],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
