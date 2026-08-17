@@ -31,9 +31,10 @@ hiddenimports = [
     'language_tags', 'spacy', 'en_core_web_sm', 'misaki', 'fugashi', 'mojimoji', 'unidic', 'unidic-lite', 'ordered_set', 'phonemizer',
     'flash_attn', 'mistral_common', 'snac', 'peft', 'conformer', 'diffusers', 'spacy-pkuseg', 'spacy_pkuseg', 's3tokenizer',
     'espeakng_loader', 'unidic_lite', 'mamba_ssm', 'audiotools', 'past', 'future',
-    'indextts', 'munch', 'wetext', 'kaldifst'
+    'indextts', 'qwen3_tts_runtime', 'munch', 'wetext', 'kaldifst'
 ]
 hiddenimports += collect_submodules('indextts')
+hiddenimports += collect_submodules('qwen3_tts_runtime')
 hiddenimports += [
     *collect_submodules('triton.backends'),
     *collect_submodules('triton.runtime'),
@@ -80,6 +81,11 @@ for license_name in ['LICENSE', 'LICENSE_ZH.txt', 'DISCLAIMER']:
     license_path = os.path.join(indextts_parent, 'indextts', license_name)
     if os.path.isfile(license_path):
         datas.append((license_path, 'indextts'))
+
+# Preserve the Apache-2.0 license for the inference-only Qwen3-TTS runtime.
+qwen3_tts_license = os.path.join(indextts_parent, 'qwen3_tts_runtime', 'LICENSE')
+if os.path.isfile(qwen3_tts_license):
+    datas.append((qwen3_tts_license, 'qwen3_tts_runtime'))
 
 # ---- Bundle these as real modules (code + extensions) ----
 for pkg in [

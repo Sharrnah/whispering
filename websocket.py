@@ -612,6 +612,9 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
             try:
                 if hasattr(tts.tts, 'save_voice'):
                     tts.tts.save_voice()
+                    if hasattr(tts.tts, 'list_voices'):
+                        server_instance.broadcast_message(
+                            json.dumps({"type": "available_tts_voices", "data": tts.tts.list_voices()}))
                 else:
                     print("Save voice method not found.")
             except Exception as e:

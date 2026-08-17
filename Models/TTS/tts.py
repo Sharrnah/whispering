@@ -8,6 +8,7 @@ from Models.TTS.kokoro_tts import KokoroTTS
 from Models.TTS.chatterbox_tts import Chatterbox
 from Models.TTS.maya1_tts import MayaOne
 from Models.TTS.index_tts import IndexTTS
+from Models.TTS.qwen3_tts import Qwen3TTS
 
 tts = None
 failed = None
@@ -65,6 +66,12 @@ def init():
                 return False
         case "index_tts":
             tts = IndexTTS()
+            if not failed:
+                return True
+            else:
+                return False
+        case "qwen3_tts":
+            tts = Qwen3TTS()
             if not failed:
                 return True
             else:
