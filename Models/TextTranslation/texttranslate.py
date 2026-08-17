@@ -1,3 +1,4 @@
+import threading
 import traceback
 
 import settings
@@ -7,6 +8,7 @@ from Models.TextTranslation import texttranslateM2M100_CTranslate2
 from Models.TextTranslation import texttranslateNLLB200
 from Models.TextTranslation import texttranslateNLLB200_CTranslate2
 from Models.TextTranslation import texttranslate_hunyuan
+from Models.TextTranslation import texttranslate_milmmt
 from Models.Multi.seamless_m4t import SeamlessM4T
 from Models.Multi.phi4 import Phi4
 from Models.Multi.voxtral import Voxtral
@@ -14,6 +16,18 @@ from Models.Multi.voxtral import Voxtral
 import Plugins
 
 txt_translator_instance = None
+_active_translator_configuration = None
+_translation_lock = threading.RLock()
+_BUILTIN_TRANSLATORS = {
+    "M2M100",
+    "NLLB200",
+    "NLLB200_CT2",
+    "hunyuan_mt",
+    "milmmt",
+    "seamless_m4t",
+    "phi4",
+    "voxtral",
+}
 
 
 def get_current_translator():
@@ -38,18 +52,65 @@ def convert_to_romaji(text):
 
 
 # Download and install Translate packages
-def InstallLanguages():
+def _translator_configuration(translator):
+    return (
+        translator,
+        settings.GetOption("txt_translator_size"),
+        settings.GetOption("txt_translator_precision"),
+        settings.GetOption("txt_translator_device"),
+    )
+
+
+def _translator_is_ready(translator):
+    if translator == "hunyuan_mt":
+        return texttranslate_hunyuan.is_model_loaded()
+    if translator == "milmmt":
+        return texttranslate_milmmt.is_model_loaded()
+    if translator in {"seamless_m4t", "phi4", "voxtral"}:
+        return txt_translator_instance is not None
+    return True
+
+
+def _release_inactive_transformers_models(translator):
+    if translator != "hunyuan_mt" and texttranslate_hunyuan.is_model_loaded():
+        texttranslate_hunyuan.release_model()
+    if translator != "milmmt" and texttranslate_milmmt.is_model_loaded():
+        texttranslate_milmmt.release_model()
+
+
+def _install_languages(translator):
     global txt_translator_instance
-    match get_current_translator():
+    global _active_translator_configuration
+
+    configuration = _translator_configuration(translator)
+    if (
+        _active_translator_configuration == configuration
+        and _translator_is_ready(translator)
+    ):
+        return
+
+    _active_translator_configuration = None
+    _release_inactive_transformers_models(translator)
+
+    match translator:
         case "M2M100":
+            texttranslateM2M100_CTranslate2.set_device(settings.GetOption("txt_translator_device"))
             texttranslateM2M100_CTranslate2.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "NLLB200":
+            texttranslateNLLB200.set_device(settings.GetOption("txt_translator_device"))
             texttranslateNLLB200.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "NLLB200_CT2":
+            texttranslateNLLB200_CTranslate2.set_device(settings.GetOption("txt_translator_device"))
             texttranslateNLLB200_CTranslate2.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "hunyuan_mt":
             texttranslate_hunyuan.set_device(settings.GetOption("txt_translator_device"))
             texttranslate_hunyuan.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
+        case "milmmt":
+            texttranslate_milmmt.set_device(settings.GetOption("txt_translator_device"))
+            texttranslate_milmmt.load_model(
+                settings.GetOption("txt_translator_size"),
+                compute_type=settings.GetOption("txt_translator_precision"),
+            )
         case "seamless_m4t":
             txt_translator_instance = SeamlessM4T(
                 model=settings.GetOption("txt_translator_size"),
@@ -69,6 +130,13 @@ def InstallLanguages():
             )
             txt_translator_instance.load_model()
 
+    _active_translator_configuration = configuration
+
+
+def InstallLanguages():
+    with _translation_lock:
+        _install_languages(get_current_translator())
+
 
 def GetInstalledLanguageNames():
     match get_current_translator():
@@ -80,6 +148,8 @@ def GetInstalledLanguageNames():
             return texttranslateNLLB200_CTranslate2.get_installed_language_names()
         case "hunyuan_mt":
             return texttranslate_hunyuan.get_installed_language_names()
+        case "milmmt":
+            return texttranslate_milmmt.get_installed_language_names()
         case "seamless_m4t":
             return SeamlessM4T.get_languages()
         case "phi4":
@@ -100,80 +170,82 @@ def GetInstalledLanguageNames():
 def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
     global txt_translator_instance
     translation_text = text
-    match get_current_translator():
-        case "M2M100":
+    translator = get_current_translator()
+
+    if translator in _BUILTIN_TRANSLATORS:
+        try:
+            with _translation_lock:
+                _install_languages(translator)
+                match translator:
+                    case "M2M100":
+                        translation_text = texttranslateM2M100_CTranslate2.translate_language(text, from_code, to_code)
+                    case "NLLB200":
+                        translation_text, from_code, to_code = texttranslateNLLB200.translate_language(text, from_code, to_code, as_iso1)
+                    case "NLLB200_CT2":
+                        translation_text, from_code, to_code = texttranslateNLLB200_CTranslate2.translate_language(text, from_code, to_code, as_iso1)
+                    case "hunyuan_mt":
+                        translation_text, from_code, to_code = texttranslate_hunyuan.translate_language(text, from_code, to_code, as_iso1)
+                    case "milmmt":
+                        translation_text, from_code, to_code = texttranslate_milmmt.translate_language(
+                            text,
+                            from_code,
+                            to_code,
+                            as_iso1,
+                        )
+                    case "seamless_m4t":
+                        translation_text, from_code, to_code = txt_translator_instance.text_translate(text, from_code, to_code)
+                    case "phi4":
+                        response_dict = txt_translator_instance.transcribe(
+                            None,
+                            task='text_translate',
+                            chat_message=text,
+                            language=to_code,
+                        )
+                        translation_text, from_code, to_code = response_dict['text'], '', response_dict['language']
+                    case "voxtral":
+                        response_dict = txt_translator_instance.transcribe(
+                            None,
+                            task='text_translate',
+                            chat_message=text,
+                            language=to_code,
+                        )
+                        translation_text, from_code, to_code = response_dict['text'], '', response_dict['language']
+        except Exception as e:
+            print("Error: " + str(e))
+            traceback.print_exc()
+    else:
+        for plugin_inst in Plugins.plugins:
             try:
-                translation_text = texttranslateM2M100_CTranslate2.translate_language(text, from_code, to_code)
+                if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'text_translate'):
+                    translation_text, from_code, to_code = plugin_inst.text_translate(text, from_code, to_code)
             except Exception as e:
-                print("Error: " + str(e))
+                print(f"Error in Plugin {plugin_inst.__class__.__name__}: " + str(e))
                 traceback.print_exc()
-        case "NLLB200":
-            try:
-                translation_text, from_code, to_code = texttranslateNLLB200.translate_language(text, from_code, to_code, as_iso1)
-            except Exception as e:
-                print("Error: " + str(e))
-                traceback.print_exc()
-        case "NLLB200_CT2":
-            try:
-                translation_text, from_code, to_code = texttranslateNLLB200_CTranslate2.translate_language(text, from_code, to_code, as_iso1)
-            except Exception as e:
-                print("Error: " + str(e))
-                traceback.print_exc()
-        case "hunyuan_mt":
-            try:
-                translation_text, from_code, to_code = texttranslate_hunyuan.translate_language(text, from_code, to_code, as_iso1)
-            except Exception as e:
-                print("Error: " + str(e))
-                traceback.print_exc()
-        case "seamless_m4t":
-            try:
-                translation_text, from_code, to_code = txt_translator_instance.text_translate(text, from_code, to_code)
-            except Exception as e:
-                print("Error: " + str(e))
-                traceback.print_exc()
-        case "phi4":
-            try:
-                response_dict = txt_translator_instance.transcribe(
-                    None,
-                    task='text_translate',
-                    chat_message=text,
-                    language=to_code,
-                )
-                translation_text, from_code, to_code = response_dict['text'], '', response_dict['language']
-            except Exception as e:
-                print("Error: " + str(e))
-                traceback.print_exc()
-        case "voxtral":
-            try:
-                response_dict = txt_translator_instance.transcribe(
-                    None,
-                    task='text_translate',
-                    chat_message=text,
-                    language=to_code,
-                )
-                translation_text, from_code, to_code = response_dict['text'], '', response_dict['language']
-            except Exception as e:
-                print("Error: " + str(e))
-                traceback.print_exc()
-        case _:
-            for plugin_inst in Plugins.plugins:
-                try:
-                    if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'text_translate'):
-                        translation_text, from_code, to_code = plugin_inst.text_translate(text, from_code, to_code)
-                except Exception as e:
-                    print(f"Error in Plugin {plugin_inst.__class__.__name__}: " + str(e))
-                    traceback.print_exc()
+
+    if str(text or "").strip() and not str(translation_text or "").strip():
+        print(f"Error: {translator or 'text translator'} returned an empty translation; using the source text.")
+        translation_text = text
 
     if to_romaji:
         translation_text = convert_to_romaji(translation_text)
 
-    return translation_text.strip(), from_code, to_code
+    return str(translation_text or "").strip(), from_code, to_code
 
 
 def SetDevice(option):
     global txt_translator_instance
-    texttranslateNLLB200.set_device(option)
-    texttranslateNLLB200_CTranslate2.set_device(option)
-    texttranslateM2M100_CTranslate2.set_device(option)
-    if txt_translator_instance is not None and hasattr(txt_translator_instance, 'set_device'):
-        txt_translator_instance.set_device(option)
+
+    match get_current_translator():
+        case "NLLB200":
+            texttranslateNLLB200.set_device(option)
+        case "NLLB200_CT2":
+            texttranslateNLLB200_CTranslate2.set_device(option)
+        case "M2M100":
+            texttranslateM2M100_CTranslate2.set_device(option)
+        case "hunyuan_mt":
+            texttranslate_hunyuan.set_device(option)
+        case "milmmt":
+            texttranslate_milmmt.set_device(option)
+        case _:
+            if txt_translator_instance is not None and hasattr(txt_translator_instance, 'set_device'):
+                txt_translator_instance.set_device(option)

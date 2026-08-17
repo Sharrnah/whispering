@@ -84,6 +84,7 @@ if __name__ == '__main__':
     import settings
     import remote_opener
     from Models.STT import faster_whisper
+    from Models.STT import qwen3_asr
     from Models.Multi import seamless_m4t
     from Models.TextTranslation import texttranslate
     from Models import languageClassification
@@ -483,6 +484,11 @@ if __name__ == '__main__':
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.vibevoice_asr_get_languages())
         elif settings.SETTINGS.GetOption("stt_type") == "higgs_audio":
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.higgs_audio_asr_get_languages())
+        elif settings.SETTINGS.GetOption("stt_type") == "qwen3_asr":
+            settings.SETTINGS.SetOption("whisper_languages", audioprocessor.qwen3_asr_get_languages())
+            if settings.SETTINGS.GetOption("whisper_task") != "transcribe":
+                print("Qwen3-ASR only supports transcription; switching the speech task to transcribe.")
+                settings.SETTINGS.SetOption("whisper_task", "transcribe")
         else:
             # show no language if unspecified STT type
             settings.SETTINGS.SetOption("whisper_languages", ({"code": "", "name": ""},))
@@ -593,6 +599,13 @@ if __name__ == '__main__':
             stt_model_size = settings.SETTINGS.GetOption("model")
             if seamless_m4t.SeamlessM4T.needs_download(stt_model_size):
                 seamless_m4t.SeamlessM4T.download_model(stt_model_size)
+        if settings.SETTINGS.GetOption("stt_type") == "qwen3_asr":
+            qwen_model = settings.SETTINGS.GetOption("model")
+            if qwen3_asr.needs_download(qwen_model):
+                qwen3_asr.download_model(qwen_model)
+            realtime_qwen_model = settings.SETTINGS.GetOption("realtime_whisper_model")
+            if realtime_qwen_model and qwen3_asr.needs_download(realtime_qwen_model):
+                qwen3_asr.download_model(realtime_qwen_model)
 
         # load audio filter model
         audio_enhancer = None

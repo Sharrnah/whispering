@@ -34,6 +34,7 @@ import Models.STT.wav2vec_bert as wav2vec_bert
 import Models.STT.nemo_canary as nemo_canary
 import Models.STT.vibevoice_asr as vibevoice_asr
 import Models.STT.higgs_audio as higgs_audio
+import Models.STT.qwen3_asr as qwen3_asr
 import Models.Multi.seamless_m4t as seamless_m4t
 import Models.Multi.mms as mms
 import Models.Multi.phi4 as phi4
@@ -147,6 +148,9 @@ def higgs_audio_asr_get_languages():
         "": "Auto",
     }
     return tuple([{"code": code, "name": language} for code, language in languages.items()])
+
+def qwen3_asr_get_languages():
+    return qwen3_asr.get_languages()
 
 
 def remove_repetitions(text, language='english', settings=main_settings):
@@ -603,6 +607,12 @@ def load_whisper(model, ai_device):
             return higgs_audio.HiggsAudio(compute_type=compute_dtype, device=ai_device)
         except Exception as e:
             print("Failed to load Higgs Audio ASR model. Application exits. " + str(e))
+    elif stt_type == "qwen3_asr":
+        compute_dtype = main_settings.GetOption("whisper_precision")
+        try:
+            return qwen3_asr.Qwen3ASR(compute_type=compute_dtype, device=ai_device)
+        except Exception as e:
+            print("Failed to load Qwen3-ASR model. Application exits. " + str(e))
     #elif stt_type == "phi4-onnx":
     #    compute_dtype = main_settings.GetOption("whisper_precision")
     #    #try:
@@ -663,6 +673,9 @@ def load_realtime_whisper(model, ai_device):
     elif main_settings.GetOption("stt_type") == "higgs_audio":
         compute_dtype = main_settings.GetOption("realtime_whisper_precision")
         return higgs_audio.HiggsAudio(compute_type=compute_dtype, device=ai_device)
+    elif main_settings.GetOption("stt_type") == "qwen3_asr":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
+        return qwen3_asr.Qwen3ASR(compute_type=compute_dtype, device=ai_device)
 
     #elif main_settings.GetOption("stt_type") == "phi4-onnx":
     #    compute_dtype = main_settings.GetOption("realtime_whisper_precision")
@@ -1067,6 +1080,30 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                                             beam_size=whisper_beam_size,
                                             model=model_size,
                                             )
+        elif settings.GetOption("stt_type") == "qwen3_asr":
+            selected_model = audio_model
+            selected_model_name = settings.GetOption("model")
+            selected_precision = settings.GetOption("whisper_precision")
+            selected_beam_size = whisper_beam_size
+            if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
+                selected_model = audio_model_realtime
+                selected_model_name = settings.GetOption("realtime_whisper_model")
+                selected_precision = settings.GetOption("realtime_whisper_precision")
+                selected_beam_size = whisper_beam_size_realtime
+            selected_model.set_compute_type(selected_precision)
+            selected_model.set_compute_device(settings.GetOption("ai_device"))
+            result = selected_model.transcribe(
+                audio_data_numpy,
+                model=selected_model_name,
+                task="transcribe",
+                language=whisper_language,
+                return_timestamps=whisper_word_timestamps,
+                beam_size=selected_beam_size,
+                prompt=whisper_initial_prompt,
+                length_penalty=whisper_faster_length_penalty,
+                repetition_penalty=repetition_penalty,
+                no_repeat_ngram_size=no_repeat_ngram_size,
+            )
         else:
             # process audio by plugin for Speech-to-Text
             threading.Thread(target=plugin_process_stt_processing, args=(

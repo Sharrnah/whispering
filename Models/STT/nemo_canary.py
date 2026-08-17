@@ -1,7 +1,9 @@
 import copy
+import functools
 import json
 import os
 import signal
+import threading
 # patch (/nemo/utils/exp_manager.py) - https://github.com/NVIDIA/NeMo/issues/12858
 signal.SIGKILL = signal.SIGTERM
 
@@ -10,6 +12,7 @@ import torch
 import yaml
 from nemo.collections.asr.models import EncDecMultiTaskModel
 import nemo.collections.asr as nemo_asr
+from omegaconf import open_dict
 from Models.Singleton import SingletonMeta
 
 from pathlib import Path
@@ -88,6 +91,17 @@ LANGUAGES = {
 }
 
 
+def _synchronized_model_access(function):
+    """Serialize access to NeMo's mutable model and decoder state."""
+
+    @functools.wraps(function)
+    def synchronized(self, *args, **kwargs):
+        with self._model_lock:
+            return function(self, *args, **kwargs)
+
+    return synchronized
+
+
 class NemoCanary(metaclass=SingletonMeta):
     model = None
     previous_model = None
@@ -100,6 +114,12 @@ class NemoCanary(metaclass=SingletonMeta):
     text_correction_model = None
 
     currently_downloading = False
+    # NeMo transcribe() freezes/unfreezes modules and mutates decoding state.
+    # The application can deliberately start one Python thread per
+    # transcription, so guard every model load/inference entry point. Parakeet
+    # also receives a graph-free CUDA decoder below because this lock cannot
+    # serialize unrelated CUDA models such as realtime translation or TTS.
+    _model_lock = threading.RLock()
     model_cache_path = Path(".cache/nemo-canary")
     MODEL_LINKS = {}
     MODELS_LIST_URLS = [
@@ -191,6 +211,19 @@ class NemoCanary(metaclass=SingletonMeta):
 
         self.currently_downloading = False
 
+    def _configure_parakeet_cuda_decoder(self):
+        """Persistently disable TDT CUDA graphs for mixed-model inference."""
+        decoding_config = copy.deepcopy(self.model.cfg.decoding)
+        with open_dict(decoding_config.greedy):
+            decoding_config.greedy.use_cuda_graph_decoder = False
+
+        # Runtime disable_cuda_graphs() is only temporary: the TDT decoder's
+        # next forward pass may enable graphs again. Rebuilding from a config
+        # with use_cuda_graph_decoder=False also survives the strategy rebuild
+        # that NeMo performs when timestamps are requested.
+        self.model.change_decoding_strategy(decoding_config, verbose=False)
+
+    @_synchronized_model_access
     def load_model(self, model='canary-1b-v2', compute_type="float32", device="cpu"):
         #self.model = EncDecMultiTaskModel.from_pretrained('nvidia/canary-1b')
         #if self.model is None:
@@ -211,6 +244,8 @@ class NemoCanary(metaclass=SingletonMeta):
             #self.model.half()
             #self.model.cuda()
             self.model.eval()
+            if model.startswith("parakeet-") and torch.device(device).type == "cuda":
+                self._configure_parakeet_cuda_decoder()
             self.previous_model = model
 
     def generate_models_yaml(self, directory, filename):
@@ -253,6 +288,7 @@ class NemoCanary(metaclass=SingletonMeta):
         with open(os.path.join(directory, filename), 'w') as file:
             yaml.dump(data, file, default_flow_style=False)
 
+    @_synchronized_model_access
     @torch.inference_mode()
     def transcribe(self, audio_sample, task, source_lang=None, target_lang='en',
                    without_timestamps=False, **kwargs) -> dict:
@@ -414,6 +450,7 @@ class NemoCanary(metaclass=SingletonMeta):
         return result
 
     # https://github.com/NVIDIA/NeMo/blob/main/examples/asr/asr_chunked_inference/aed/speech_to_text_aed_chunked_infer.py
+    @_synchronized_model_access
     def long_form_transcribe(self, audio_sample, task, source_lang=None, target_lang='en',
                                  without_timestamps=False, **kwargs):
         filepaths = audio_sample

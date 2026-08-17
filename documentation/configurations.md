@@ -59,22 +59,22 @@ ai_device: null  # can be null (auto), "cuda" or "cpu".
 whisper_task: translate  # Whisper A.I. Can do "transcribe" or "translate".
 current_language: null  # can be null (auto) or any Whisper supported language (improves accuracy if whisper does not have to detect the language).
 model: small  # Whisper model size. Can be "tiny", "base", "small", "medium" or "large".
-condition_on_previous_text: true  # if enabled, Whisper will condition on previous text (more prone to loops or getting stuck).
-prompt_reset_on_temperature: 0.5,  # after which temperature fallback step the prompt with the previous text should be reset (default value is 0.5)
+condition_on_previous_text: true  # Whisper-only. Qwen uses initial_prompt as context and ignores this switch.
+prompt_reset_on_temperature: 0.5,  # Whisper-only: temperature step after which previous-text context is reset.
 energy: 300,  # energy of audio volume to start whisper processing. Can be 0-?????
 phrase_time_limit: 0,  # time limit for Whisper to generate a phrase. (0 = no limit)
 pause: 1.0,  # pause between phrases.
 initial_prompt: ""  # initial prompt for Whisper to try to follow its style. for example "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking." will give more filler words.
-logprob_threshold: "-1.0",  # log probability threshold for Whisper to treat as failed. (can be negative or positive).
-no_speech_threshold: "0.6",  # If the no_speech probability is higher than this value AND the average log probability over sampled tokens is below `logprob_threshold`, consider the segment as silent
-length_penalty: 1.0,
-beam_search_patience: 1.0,
-repetition_penalty: 1.0,  # penalize the score of previously generated tokens (set > 1 to penalize)
-no_repeat_ngram_size: 0,  # prevent repetitions of ngrams with this size
+logprob_threshold: "-1.0",  # Whisper-only; Qwen does not return the required confidence statistic.
+no_speech_threshold: "0.6",  # Whisper-only; Qwen relies on the application's VAD before inference.
+length_penalty: 1.0,  # Also used by Qwen's generic Transformers beam search when beam_size > 1.
+beam_search_patience: 1.0,  # CTranslate2/Whisper-specific; it has no equivalent Qwen mapping.
+repetition_penalty: 1.0,  # Also used by Qwen through Transformers; 1 is neutral and > 1 penalizes repetition.
+no_repeat_ngram_size: 0,  # Also used by Qwen through Transformers; 0 disables it.
 whisper_precision: "float32"  # for original Whisper can be "float16" or "float32", for faster-whisper "default", "auto", "int8", "int8_float16", "int16", "float16", "float32".
 stt_type: "faster_whisper",  # can be "faster_whisper", "original_whisper", "speech_t5" or "seamless_m4t".
-temperature_fallback: true  # Set to False to disable temperature fallback which is the reason for some slowdowns, but decreases quality.
-beam_size: 5  # Beam size for beam search. (higher = more accurate, but slower)
+temperature_fallback: true  # Whisper-only retry loop; Qwen performs one deterministic pass and ignores it.
+beam_size: 5  # Beam-search width. Qwen3-ASR maps this to num_beams; 1 uses its official greedy, lowest-memory path.
 whisper_cpu_threads: 0  # Number of threads to use when running on CPU (4 by default)
 whisper_num_workers: 1  # When transcribe() is called from multiple Python threads
 vad_enabled: True,  # Enable Voice activity detection (VAD)
@@ -83,8 +83,8 @@ vad_confidence_threshold: "0.4",  # Voice activity detection (VAD) confidence th
 vad_frames_per_buffer: 2000,  # Voice activity detection (VAD) sample size (how many audio samples should be tested).
 vad_thread_num: 1,  # number of threads to use for VAD.
 push_to_talk_key: "",  # Push to talk key or key combination. (empty or None to disable)
-word_timestamps: False,  # if enabled, Whisper will add timestamps to the transcribed text.
-faster_without_timestamps: False,  # if enabled, faster whisper will only sample text tokens. (only when using stt_type=faster_whisper)
+word_timestamps: False,  # Qwen timestamps require a separate forced-aligner model and are not enabled by this setting.
+faster_without_timestamps: False,  # faster-whisper only; Qwen already returns text without timestamps.
 whisper_apply_voice_markers: False,  # if enabled, Whisper will apply voice markers.
 max_sentence_repetition: -1,  # set max sentence repetition in result (-1 = disabled)
 
@@ -106,8 +106,8 @@ denoise_audio_post_filter: False,  # Enable post filter for some minor, extra no
 realtime: false  # if enabled, Whisper will process audio in realtime.
 realtime_whisper_model: ''  # model used for realtime transcription. (empty for using same model as model setting)
 realtime_whisper_precision: "float16"  # precision used for realtime transcription model.
-realtime_whisper_beam_size: 1  # beam size used for realtime transcription model.
-realtime_temperature_fallback: false  # Set to False to disable temperature fallback for realtime transcription. (see temperature_fallback setting)
+realtime_whisper_beam_size: 1  # Beam-search width used for realtime transcription; 1 disables beam search.
+realtime_temperature_fallback: false  # Whisper-only; Qwen realtime requests also use one deterministic pass.
 realtime_frame_multiply: 15  # Only sends the audio clip to Whisper every X frames. (higher = less whisper updates and less processing time)
 realtime_frequency_time: 1.0  # Only sends the audio clip to Whisper every X seconds. (higher = less whisper updates and less processing time)
 

@@ -1,8 +1,15 @@
+import gc
+import os
+from pathlib import Path
+
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
-import os
+
 import downloader
-from pathlib import Path
+from Models.transformers_attention import (
+    get_preferred_attention_implementation,
+    load_with_attention_fallback,
+)
 
 # https://huggingface.co/spaces/SkynetM1/HY-MT1.5-1.8B/tree/main
 
@@ -115,10 +122,11 @@ MODEL_LINKS = {
 cache_path = Path(Path.cwd() / ".cache" / "hunyuan_mt15")
 os.makedirs(cache_path, exist_ok=True)
 
-model = AutoModelForCausalLM
-tokenizer = AutoTokenizer
+model = None
+tokenizer = None
 
-torch_device = "cuda" if torch.cuda.is_available() else "cpu"
+torch_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+loaded_configuration = None
 
 download_state = {"is_downloading": False}
 
@@ -128,21 +136,68 @@ def get_installed_language_names():
 
 def set_device(device: str):
     global torch_device
-    if device == "cuda" or device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    torch_device = device
+
+    device_name = str(device or "").lower()
+    if device_name in {"", "none", "auto", "cuda"}:
+        device_name = "cuda" if torch.cuda.is_available() else "cpu"
+    if device_name.startswith("direct-ml"):
+        raise ValueError("HY-MT1.5 currently supports CUDA and CPU devices, but not DirectML.")
+    if device_name.startswith("cuda") and not torch.cuda.is_available():
+        device_name = "cpu"
+    if device_name != "cpu" and not device_name.startswith("cuda"):
+        raise ValueError(f"Unsupported HY-MT1.5 device: {device}")
+    torch_device = torch.device(device_name)
+
+
+def is_model_loaded():
+    return model is not None and tokenizer is not None
+
+
+def release_model():
+    global model
+    global tokenizer
+    global loaded_configuration
+
+    model = None
+    tokenizer = None
+    loaded_configuration = None
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    gc.collect()
+
+
+def _torch_dtype(compute_type):
+    if compute_type == "float16":
+        return torch.float16
+    if compute_type == "bfloat16":
+        return torch.bfloat16
+    if compute_type == "float32":
+        return torch.float32
+    raise ValueError(
+        f"Unsupported HY-MT1.5 precision '{compute_type}'. "
+        "Use float32, float16, or bfloat16."
+    )
 
 
 def load_model(size="small", compute_type="float32"):
     global model
     global tokenizer
-    global torch_device
+    global loaded_configuration
+
+    load_configuration = (size, compute_type, str(torch_device))
+    if is_model_loaded() and loaded_configuration == load_configuration:
+        return
 
     model_path = Path(cache_path / size)
+    torch_dtype = _torch_dtype(compute_type)
+    attention_type = get_preferred_attention_implementation(torch_device, torch_dtype)
 
-    print(f"HY-MT1.5 {size} is Loading to {torch_device} using {compute_type} precision...")
+    print(
+        f"HY-MT1.5 {size} is Loading to {torch_device} using {compute_type} "
+        f"precision with {attention_type}..."
+    )
 
-    downloader.download_model({
+    download_succeeded = downloader.download_model({
         "model_path": cache_path,
         "model_link_dict": MODEL_LINKS,
         "model_name": size,
@@ -152,22 +207,46 @@ def load_model(size="small", compute_type="float32"):
         "force_non_ui_dl": False,
         "extract_format": "zip",
     }, download_state)
+    if download_succeeded is False:
+        raise RuntimeError(f"Could not download HY-MT1.5 model '{size}'.")
+    if not model_path.is_dir():
+        raise FileNotFoundError(f"HY-MT1.5 model directory does not exist: {model_path.resolve()}")
 
     model_path_string = str(model_path.resolve())
 
-    torch_dtype = torch.float16 if compute_type == "float16" else torch.float32
+    release_model()
 
-    model = AutoModelForCausalLM.from_pretrained(model_path_string, dtype=torch_dtype).to(torch_device)
+    def model_loader(attention_implementation):
+        return AutoModelForCausalLM.from_pretrained(
+            model_path_string,
+            dtype=torch_dtype,
+            attn_implementation=attention_implementation,
+            local_files_only=True,
+        ).to(torch_device)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_path_string, token=True, return_tensors="pt")
+    loaded_model, attention_type = load_with_attention_fallback(
+        model_loader,
+        attention_type,
+        f"HY-MT1.5 {size}",
+    )
+    loaded_tokenizer = AutoTokenizer.from_pretrained(
+        model_path_string,
+        local_files_only=True,
+    )
+    loaded_model.eval()
+    model = loaded_model
+    tokenizer = loaded_tokenizer
+    loaded_configuration = load_configuration
 
-    print(f"HY-MT1.5 model loaded.")
+    print(f"HY-MT1.5 model loaded using {attention_type}.")
 
 
 def translate_language(text, from_code, to_code, as_iso1=False):
-    global model
-    global tokenizer
-    global torch_device
+    del as_iso1
+
+    if not is_model_loaded():
+        raise RuntimeError("HY-MT1.5 model is not loaded.")
+    text = "" if text is None else str(text)
 
     language_unsupported = False
     if to_code not in language_codes:
@@ -193,12 +272,18 @@ def translate_language(text, from_code, to_code, as_iso1=False):
         return_tensors="pt",
         return_dict=True,
     )
-    input_ids = tokenized_chat["input_ids"].to(model.device)
-    input_length = input_ids.shape[1]
+    tokenized_chat = {
+        name: value.to(model.device)
+        for name, value in tokenized_chat.items()
+    }
+    input_length = tokenized_chat["input_ids"].shape[1]
 
-    outputs = model.generate(input_ids, max_new_tokens=2048)
+    with torch.inference_mode():
+        outputs = model.generate(**tokenized_chat, max_new_tokens=2048)
     generated_tokens = outputs[0][input_length:]
 
-    translation_text = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+    translation_text = tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
+    if text and text.strip() and not translation_text:
+        raise RuntimeError("HY-MT1.5 generated an empty translation.")
 
     return translation_text, from_code, to_code
