@@ -614,6 +614,7 @@ class Qwen3TTSModel:
                     ref_tok = self._tokenize_texts([self._build_ref_text(rt)])[0]
                     ref_ids.append(ref_tok)
 
+        decode_audio = bool(kwargs.pop("decode_audio", True))
         gen_kwargs = self._merge_generate_kwargs(**kwargs)
 
         talker_codes_list, _ = self.model.generate(
@@ -624,6 +625,9 @@ class Qwen3TTSModel:
             non_streaming_mode=non_streaming_mode,
             **gen_kwargs,
         )
+
+        if not decode_audio:
+            return [], self.model.speech_tokenizer.get_output_sample_rate()
 
         codes_for_decode = []
         for i, codes in enumerate(talker_codes_list):
@@ -730,6 +734,7 @@ class Qwen3TTSModel:
             else:
                 instruct_ids.append(self._tokenize_texts([self._build_instruct_text(ins)])[0])
 
+        decode_audio = bool(kwargs.pop("decode_audio", True))
         gen_kwargs = self._merge_generate_kwargs(**kwargs)
 
         talker_codes_list, _ = self.model.generate(
@@ -739,6 +744,9 @@ class Qwen3TTSModel:
             non_streaming_mode=non_streaming_mode,
             **gen_kwargs,
         )
+
+        if not decode_audio:
+            return [], self.model.speech_tokenizer.get_output_sample_rate()
 
         wavs, fs = self.model.speech_tokenizer.decode([{"audio_codes": c} for c in talker_codes_list])
         return wavs, fs
@@ -840,6 +848,7 @@ class Qwen3TTSModel:
             else:
                 instruct_ids.append(self._tokenize_texts([self._build_instruct_text(ins)])[0])
 
+        decode_audio = bool(kwargs.pop("decode_audio", True))
         gen_kwargs = self._merge_generate_kwargs(**kwargs)
 
         talker_codes_list, _ = self.model.generate(
@@ -850,6 +859,9 @@ class Qwen3TTSModel:
             non_streaming_mode=non_streaming_mode,
             **gen_kwargs,
         )
+
+        if not decode_audio:
+            return [], self.model.speech_tokenizer.get_output_sample_rate()
 
         wavs, fs = self.model.speech_tokenizer.decode([{"audio_codes": c} for c in talker_codes_list])
         return wavs, fs

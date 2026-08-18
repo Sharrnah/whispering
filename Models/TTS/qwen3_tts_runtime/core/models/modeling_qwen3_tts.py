@@ -1671,6 +1671,7 @@ class Qwen3TTSTalkerForConditionalGeneration(Qwen3TTSTalkerTextPreTrainedModel, 
         subtalker_top_p=None,
         subtalker_top_k=None,
         subtalker_temperature=None,
+        codec_streamer=None,
         **kwargs,
     ) -> CausalLMOutputWithPast:
         r"""
@@ -1752,6 +1753,9 @@ class Qwen3TTSTalkerForConditionalGeneration(Qwen3TTSTalkerTextPreTrainedModel, 
 
         hidden_states = outputs.last_hidden_state
         logits = self.codec_head(hidden_states)
+
+        if codec_streamer is not None and codec_ids is not None:
+            codec_streamer.put(codec_ids)
 
         loss = None
         if labels is not None:
@@ -2298,14 +2302,20 @@ class Qwen3TTSForConditionalGeneration(Qwen3TTSPreTrainedModel, GenerationMixin)
         padded_hiddens[padding_mask] = pad_embedding_vector
         trailing_text_hiddens = padded_hiddens
 
-        # forward
-        talker_result = self.talker.generate(
-            inputs_embeds=talker_input_embeds,
-            attention_mask=talker_attention_mask,
-            trailing_text_hidden=trailing_text_hiddens,
-            tts_pad_embed=tts_pad_embed,
-            **talker_kwargs,
-        )
+        # Forward. The optional application streamer consumes complete 16-codebook
+        # frames from the talker while generation is still in progress.
+        codec_streamer = kwargs.get("codec_streamer")
+        try:
+            talker_result = self.talker.generate(
+                inputs_embeds=talker_input_embeds,
+                attention_mask=talker_attention_mask,
+                trailing_text_hidden=trailing_text_hiddens,
+                tts_pad_embed=tts_pad_embed,
+                **talker_kwargs,
+            )
+        finally:
+            if codec_streamer is not None:
+                codec_streamer.end()
 
         talker_codes = torch.stack([hid[-1] for hid in talker_result.hidden_states if hid[-1] is not None], dim=1)
         talker_hidden_states = torch.cat([hid[0][-1][:, -1:] for hid in talker_result.hidden_states], dim=1)[:, :-1]

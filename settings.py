@@ -276,6 +276,21 @@ class SettingsManager:
             self._save_timer = threading.Timer(DEBOUNCE_TIME, self.save_yaml, [path])
             self._save_timer.start()
 
+    def flush_pending_save(self):
+        """Synchronously persist dirty settings before process shutdown.
+
+        ``save_yaml`` already merges only this process's dirty keys into the
+        newest profile revision, so flushing preserves recent live changes
+        without overwriting a newer UI save. It also cancels the debounce timer
+        before returning, ensuring no writer survives the shutdown boundary.
+        """
+        with self._save_lock:
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+                self._save_timer = None
+            if self.settings_path is not None and self._dirty_settings and not self.immutable:
+                self.save_yaml(self.settings_path)
+
     def save_yaml(self, path):
         with self._save_lock:
             # If this function was called directly, cancel the timer

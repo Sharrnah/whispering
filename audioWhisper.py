@@ -129,10 +129,17 @@ if __name__ == '__main__':
     CHUNK = int(SAMPLE_RATE / 10)
 
     def sigterm_handler(_signo, _stack_frame):
-        processmanager.cleanup_subprocesses()
+        # Persist the stopped state and any setting still inside the debounce
+        # window before cleanup. The save merges against the newest profile,
+        # so a later UI write for the same key still wins.
+        try:
+            settings.SETTINGS.SetOption("process_id", 0)
+            settings.SETTINGS.flush_pending_save()
+        except Exception as save_error:
+            print(f"Could not flush settings during shutdown: {save_error}")
+            traceback.print_exc()
 
-        # reset process id
-        settings.SETTINGS.SetOption("process_id", 0)
+        processmanager.cleanup_subprocesses()
 
         # it raises SystemExit(0):
         print('Process died')

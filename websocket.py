@@ -1,4 +1,5 @@
 import sys
+import os
 import threading
 import asyncio
 import time
@@ -672,8 +673,23 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
 
     if msg_obj["type"] == "quit":
         print("Received quit command.")
+        # sys.exit() only terminates this WebSocket worker thread.  The UI then
+        # sees the port close and may launch another profile while the old
+        # Python process is still alive. Flush the atomic profile merge first,
+        # then terminate the complete process so a closed port really means it
+        # is gone and no debounced writer remains.
+        try:
+            settings.SetOption("process_id", 0)
+            settings.SETTINGS.flush_pending_save()
+        except Exception as save_error:
+            print(f"Could not flush settings during shutdown: {save_error}")
+            traceback.print_exc()
         processmanager.cleanup_subprocesses()
-        sys.exit(0)
+        try:
+            sys.stdout.flush()
+            sys.stderr.flush()
+        finally:
+            os._exit(0)
 
 
 async def main_on_connect_handler(server_instance, websocket):
