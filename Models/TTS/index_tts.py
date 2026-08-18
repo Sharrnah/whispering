@@ -14,6 +14,7 @@ import Utilities
 import audio_tools
 import settings
 from Models.Singleton import SingletonMeta
+from Models.TTS.text_segmentation import chunk_text, has_voice_tags, parse_voice_tagged_text
 
 
 SAMPLE_RATE = 22050
@@ -121,7 +122,9 @@ class IndexTTS(metaclass=SingletonMeta):
         "repetition_penalty": 10.0,
         "max_mel_tokens": 1500,
         "max_text_tokens_per_segment": 120,
+        "streaming_segment_goal_length": 120,
         "pause_between_segments_ms": 200,
+        "pause_between_voice_change_ms": 400,
         "text_normalization": True,
         "emotion_enabled": False,
         "emotion_happy": 0.0,
@@ -287,6 +290,71 @@ class IndexTTS(metaclass=SingletonMeta):
             )
         return selected["audio_filename"]
 
+    def _build_voice_map(self, main_voice):
+        voices = {
+            voice["name"]: voice["audio_filename"]
+            for voice in self.update_voices()
+        }
+        voices["main"] = main_voice
+        return voices
+
+    def _segment_plan(self, text, main_voice, split_for_streaming):
+        """Return ordered ``(voice name, reference path, text)`` segments."""
+        tagged = has_voice_tags(text)
+        sections = parse_voice_tagged_text(text) if tagged else [("main", text.strip())]
+        voices = self._build_voice_map(main_voice)
+        plan = []
+
+        goal_length = max(
+            40,
+            min(
+                1000,
+                self._int(
+                    self.special_settings.get("streaming_segment_goal_length"),
+                    120,
+                ),
+            ),
+        )
+        for requested_voice, section_text in sections:
+            voice_name = requested_voice
+            voice = voices.get(voice_name)
+            if voice is None:
+                print(f"IndexTTS voice '{voice_name}' not found; using the main voice.")
+                voice_name = "main"
+                voice = main_voice
+
+            segments = (
+                chunk_text(section_text, goal_length=goal_length)
+                if split_for_streaming
+                else [section_text.strip()]
+            )
+            for segment in segments:
+                if segment and segment.strip():
+                    plan.append((voice_name, voice, segment.strip()))
+        if split_for_streaming:
+            print(f"IndexTTS streamed playback prepared {len(plan)} text segment(s).")
+        if tagged:
+            voice_names = list(dict.fromkeys(item[0] for item in plan))
+            print(f"IndexTTS voice-tag sequence: {', '.join(voice_names) or 'empty'}.")
+        return plan
+
+    def _pause_after_segment(self, plan, index):
+        if index >= len(plan) - 1:
+            return 0
+        current_voice = plan[index][0]
+        next_voice = plan[index + 1][0]
+        setting = (
+            "pause_between_voice_change_ms"
+            if current_voice != next_voice
+            else "pause_between_segments_ms"
+        )
+        default = 400 if current_voice != next_voice else 200
+        return max(0, min(5000, self._int(self.special_settings.get(setting), default)))
+
+    def _make_silence(self, duration_ms):
+        sample_count = int(self.sample_rate * max(0, duration_ms) / 1000)
+        return torch.zeros((1, sample_count), dtype=torch.float32)
+
     def _effective_precision(self):
         precision = str(self.special_settings.get("precision", "bfloat16")).lower()
         if precision not in {"bfloat16", "float32"}:
@@ -413,13 +481,15 @@ class IndexTTS(metaclass=SingletonMeta):
             for name in names
         ]
 
-    def _inference_kwargs(self, text):
+    def _seed_generation(self):
         seed = self._int(self.special_settings.get("seed"), -1)
         if seed < 0:
             seed = int(torch.randint(1, 2**31 - 1, (1,)).item())
         torch.manual_seed(seed)
         if self.compute_device.type == "cuda":
             torch.cuda.manual_seed_all(seed)
+
+    def _inference_kwargs(self, text):
         return {
             "lang": self._language(text),
             "emo_vector": self._emotion_vector(),
@@ -480,6 +550,20 @@ class IndexTTS(metaclass=SingletonMeta):
                 wave = self._wave_tensor(result["audio"])
         return wave
 
+    def _generate_segment(self, text, voice):
+        result = self.model.infer(
+            spk_audio_prompt=voice,
+            text=text,
+            output_path=None,
+            stream_return=False,
+            **self._inference_kwargs(text),
+        )
+        if not isinstance(result, tuple) or len(result) != 2:
+            raise RuntimeError("IndexTTS returned no audio.")
+        sample_rate, audio = result
+        self.sample_rate = int(sample_rate)
+        return self._finish_audio(audio)
+
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         del remove_silence, silence_after_segments, normalize
         if not text or not text.strip():
@@ -487,19 +571,22 @@ class IndexTTS(metaclass=SingletonMeta):
         with self.generation_lock:
             self.stop_event.clear()
             self.load()
-            voice = self._resolve_voice(ref_audio)
-            result = self.model.infer(
-                spk_audio_prompt=voice,
-                text=text.strip(),
-                output_path=None,
-                stream_return=False,
-                **self._inference_kwargs(text),
+            self._seed_generation()
+            main_voice = self._resolve_voice(ref_audio)
+            plan = self._segment_plan(
+                text,
+                main_voice,
+                split_for_streaming=False,
             )
-            if not isinstance(result, tuple) or len(result) != 2:
-                raise RuntimeError("IndexTTS returned no audio.")
-            sample_rate, audio = result
-            self.sample_rate = int(sample_rate)
-            wave = self._finish_audio(audio)
+            chunks = []
+            for index, (_, voice, segment) in enumerate(plan):
+                if self.stop_event.is_set():
+                    break
+                chunks.append(self._generate_segment(segment, voice))
+                pause_ms = self._pause_after_segment(plan, index)
+                if pause_ms:
+                    chunks.append(self._make_silence(pause_ms))
+            wave = torch.cat(chunks, dim=-1) if chunks else torch.zeros((1, 0))
             self.last_generation = {"audio": wave, "sample_rate": self.sample_rate}
             return wave, self.sample_rate
 
@@ -526,30 +613,30 @@ class IndexTTS(metaclass=SingletonMeta):
         with self.generation_lock:
             self.stop_event.clear()
             self.load()
-            voice = self._resolve_voice(ref_audio)
+            self._seed_generation()
+            main_voice = self._resolve_voice(ref_audio)
             self.init_audio_stream_playback()
             chunks = []
-            generator = self.model.infer(
-                spk_audio_prompt=voice,
-                text=text.strip(),
-                output_path=None,
-                stream_return=True,
-                **self._inference_kwargs(text),
+            plan = self._segment_plan(
+                text,
+                main_voice,
+                split_for_streaming=True,
             )
-            for index, audio in enumerate(generator):
+            for index, (_, voice, segment) in enumerate(plan):
                 if self.stop_event.is_set():
                     break
-                # The upstream generator alternates synthesized segments and
-                # inter-segment silence. Process the speech through plugins and
-                # keep silence untouched so live and returned audio stay equal.
-                wave = self._finish_audio(
-                    audio,
-                    apply_normalization=index % 2 == 0,
-                    call_plugin=index % 2 == 0,
-                )
+                wave = self._generate_segment(segment, voice)
+                if self.stop_event.is_set():
+                    break
                 chunks.append(wave)
                 if self.audio_streamer is not None and wave.numel():
                     self.audio_streamer.add_audio_chunk(self.return_pcm_audio(wave))
+                pause_ms = self._pause_after_segment(plan, index)
+                if pause_ms:
+                    silence = self._make_silence(pause_ms)
+                    chunks.append(silence)
+                    if self.audio_streamer is not None and silence.numel():
+                        self.audio_streamer.add_audio_chunk(self.return_pcm_audio(silence))
             final_wave = torch.cat(chunks, dim=-1) if chunks else torch.zeros((1, 0))
             self.last_generation = {"audio": final_wave, "sample_rate": self.sample_rate}
             return final_wave, self.sample_rate
