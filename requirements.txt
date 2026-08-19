@@ -82,7 +82,7 @@ peft==0.18.1
 deepfilternet==0.5.6
 pyloudnorm
 future
-nltk==3.9.3
+nltk==3.10.3
 
 # NVIDIA Nemo (Canary) dependency
 Cython==3.2.4
