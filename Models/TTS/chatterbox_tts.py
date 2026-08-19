@@ -711,14 +711,24 @@ class Chatterbox(metaclass=SingletonMeta):
     def get_last_generation(self):
         return self.last_generation["audio"], self.last_generation["sample_rate"]
 
-    def _voice_cache_key(self, ref_audio_path: str) -> str:
+    def _voice_cache_key(self, ref_audio_path: str, exaggeration: float = 0.5) -> str:
+        exaggeration_key = float(exaggeration).hex()
         try:
-            abs_path = os.path.abspath(ref_audio_path)
+            abs_path = os.path.normcase(
+                os.path.realpath(os.path.abspath(os.path.expanduser(ref_audio_path)))
+            )
             st = os.stat(abs_path)
-            # include device in key because tensors are device-bound
-            return f"{self.compute_device_str}|{abs_path}|{st.st_size}|{int(st.st_mtime)}"
+            # Conditionals are device-bound and bake exaggeration into the T3
+            # emotion tensor, so both belong in the key.
+            return (
+                f"{self.compute_device_str}|{abs_path}|{st.st_size}|"
+                f"{st.st_mtime_ns}|{exaggeration_key}"
+            )
         except Exception:
-            return f"{self.compute_device_str}|{ref_audio_path}|unknown"
+            return (
+                f"{self.compute_device_str}|{ref_audio_path}|unknown|"
+                f"{exaggeration_key}"
+            )
 
     def _ensure_voice_conditionals(self, ref_audio: str, exaggeration: float = 0.5):
         """Prepare or reuse cached conditionals for the given reference audio.
@@ -727,7 +737,7 @@ class Chatterbox(metaclass=SingletonMeta):
         """
         if ref_audio is None:
             return
-        key = self._voice_cache_key(ref_audio)
+        key = self._voice_cache_key(ref_audio, exaggeration=exaggeration)
         cached = self.voice_conds_cache.get(key)
         if cached is not None:
             # Move key to the end of the order list (most recently used)

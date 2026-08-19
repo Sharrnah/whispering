@@ -461,6 +461,8 @@ class _QwenBatchCodecAudioStreamer:
 
 
 class Qwen3TTS(metaclass=SingletonMeta):
+    VOICE_PROMPT_CACHE_MAX_ENTRIES = 8
+
     sample_rate = SAMPLE_RATE
     special_settings_defaults = {
         "precision": "auto",
@@ -869,14 +871,18 @@ class Qwen3TTS(metaclass=SingletonMeta):
             reference_text,
             x_vector_only,
         )
-        prompt = self.voice_prompt_cache.get(cache_key)
-        if prompt is None:
+        try:
+            prompt = self.voice_prompt_cache.pop(cache_key)
+        except KeyError:
             prompt = self.model.create_voice_clone_prompt(
                 ref_audio=str(voice_path),
                 ref_text=reference_text,
                 x_vector_only_mode=x_vector_only,
             )
-            self.voice_prompt_cache = {cache_key: prompt}
+        self.voice_prompt_cache[cache_key] = prompt
+        while len(self.voice_prompt_cache) > self.VOICE_PROMPT_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(self.voice_prompt_cache))
+            del self.voice_prompt_cache[oldest_key]
         return prompt
 
     @staticmethod

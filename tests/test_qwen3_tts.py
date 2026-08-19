@@ -209,6 +209,96 @@ class Qwen3TTSAdapterTests(unittest.TestCase):
             x_vector_only_mode=False,
         )
 
+    def test_clone_prompt_cache_is_metadata_aware_and_keeps_recent_voices(self):
+        adapter = object.__new__(qwen3_tts.Qwen3TTS)
+        adapter.special_settings = {"clone_mode": "x_vector", "reference_text": ""}
+        adapter.voice_prompt_cache = {}
+        adapter.VOICE_PROMPT_CACHE_MAX_ENTRIES = 2
+        adapter.model = mock.Mock()
+        adapter.model.create_voice_clone_prompt.side_effect = lambda **kwargs: [
+            kwargs["ref_audio"]
+        ]
+        adapter._resolve_voice = lambda path: Path(path)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            first = Path(temp_dir) / "first.wav"
+            second = Path(temp_dir) / "second.wav"
+            first.write_bytes(b"first")
+            second.write_bytes(b"second")
+
+            adapter._clone_prompt(first)
+            adapter._clone_prompt(second)
+            adapter._clone_prompt(first)
+            self.assertEqual(adapter.model.create_voice_clone_prompt.call_count, 2)
+
+            first.write_bytes(b"first changed")
+            adapter._clone_prompt(first)
+            self.assertEqual(adapter.model.create_voice_clone_prompt.call_count, 3)
+            self.assertEqual(len(adapter.voice_prompt_cache), 2)
+
+    def test_x_vector_prompt_skips_unused_reference_codec_encoding(self):
+        from Models.TTS.qwen3_tts_runtime.inference.qwen3_tts_model import Qwen3TTSModel
+
+        runtime = object.__new__(Qwen3TTSModel)
+        speech_tokenizer = mock.Mock()
+        runtime.model = types.SimpleNamespace(
+            tts_model_type="base",
+            tokenizer_type="qwen3_tts_tokenizer_12hz",
+            tts_model_size="0.6B",
+            speech_tokenizer=speech_tokenizer,
+            speaker_encoder_sample_rate=24000,
+            extract_speaker_embedding=mock.Mock(return_value=torch.ones(16)),
+        )
+        runtime._normalize_audio_inputs = mock.Mock(
+            return_value=[(np.zeros(240, dtype=np.float32), 24000)]
+        )
+
+        prompt = runtime.create_voice_clone_prompt(
+            ref_audio="voice.wav",
+            ref_text=None,
+            x_vector_only_mode=True,
+        )
+
+        speech_tokenizer.encode.assert_not_called()
+        self.assertIsNone(prompt[0].ref_code)
+        self.assertTrue(prompt[0].x_vector_only_mode)
+
+    def test_mixed_clone_prompt_encodes_only_icl_references(self):
+        from Models.TTS.qwen3_tts_runtime.inference.qwen3_tts_model import Qwen3TTSModel
+
+        runtime = object.__new__(Qwen3TTSModel)
+        speech_tokenizer = mock.Mock()
+        reference_code = torch.ones((3, 16), dtype=torch.long)
+        speech_tokenizer.encode.return_value = types.SimpleNamespace(
+            audio_codes=[reference_code]
+        )
+        runtime.model = types.SimpleNamespace(
+            tts_model_type="base",
+            tokenizer_type="qwen3_tts_tokenizer_12hz",
+            tts_model_size="0.6B",
+            speech_tokenizer=speech_tokenizer,
+            speaker_encoder_sample_rate=24000,
+            extract_speaker_embedding=mock.Mock(return_value=torch.ones(16)),
+        )
+        x_vector_audio = np.zeros(120, dtype=np.float32)
+        icl_audio = np.ones(120, dtype=np.float32)
+        runtime._normalize_audio_inputs = mock.Mock(
+            return_value=[(x_vector_audio, 24000), (icl_audio, 24000)]
+        )
+
+        prompt = runtime.create_voice_clone_prompt(
+            ref_audio=["x-vector.wav", "icl.wav"],
+            ref_text=[None, "Exact words."],
+            x_vector_only_mode=[True, False],
+        )
+
+        encoded_audio, = speech_tokenizer.encode.call_args.args
+        self.assertEqual(len(encoded_audio), 1)
+        self.assertIs(encoded_audio[0], icl_audio)
+        self.assertEqual(speech_tokenizer.encode.call_args.kwargs, {"sr": 24000})
+        self.assertIsNone(prompt[0].ref_code)
+        self.assertIs(prompt[1].ref_code, reference_code)
+
     def test_segment_streaming_sends_and_returns_identical_audio(self):
         adapter = object.__new__(qwen3_tts.Qwen3TTS)
         adapter.generation_lock = threading.RLock()

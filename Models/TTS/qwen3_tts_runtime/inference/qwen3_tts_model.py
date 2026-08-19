@@ -398,7 +398,7 @@ class Qwen3TTSModel:
         Args:
             ref_audio:
                 Reference audio(s) used to extract:
-                  - ref_code via `model.speech_tokenizer.encode(...)`
+                  - ref_code via `model.speech_tokenizer.encode(...)` in ICL mode
                   - ref_spk_embedding via `model.extract_speaker_embedding(...)` (resampled to 24k)
             ref_text:
                 Reference transcript(s). Required when x_vector_only_mode=False (ICL mode).
@@ -433,19 +433,26 @@ class Qwen3TTSModel:
 
         normalized = self._normalize_audio_inputs(ref_audio_list)
 
-        ref_wavs_for_code: List[np.ndarray] = []
-        ref_sr_for_code: List[int] = []
-        for wav, sr in normalized:
-            ref_wavs_for_code.append(wav)
-            ref_sr_for_code.append(sr)
-
-        if len(set(ref_sr_for_code)) == 1:
-            enc = self.model.speech_tokenizer.encode(ref_wavs_for_code, sr=ref_sr_for_code[0])
-            ref_codes = enc.audio_codes
-        else:
-            ref_codes = []
-            for wav, sr in normalized:
-                ref_codes.append(self.model.speech_tokenizer.encode(wav, sr=sr).audio_codes[0])
+        # X-vector cloning consumes only the speaker embedding. Avoid running
+        # the comparatively expensive speech tokenizer for references whose
+        # codec tokens would immediately be discarded.
+        ref_codes: List[Optional[torch.Tensor]] = [None] * len(normalized)
+        icl_indexes = [index for index, xvec_only in enumerate(xvec_list) if not xvec_only]
+        if icl_indexes:
+            icl_wavs = [normalized[index][0] for index in icl_indexes]
+            icl_rates = [normalized[index][1] for index in icl_indexes]
+            if len(set(icl_rates)) == 1:
+                encoded = self.model.speech_tokenizer.encode(
+                    icl_wavs, sr=icl_rates[0]
+                ).audio_codes
+                for index, code in zip(icl_indexes, encoded):
+                    ref_codes[index] = code
+            else:
+                for index in icl_indexes:
+                    wav, sr = normalized[index]
+                    ref_codes[index] = self.model.speech_tokenizer.encode(
+                        wav, sr=sr
+                    ).audio_codes[0]
 
         items: List[VoiceClonePromptItem] = []
         for i, ((wav, sr), code, rtext, xvec_only) in enumerate(zip(normalized, ref_codes, ref_text_list, xvec_list)):
@@ -464,7 +471,7 @@ class Qwen3TTSModel:
 
             items.append(
                 VoiceClonePromptItem(
-                    ref_code=None if xvec_only else code,
+                    ref_code=code,
                     ref_spk_embedding=spk_emb,
                     x_vector_only_mode=bool(xvec_only),
                     icl_mode=bool(not xvec_only),

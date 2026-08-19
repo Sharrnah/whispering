@@ -1,9 +1,11 @@
 import inspect
 import io
 import sys
+import tempfile
 import types
 import unittest
 import wave
+from collections import OrderedDict
 from pathlib import Path
 from unittest import mock
 
@@ -221,6 +223,78 @@ class IndexTTSAdapterTests(unittest.TestCase):
 
 
 class IndexTTSTransformersCompatibilityTests(unittest.TestCase):
+    def test_reference_conditioning_lru_reuses_preprocessing_and_tracks_file_changes(self):
+        from indextts import infer_v2_5
+
+        runtime = object.__new__(infer_v2_5.IndexTTS2)
+        runtime.device = "cpu"
+        runtime.speaker_conditioning_cache = OrderedDict()
+        runtime.emotion_conditioning_cache = OrderedDict()
+        runtime._load_and_cut_audio = mock.Mock(
+            return_value=(torch.zeros((1, 320), dtype=torch.float32), 16000)
+        )
+        runtime._resample_audio = mock.Mock(side_effect=lambda audio, *_: audio)
+        runtime.extract_features = mock.Mock(
+            return_value={
+                "input_features": torch.zeros((1, 4, 3)),
+                "attention_mask": torch.ones((1, 4), dtype=torch.long),
+            }
+        )
+        runtime.get_emb = mock.Mock(return_value=torch.ones((1, 4, 3)))
+        runtime.mel_fn = mock.Mock(return_value=torch.ones((1, 80, 5)))
+        runtime.campplus_model = mock.Mock(return_value=torch.ones((1, 192)))
+        length_regulator = mock.Mock(return_value=(torch.ones((1, 5, 4)),))
+        runtime.s2mel = types.SimpleNamespace(
+            models={"length_regulator": length_regulator}
+        )
+
+        with mock.patch.object(
+            infer_v2_5.torchaudio.compliance.kaldi,
+            "fbank",
+            return_value=torch.ones((5, 80)),
+        ):
+            with tempfile.TemporaryDirectory() as temp_dir:
+                first_path = Path(temp_dir) / "first.wav"
+                second_path = Path(temp_dir) / "second.wav"
+                first_path.write_bytes(b"first")
+                second_path.write_bytes(b"second")
+
+                first = runtime._prepare_speaker_conditioning(first_path)
+                runtime.emotion_conditioning_cache.clear()
+                default_emotion = runtime._prepare_emotion_conditioning(
+                    first_path, speaker_conditioning=first
+                )
+                second = runtime._prepare_speaker_conditioning(second_path)
+                first_again = runtime._prepare_speaker_conditioning(first_path)
+
+                self.assertIs(first, first_again)
+                self.assertIs(default_emotion, first["spk_cond_emb"])
+                self.assertIsNot(first, second)
+                self.assertEqual(runtime._load_and_cut_audio.call_count, 2)
+                self.assertEqual(runtime.get_emb.call_count, 2)
+                self.assertEqual(length_regulator.call_count, 2)
+
+                first_path.write_bytes(b"first changed")
+                changed = runtime._prepare_speaker_conditioning(first_path)
+
+        self.assertIsNot(first, changed)
+        self.assertEqual(runtime._load_and_cut_audio.call_count, 3)
+        self.assertEqual(runtime.get_emb.call_count, 3)
+
+    def test_reference_conditioning_cache_is_bounded_lru(self):
+        from indextts.infer_v2_5 import IndexTTS2
+
+        runtime = object.__new__(IndexTTS2)
+        runtime.REFERENCE_CACHE_MAX_ENTRIES = 2
+        cache = OrderedDict()
+        runtime._lru_put(cache, "a", 1)
+        runtime._lru_put(cache, "b", 2)
+        self.assertEqual(runtime._lru_get(cache, "a"), 1)
+        runtime._lru_put(cache, "c", 3)
+
+        self.assertEqual(list(cache), ["a", "c"])
+        self.assertNotIn("b", cache)
+
     def test_pinned_wetext_normalizer_loads_both_languages(self):
         from indextts.utils.front import TextNormalizer
 
