@@ -606,9 +606,8 @@ class Qwen3TTS(metaclass=SingletonMeta):
         if entry["checksum"] == ARCHIVE_CHECKSUM_PLACEHOLDER:
             archive_name = Path(entry["urls"][0]).name
             raise RuntimeError(
-                f"The application-hosted Qwen3-TTS archive {archive_name} is not ready. "
-                "Create the ZIP with the manifest files at its root, upload it, and "
-                "replace the zero SHA-256 checksum in TTS_MODEL_LINKS."
+                f"The Qwen3-TTS model archive {archive_name} is not currently "
+                "available for automatic download."
             )
         return downloader.download_model(
             {

@@ -214,9 +214,8 @@ class IndexTTS(metaclass=SingletonMeta):
             return True
         if model_entry["checksum"] == ARCHIVE_CHECKSUM_PLACEHOLDER:
             raise RuntimeError(
-                "The application-hosted IndexTTS 2.5 archive is not ready yet. "
-                "Build index-tts-2.5.zip with the documented root layout, upload it, "
-                "and replace the zero SHA-256 checksum in TTS_MODEL_LINKS."
+                "The IndexTTS 2.5 model archive index-tts-2.5.zip is not "
+                "currently available for automatic download."
             )
         return downloader.download_model(
             {
