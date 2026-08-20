@@ -186,8 +186,8 @@ def download_model(model_name, force_non_ui_dl=False):
     if model_entry["checksum"] == ARCHIVE_CHECKSUM_PLACEHOLDER:
         archive_name = Path(model_entry["urls"][0]).name
         raise RuntimeError(
-            f"The application-hosted Qwen3-ASR archive '{archive_name}' is not ready yet. "
-            "Upload the ZIP and replace its zero SHA-256 checksum in MODEL_LINKS."
+            f"The Qwen3-ASR model archive {archive_name} is not currently "
+            "available for automatic download."
         )
 
     return downloader.download_model(

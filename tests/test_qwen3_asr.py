@@ -82,7 +82,7 @@ class Qwen3ASRTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch.object(qwen3_asr, "MODEL_CACHE_PATH", Path(temp_dir)):
                 with mock.patch.object(qwen3_asr.downloader, "download_model") as download:
-                    with self.assertRaisesRegex(RuntimeError, "application-hosted"):
+                    with self.assertRaisesRegex(RuntimeError, "not currently available"):
                         qwen3_asr.download_model("Qwen3-ASR-0.6B-hf")
                     download.assert_not_called()
 

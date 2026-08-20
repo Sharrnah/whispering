@@ -162,7 +162,7 @@ class MiLMMTTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch.object(milmmt, "MODEL_CACHE_PATH", Path(temp_dir)):
                 with mock.patch.object(milmmt.downloader, "download_model") as download:
-                    with self.assertRaisesRegex(RuntimeError, "application-hosted"):
+                    with self.assertRaisesRegex(RuntimeError, "not currently available"):
                         milmmt.download_model("MiLMMT-46-1B-v1.0")
                     download.assert_not_called()
 

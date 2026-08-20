@@ -124,7 +124,7 @@ class Qwen3TTSAdapterTests(unittest.TestCase):
             download_model=download,
         )
         with mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
-            with self.assertRaisesRegex(RuntimeError, "archive .* is not ready"):
+            with self.assertRaisesRegex(RuntimeError, "not currently available"):
                 adapter.download_model(qwen3_tts.DEFAULT_MODEL)
         download.assert_not_called()
 
