@@ -568,7 +568,7 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
         py_audio = pyaudio.PyAudio()
 
     needs_sample_rate_conversion = False
-    num_of_channels = 2
+    num_of_channels = channels
     recorded_sample_rate = sample_rate
 
     callback = None
@@ -608,6 +608,7 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
                                    input_device_index=device_index,
                                    frames_per_buffer=initial_chunk_size,
                                    stream_callback=callback)
+            num_of_channels = 2
         except Exception as e:
             print(f"Failed with 2 channels at default rate {recorded_sample_rate}: {e}")
             initial_chunk_size = calculate_chunk_size(recorded_sample_rate, sample_rate, chunk)

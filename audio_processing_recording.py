@@ -1,4 +1,5 @@
 # -*- encoding: utf-8 -*-
+import inspect
 import time
 import traceback
 
@@ -78,11 +79,42 @@ def call_plugin_sts(plugins, wavefiledata, sample_rate):
                 print("Error in plugin sts method: " + str(e))
                 traceback.print_exc()
 
-def call_plugin_realtime_sts(plugins, wavefiledata, sample_rate):
+def call_plugin_realtime_sts(plugins, wavefiledata, sample_rate, input_channels=1):
     for plugin_inst in plugins:
         if plugin_inst.is_enabled(False) and hasattr(plugin_inst, 'realtime_sts'):
             try:
-                plugin_inst.realtime_sts(wavefiledata, sample_rate)
+                supports_input_channels = getattr(
+                    plugin_inst,
+                    '_realtime_sts_accepts_input_channels',
+                    None,
+                )
+                if supports_input_channels is None:
+                    try:
+                        parameters = inspect.signature(
+                            plugin_inst.realtime_sts
+                        ).parameters.values()
+                        supports_input_channels = any(
+                            parameter.name == 'input_channels'
+                            or parameter.kind == inspect.Parameter.VAR_KEYWORD
+                            for parameter in parameters
+                        )
+                    except (TypeError, ValueError):
+                        supports_input_channels = False
+                    try:
+                        plugin_inst._realtime_sts_accepts_input_channels = (
+                            supports_input_channels
+                        )
+                    except Exception:
+                        pass
+
+                if supports_input_channels:
+                    plugin_inst.realtime_sts(
+                        wavefiledata,
+                        sample_rate,
+                        input_channels=input_channels,
+                    )
+                else:
+                    plugin_inst.realtime_sts(wavefiledata, sample_rate)
             except Exception as e:
                 print("Error in plugin realtime_sts method: " + str(e))
                 traceback.print_exc()
@@ -315,7 +347,11 @@ class AudioProcessor:
                         pass  # If still full, proceed without returning early
 
 
-        threading.Thread(target=call_plugin_realtime_sts, args=(self.plugins, in_data, self.recorded_sample_rate), daemon=False).start()
+        threading.Thread(
+            target=call_plugin_realtime_sts,
+            args=(self.plugins, in_data, self.recorded_sample_rate, self.input_channel_num),
+            daemon=False,
+        ).start()
 
         if not self.settings.GetOption("stt_enabled"):
             return None, pyaudio.paContinue
