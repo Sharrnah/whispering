@@ -25,16 +25,11 @@ from Models.transformers_attention import (
 
 
 SAMPLE_RATE = 24000
-ARCHIVE_CHECKSUM_PLACEHOLDER = "0" * 64
 MODEL_CACHE_PATH = Path.cwd() / ".cache" / "qwen3-tts"
 TOKENIZER_MODEL = "Qwen3-TTS-Tokenizer-12Hz"
 DEFAULT_MODEL = "Qwen3-TTS-12Hz-0.6B-Base"
 
-# Qwen3-TTS can reuse the voice sample pack already shared by Chatterbox and
-# IndexTTS. A matching .txt sidecar can contain the exact reference transcript
-# for higher-fidelity ICL cloning.
-VOICE_CACHE_PATH = Path.cwd() / ".cache" / "chatterbox-tts-cache"
-VOICES_PATH = VOICE_CACHE_PATH / "voices"
+VOICES_PATH = MODEL_CACHE_PATH / "voices"
 
 SUPPORTED_LANGUAGES = {
     "auto": "Auto",
@@ -92,10 +87,16 @@ _COMMON_MODEL_HASHES = {
 }
 
 
-def _model_manifest(archive_name, config_hash, model_hash, revision):
+def _model_manifest(
+    archive_name,
+    archive_checksum,
+    config_hash,
+    model_hash,
+    revision,
+):
     return {
         "urls": _hosted_urls(archive_name),
-        "checksum": ARCHIVE_CHECKSUM_PLACEHOLDER,
+        "checksum": archive_checksum,
         "file_checksums": {
             "config.json": config_hash,
             **_COMMON_MODEL_HASHES,
@@ -113,7 +114,7 @@ TTS_MODEL_LINKS = {
     # Qwen/Qwen3-TTS-Tokenizer-12Hz @ 7dd38ad4e9bad454aae9cd937d0cd577604fe229
     TOKENIZER_MODEL: {
         "urls": _hosted_urls("qwen3-tts-tokenizer-12hz.zip"),
-        "checksum": ARCHIVE_CHECKSUM_PLACEHOLDER,
+        "checksum": "195158f936330b9a0337f32f11d3af414455c6ae1a835495455d3a887cfd07fb",
         "file_checksums": {
             "config.json": "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167",
             "configuration.json": "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd",
@@ -125,47 +126,52 @@ TTS_MODEL_LINKS = {
     },
     # Qwen/Qwen3-TTS-12Hz-0.6B-Base @ 5d83992436eae1d760afd27aff78a71d676296fc
     "Qwen3-TTS-12Hz-0.6B-Base": _model_manifest(
-        "qwen3-tts-12hz-0.6b-base.zip",
-        "2e714c787c8edb98b05432685cddb634add2de4d4e645f653d68251ef72ba011",
-        "180b3b10eb1c9f1b4db7806d5475bae3071c0243c299d49926bab1da3b6946f6",
-        "5d83992436eae1d760afd27aff78a71d676296fc",
+        archive_name="qwen3-tts-12hz-0.6b-base.zip",
+        archive_checksum="415624561a856609278afa80df9c815c2daaddbad00981cea305213a44a0a0ef",
+        config_hash="2e714c787c8edb98b05432685cddb634add2de4d4e645f653d68251ef72ba011",
+        model_hash="180b3b10eb1c9f1b4db7806d5475bae3071c0243c299d49926bab1da3b6946f6",
+        revision="5d83992436eae1d760afd27aff78a71d676296fc",
     ),
     # Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice @ 85e237c12c027371202489a0ec509ded67b5e4b5
     "Qwen3-TTS-12Hz-0.6B-CustomVoice": _model_manifest(
-        "qwen3-tts-12hz-0.6b-customvoice.zip",
-        "81aca2b6fac304944d8acf345272d8a9a727d5fc2e2e66b222ab4729340c7455",
-        "bc3c7e785eb961179c25450d1acff03f839e0002f2f3a5aeb67b5735c0fa2adb",
-        "85e237c12c027371202489a0ec509ded67b5e4b5",
+        archive_name="qwen3-tts-12hz-0.6b-customvoice.zip",
+        archive_checksum="597393b112a5da3c40ab1248526c1f7b9cf0f7eb30f810aaca782964645d6838",
+        config_hash="81aca2b6fac304944d8acf345272d8a9a727d5fc2e2e66b222ab4729340c7455",
+        model_hash="bc3c7e785eb961179c25450d1acff03f839e0002f2f3a5aeb67b5735c0fa2adb",
+        revision="85e237c12c027371202489a0ec509ded67b5e4b5",
     ),
     # Qwen/Qwen3-TTS-12Hz-1.7B-Base @ fd4b254389122332181a7c3db7f27e918eec64e3
     "Qwen3-TTS-12Hz-1.7B-Base": _model_manifest(
-        "qwen3-tts-12hz-1.7b-base.zip",
-        "b4f01752d15a488abde3e1ab44723ae4f4b9e68a4037257b098b3737893cc1f9",
-        "38fc7fc51c5e776e840414b6fd443962e9411b9654888fd7913e4da643cb857c",
-        "fd4b254389122332181a7c3db7f27e918eec64e3",
+        archive_name="qwen3-tts-12hz-1.7b-base.zip",
+        archive_checksum="935502b372856598b5bea4c9820e5f807a22b7eee2e50a8a8f214bf88e7c868a",
+        config_hash="b4f01752d15a488abde3e1ab44723ae4f4b9e68a4037257b098b3737893cc1f9",
+        model_hash="38fc7fc51c5e776e840414b6fd443962e9411b9654888fd7913e4da643cb857c",
+        revision="fd4b254389122332181a7c3db7f27e918eec64e3",
     ),
     # Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice @ 0c0e3051f131929182e2c023b9537f8b1c68adfe
     "Qwen3-TTS-12Hz-1.7B-CustomVoice": _model_manifest(
-        "qwen3-tts-12hz-1.7b-customvoice.zip",
-        "17a07f527a1c25ea30b4e023a184482a23d3e279d697b1dc81b1bde498d29cf9",
-        "38b1d5971bdbd982b561cccec982669a53b0537c3cf5e9bd4778ed07bb2f5137",
-        "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+        archive_name="qwen3-tts-12hz-1.7b-customvoice.zip",
+        archive_checksum="69711e850dbb1b38d643e9d6dc3f11edf4eb7a03cb2bf7d427d355ead6833be0",
+        config_hash="17a07f527a1c25ea30b4e023a184482a23d3e279d697b1dc81b1bde498d29cf9",
+        model_hash="38b1d5971bdbd982b561cccec982669a53b0537c3cf5e9bd4778ed07bb2f5137",
+        revision="0c0e3051f131929182e2c023b9537f8b1c68adfe",
     ),
     # Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign @ 5ecdb67327fd37bb2e042aab12ff7391903235d3
     "Qwen3-TTS-12Hz-1.7B-VoiceDesign": _model_manifest(
-        "qwen3-tts-12hz-1.7b-voicedesign.zip",
-        "aecd2cc4c1fe9edef1cb7ca7c401685a43879ad43f3f9e883f1c6760b61731e0",
-        "391e8db219f292c515297cdceeb43e4eae67cdde35fa57e79a6a8a532fca0522",
-        "5ecdb67327fd37bb2e042aab12ff7391903235d3",
+        archive_name="qwen3-tts-12hz-1.7b-voicedesign.zip",
+        archive_checksum="bb9e9c4392cc3ac52e7d6816cad7e70c977a2ed4227b7c8aa06aed8ba46b3c64",
+        config_hash="aecd2cc4c1fe9edef1cb7ca7c401685a43879ad43f3f9e883f1c6760b61731e0",
+        model_hash="391e8db219f292c515297cdceeb43e4eae67cdde35fa57e79a6a8a532fca0522",
+        revision="5ecdb67327fd37bb2e042aab12ff7391903235d3",
     ),
 }
 
 VOICE_MODEL_LINKS = {
     "voices": {
         "urls": [
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/voices.zip",
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/chatterbox-tts/voices.zip",
-            "https://s3.libs.space:9000/ai-models/chatterbox-tts/voices.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/qwen3-tts/voices.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/qwen3-tts/voices.zip",
+            "https://s3.libs.space:9000/ai-models/qwen3-tts/voices.zip",
         ],
         "checksum": "1219fc592b50118807d54e3049e6b019d248e2e1a6be2324e398b3edd6df19a9",
         "file_checksums": {
@@ -603,12 +609,6 @@ class Qwen3TTS(metaclass=SingletonMeta):
         model_directory = self._model_directory(model_name)
         if not downloader.model_needs_download(model_directory, entry["file_checksums"]):
             return True
-        if entry["checksum"] == ARCHIVE_CHECKSUM_PLACEHOLDER:
-            archive_name = Path(entry["urls"][0]).name
-            raise RuntimeError(
-                f"The Qwen3-TTS model archive {archive_name} is not currently "
-                "available for automatic download."
-            )
         return downloader.download_model(
             {
                 "model_path": MODEL_CACHE_PATH,
@@ -630,7 +630,7 @@ class Qwen3TTS(metaclass=SingletonMeta):
             return True
         return downloader.download_model(
             {
-                "model_path": VOICE_CACHE_PATH,
+                "model_path": MODEL_CACHE_PATH,
                 "model_link_dict": VOICE_MODEL_LINKS,
                 "model_name": "voices",
                 "title": "Voice samples (Qwen3-TTS / IndexTTS / Chatterbox)",

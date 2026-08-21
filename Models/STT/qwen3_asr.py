@@ -96,13 +96,6 @@ DIALECT_NAME_ALIASES = {
     "minnan language": "zh-minnan",
 }
 
-
-# The ZIP SHA-256 values intentionally remain zero until the application-hosted
-# archives are created. Each ZIP must contain these files at its root (without
-# another Qwen3-ASR-* directory). Replace the corresponding checksum before
-# publishing the archive; a missing archive never falls back to Hugging Face.
-ARCHIVE_CHECKSUM_PLACEHOLDER = "0" * 64
-
 MODEL_LINKS = {
     # Source checkpoint used for the ZIP:
     # Qwen/Qwen3-ASR-0.6B-hf @ 7f1569a48a89f3e3f4dc3a5c9d28bddd903bc76c
@@ -112,7 +105,7 @@ MODEL_LINKS = {
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Qwen3-ASR/Qwen3-ASR-0.6B-hf.zip",
             "https://s3.libs.space:9000/ai-models/Qwen3-ASR/Qwen3-ASR-0.6B-hf.zip",
         ],
-        "checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+        "checksum": "4006365de602a62fa00ce834728032d32989a22c9bb6bfc305b6c761909c4687",
         "file_checksums": {
             "chat_template.jinja": "f50e6b694fbf4a683206e37869990d68333fe95d285730f084c838a34b0d98c2",
             "config.json": "9eecf6f1b383e343889c2e6010e632590fa57d4bc678e151c7d6a160a0dfb04a",
@@ -132,7 +125,7 @@ MODEL_LINKS = {
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/Qwen3-ASR/Qwen3-ASR-1.7B-hf.zip",
             "https://s3.libs.space:9000/ai-models/Qwen3-ASR/Qwen3-ASR-1.7B-hf.zip",
         ],
-        "checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+        "checksum": "9a5cbe9efb3c841ea25ceca5f5f330842ef18f46d4aadc3b952b45a63fef1f5e",
         "file_checksums": {
             "chat_template.jinja": "f50e6b694fbf4a683206e37869990d68333fe95d285730f084c838a34b0d98c2",
             "config.json": "117ac8e63e2af7cae3665e5a632d6eb03f5f384915519ceb6403c15ec6533f63",
@@ -181,15 +174,6 @@ def download_model(model_name, force_non_ui_dl=False):
         raise ValueError(f"Unknown Qwen3-ASR model: {model_name}")
     if not needs_download(model_name):
         return True
-
-    model_entry = MODEL_LINKS[model_name]
-    if model_entry["checksum"] == ARCHIVE_CHECKSUM_PLACEHOLDER:
-        archive_name = Path(model_entry["urls"][0]).name
-        raise RuntimeError(
-            f"The Qwen3-ASR model archive {archive_name} is not currently "
-            "available for automatic download."
-        )
-
     return downloader.download_model(
         {
             "model_path": MODEL_CACHE_PATH,

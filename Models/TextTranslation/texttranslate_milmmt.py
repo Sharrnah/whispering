@@ -15,7 +15,6 @@ from Models.transformers_attention import (
 
 DEFAULT_MODEL = "MiLMMT-46-1B-v1.0"
 MODEL_CACHE_PATH = Path(".cache/milmmt")
-ARCHIVE_CHECKSUM_PLACEHOLDER = "0" * 64
 
 # MiLMMT's prompt requires these exact language names. Keep the display names
 # synchronized with Xiaomi's model card and official demo.
@@ -198,7 +197,7 @@ MODEL_LINKS = {
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/MiLMMT-46/MiLMMT-46-1B-v1.0.zip",
             "https://s3.libs.space:9000/ai-models/MiLMMT-46/MiLMMT-46-1B-v1.0.zip",
         ],
-        "checksum": ARCHIVE_CHECKSUM_PLACEHOLDER,
+        "checksum": "ce9f7fc1782d075d0234363217b7badb2cc385667fc6fe11f24704e81caff760",
         "file_checksums": {
             "README.md": "b947eb325d6069558269bc82df9980e23883d618867c5abb98fb2333fea26810",
             "added_tokens.json": "50b2f405ba56a26d4913fd772089992252d7f942123cc0a034d96424221ba946",
@@ -221,7 +220,7 @@ MODEL_LINKS = {
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/MiLMMT-46/MiLMMT-46-4B-v1.0.zip",
             "https://s3.libs.space:9000/ai-models/MiLMMT-46/MiLMMT-46-4B-v1.0.zip",
         ],
-        "checksum": ARCHIVE_CHECKSUM_PLACEHOLDER,
+        "checksum": "13cfb1db5585c77cf0220d6be6b51eec084d296b3e4c851f7d8e9d3fe026ca7c",
         "file_checksums": {
             "README.md": "b10bf681d8dd0b01eb64c6d5ce01337a332135bc0009f4b6d66e312ba0170e9e",
             "added_tokens.json": "50b2f405ba56a26d4913fd772089992252d7f942123cc0a034d96424221ba946",
@@ -244,9 +243,8 @@ MODEL_LINKS = {
         "urls": [
             "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/MiLMMT-46/MiLMMT-46-12B-v1.0.zip",
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/MiLMMT-46/MiLMMT-46-12B-v1.0.zip",
-            "https://s3.libs.space:9000/ai-models/MiLMMT-46/MiLMMT-46-12B-v1.0.zip",
         ],
-        "checksum": ARCHIVE_CHECKSUM_PLACEHOLDER,
+        "checksum": "250a627b5bc2353d03fa7edde57975a572461b38e582ebb8ba8f3dbf05fb0508",
         "file_checksums": {
             "README.md": "619351bad3f6e763c975f03e8cc2735cfd0c14829e5b70955bf97269989b5a11",
             "added_tokens.json": "50b2f405ba56a26d4913fd772089992252d7f942123cc0a034d96424221ba946",
@@ -321,14 +319,6 @@ def download_model(model_name, force_non_ui_dl=False):
         raise ValueError(f"Unknown MiLMMT model: {model_name}")
     if not needs_download(model_name):
         return True
-
-    model_entry = MODEL_LINKS[model_name]
-    if model_entry["checksum"] == ARCHIVE_CHECKSUM_PLACEHOLDER:
-        archive_name = Path(model_entry["urls"][0]).name
-        raise RuntimeError(
-            f"The MiLMMT model archive {archive_name} is not currently "
-            "available for automatic download."
-        )
 
     return downloader.download_model(
         {

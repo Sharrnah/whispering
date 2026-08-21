@@ -19,13 +19,9 @@ from Models.TTS.text_segmentation import chunk_text, has_voice_tags, parse_voice
 
 SAMPLE_RATE = 22050
 DEFAULT_MODEL = "IndexTTS-2.5"
-ARCHIVE_CHECKSUM_PLACEHOLDER = "0" * 64
 MODEL_CACHE_PATH = Path.cwd() / ".cache" / "index-tts"
 
-# Reuse the application's existing voice-clone sample pack instead of storing a
-# second copy. Users may add WAV, MP3, FLAC, or OGG references to this directory.
-VOICE_CACHE_PATH = Path.cwd() / ".cache" / "chatterbox-tts-cache"
-VOICES_PATH = VOICE_CACHE_PATH / "voices"
+VOICES_PATH = MODEL_CACHE_PATH / "voices"
 
 SUPPORTED_LANGUAGES = {
     "zh": "Chinese",
@@ -51,7 +47,7 @@ TTS_MODEL_LINKS = {
             "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/index-tts/index-tts-2.5.zip",
             "https://s3.libs.space:9000/ai-models/index-tts/index-tts-2.5.zip",
         ],
-        "checksum": ARCHIVE_CHECKSUM_PLACEHOLDER,
+        "checksum": "db4c1a599172976d0fcc8ebdefafabfed61d4275233485b96d1e9e7a9527372a",
         "file_checksums": {
             "LICENSE": "cc7da9ea0f8a97ef15ab3bf0389e636ce79ffca1aef5489520796ac87d87a87b",
             "README.md": "d21e2ed55013ce0c456b9aa6d4fab7222365bfad10dd839155da0ce36fa93001",
@@ -75,14 +71,12 @@ TTS_MODEL_LINKS = {
     },
 }
 
-# Shared Chatterbox voice archive. Keeping its manifest here avoids importing
-# Chatterbox and all of its model code merely to list IndexTTS voices.
 VOICE_MODEL_LINKS = {
     "voices": {
         "urls": [
-            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/chatterbox-tts/voices.zip",
-            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/chatterbox-tts/voices.zip",
-            "https://s3.libs.space:9000/ai-models/chatterbox-tts/voices.zip",
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/index-tts/voices.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/index-tts/voices.zip",
+            "https://s3.libs.space:9000/ai-models/index-tts/voices.zip",
         ],
         "checksum": "1219fc592b50118807d54e3049e6b019d248e2e1a6be2324e398b3edd6df19a9",
         "file_checksums": {
@@ -212,11 +206,6 @@ class IndexTTS(metaclass=SingletonMeta):
         model_directory = self._model_directory(model_name)
         if not downloader.model_needs_download(model_directory, model_entry["file_checksums"]):
             return True
-        if model_entry["checksum"] == ARCHIVE_CHECKSUM_PLACEHOLDER:
-            raise RuntimeError(
-                "The IndexTTS 2.5 model archive index-tts-2.5.zip is not "
-                "currently available for automatic download."
-            )
         return downloader.download_model(
             {
                 "model_path": MODEL_CACHE_PATH,
@@ -238,7 +227,7 @@ class IndexTTS(metaclass=SingletonMeta):
             return True
         return downloader.download_model(
             {
-                "model_path": VOICE_CACHE_PATH,
+                "model_path": MODEL_CACHE_PATH,
                 "model_link_dict": VOICE_MODEL_LINKS,
                 "model_name": "voices",
                 "title": "Voice samples (IndexTTS / Chatterbox)",

@@ -23,8 +23,6 @@ from .zonos2.runtime import (
     unload_bundle,
 )
 
-
-ARCHIVE_CHECKSUM_PLACEHOLDER = "0" * 64
 ZONOS_CACHE_PATH = Path.cwd() / ".cache" / "zonos-tts-cache"
 MODEL_CACHE_PATH = ZONOS_CACHE_PATH / "zonos2"
 VOICES_PATH = ZONOS_CACHE_PATH / "voices"
@@ -47,7 +45,7 @@ TTS_MODEL_LINKS = {
     # drbaph/ZONOS2-BF16 @ c8470cd6b2c43639780635fac10921fd74a381e0
     "zonos2-bf16": {
         "urls": _hosted_urls("zonos2-bf16.zip"),
-        "checksum": ARCHIVE_CHECKSUM_PLACEHOLDER,
+        "checksum": "3b38131bb24f6a5e417dbc0f055ad4bd54d25854c44274b3b29f251ea311bf9b",
         "file_checksums": {
             "zonos2-bf16.safetensors": "cd2fd4c9e867750e27ccd0544d2ff4cc86b5c403d6bff4ceb7540068d31b26b4",
         },
@@ -57,7 +55,7 @@ TTS_MODEL_LINKS = {
     # drbaph/ZONOS2-FP8 @ 6b713d14604a648939388f83935aed746d1be00e
     "zonos2-fp8-mixed": {
         "urls": _hosted_urls("zonos2-fp8-mixed.zip"),
-        "checksum": ARCHIVE_CHECKSUM_PLACEHOLDER,
+        "checksum": "f9a864228f925bb43fe11ebf912bada3a06870b8640f5340711d8f8ce6401d60",
         "file_checksums": {
             "zonos2-fp8-mixed.safetensors": "326e1d68c66cde0af14c27570edfdbf2d339be50ce3d6fafb8778ceaf3f9381a",
         },
@@ -79,7 +77,7 @@ TTS_MODEL_LINKS = {
     # Speaker encoder files distributed with drbaph/ZONOS2-BF16.
     "speaker_encoder": {
         "urls": _hosted_urls("zonos2-speaker-encoder.zip"),
-        "checksum": ARCHIVE_CHECKSUM_PLACEHOLDER,
+        "checksum": "5b9b480817d446371705be6bea931fbabdbae5328294d1ecefa413a35e9a7de8",
         "file_checksums": {
             "config.json": "297ac64afea59191e5aa446cb8acfdfdecfcd34771edda47d6948d1be5834ae9",
             "configuration_ecapa_tdnn.py": "6e187fd0adb8245829c855614e880551e2ec14c2372b2e5ad3c7e6565726d860",
@@ -97,7 +95,7 @@ TTS_MODEL_LINKS = {
     # 194c0a3ab67b90383a67646289f28d4ecb1c1f64
     "emotion_directions": {
         "urls": _hosted_urls("zonos2-emotion-directions.zip"),
-        "checksum": ARCHIVE_CHECKSUM_PLACEHOLDER,
+        "checksum": "2f0104060efd667f7063807316c59b8555a3619eaf3d5beee7e8bee9b58b89cf",
         "file_checksums": {
             "angry.npy": "78e7d1381a21a6903046391ff7401c49bd32e9ac348d40f903c4a04f06064592",
             "arousal.npy": "afa3eae5b74c4e495406bee7024f817f7655d4ba7e171e5ba03e92e885037c9f",
@@ -223,12 +221,6 @@ class Zonos2TTS(metaclass=SingletonMeta):
         model_directory = self._model_directory(model_name)
         if not downloader.model_needs_download(model_directory, entry["file_checksums"]):
             return True
-        if entry["checksum"] == ARCHIVE_CHECKSUM_PLACEHOLDER:
-            archive_name = os.path.basename(entry["urls"][0])
-            raise RuntimeError(
-                f"The ZONOS2 model archive {archive_name} is not currently "
-                "available for automatic download."
-            )
         return downloader.download_model(
             {
                 "model_path": MODEL_CACHE_PATH,
