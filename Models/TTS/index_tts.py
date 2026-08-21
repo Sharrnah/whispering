@@ -538,19 +538,30 @@ class IndexTTS(metaclass=SingletonMeta):
                 wave = self._wave_tensor(result["audio"])
         return wave
 
+    def _release_temporary_cuda_memory(self):
+        device = getattr(self, "compute_device", torch.device("cpu"))
+        if device.type == "cuda":
+            # IndexTTS has length-dependent GPT/diffusion/vocoder working sets.
+            # Return their now-unused allocator blocks so another application
+            # does not have to compete with this process's high-water mark.
+            torch.cuda.empty_cache()
+
     def _generate_segment(self, text, voice):
-        result = self.model.infer(
-            spk_audio_prompt=voice,
-            text=text,
-            output_path=None,
-            stream_return=False,
-            **self._inference_kwargs(text),
-        )
-        if not isinstance(result, tuple) or len(result) != 2:
-            raise RuntimeError("IndexTTS returned no audio.")
-        sample_rate, audio = result
-        self.sample_rate = int(sample_rate)
-        return self._finish_audio(audio)
+        try:
+            result = self.model.infer(
+                spk_audio_prompt=voice,
+                text=text,
+                output_path=None,
+                stream_return=False,
+                **self._inference_kwargs(text),
+            )
+            if not isinstance(result, tuple) or len(result) != 2:
+                raise RuntimeError("IndexTTS returned no audio.")
+            sample_rate, audio = result
+            self.sample_rate = int(sample_rate)
+            return self._finish_audio(audio)
+        finally:
+            self._release_temporary_cuda_memory()
 
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         del remove_silence, silence_after_segments, normalize

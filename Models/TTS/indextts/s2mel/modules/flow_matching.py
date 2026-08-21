@@ -72,9 +72,6 @@ class BASECFM(torch.nn.Module, ABC):
         """
         t, _, _ = t_span[0], t_span[-1], t_span[1] - t_span[0]
 
-        # I am storing this because I can later plot it by putting a debugger here and saving it to a file
-        # Or in future might add like a return_all_steps flag
-        sol = []
         # apply prompt
         prompt_len = prompt.size(-1)
         prompt_x = torch.zeros_like(x)
@@ -107,12 +104,11 @@ class BASECFM(torch.nn.Module, ABC):
 
             x = x + dt * dphi_dt
             t = t + dt
-            sol.append(x)
             if step < len(t_span) - 1:
                 dt = t_span[step + 1] - t
             x[:, :, :prompt_len] = 0
 
-        return sol[-1]
+        return x
     def forward(self, x1, x_lens, prompt_lens, mu, style):
         """Computes diffusion loss
 

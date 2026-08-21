@@ -454,6 +454,7 @@ class IndexTTS2:
             return audio
         return torchaudio.transforms.Resample(source_rate, target_rate)(audio)
 
+    @torch.inference_mode()
     def _prepare_speaker_conditioning(self, audio_path, verbose=False):
         """Prepare or reuse every tensor derived from a speaker reference."""
         self._ensure_reference_caches()
@@ -501,6 +502,7 @@ class IndexTTS2:
         self._lru_put(self.emotion_conditioning_cache, key, spk_cond_emb)
         return prepared
 
+    @torch.inference_mode()
     def _prepare_emotion_conditioning(
             self, audio_path, verbose=False, speaker_conditioning=None
     ):

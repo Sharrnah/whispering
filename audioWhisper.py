@@ -99,7 +99,12 @@ if __name__ == '__main__':
     import numpy as np
     import torch
 
-    torch.backends.cudnn.benchmark = True
+    # TTS and ASR use highly variable sequence/audio lengths. cuDNN benchmark
+    # mode profiles multiple convolution algorithms for every new shape, and
+    # some candidates request enormous temporary workspaces (over 15 GiB was
+    # observed in BigVGAN). The regular heuristic is both faster for these
+    # short-lived shapes and memory-safe.
+    torch.backends.cudnn.benchmark = False
 
     import transformers
     import audio_tools
