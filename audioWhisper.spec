@@ -49,6 +49,11 @@ datas += collect_data_files('triton')
 datas += collect_data_files('mistral_common')
 datas += collect_data_files('spacy_pkuseg')
 datas += collect_data_files('wetext')
+# TorchScript compiles two IndexTTS helpers when their modules are imported.
+# PyInstaller normally stores only bytecode in its PYZ archive, while
+# TorchScript requires inspectable Python source. Keep the small vendored
+# runtime sources beside the extracted modules for rt_inspect_fallback.py.
+datas += collect_data_files('indextts', include_py_files=True, includes=['**/*.py'])
 datas += copy_metadata('rich')
 datas += copy_metadata('torch')
 datas += copy_metadata('tqdm')

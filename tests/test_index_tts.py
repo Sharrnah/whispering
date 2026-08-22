@@ -1,3 +1,4 @@
+import ast
 import inspect
 import io
 import sys
@@ -5,6 +6,7 @@ import tempfile
 import types
 import unittest
 import wave
+import weakref
 from collections import OrderedDict
 from pathlib import Path
 from unittest import mock
@@ -44,6 +46,30 @@ class _FakeSegmentModel:
 
 
 class IndexTTSAdapterTests(unittest.TestCase):
+    def test_application_disables_cudnn_benchmark_for_variable_audio_shapes(self):
+        module = ast.parse((PROJECT_ROOT / "audioWhisper.py").read_text(encoding="utf-8"))
+        assignments = [
+            node
+            for node in ast.walk(module)
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Attribute)
+                and target.attr == "benchmark"
+                and isinstance(target.value, ast.Attribute)
+                and target.value.attr == "cudnn"
+                for target in node.targets
+            )
+        ]
+
+        self.assertTrue(assignments)
+        self.assertTrue(
+            all(
+                isinstance(node.value, ast.Constant)
+                and node.value.value is False
+                for node in assignments
+            )
+        )
+
     def test_hosted_archive_manifest_is_offline_and_complete(self):
         entry = index_tts.TTS_MODEL_LINKS[index_tts.DEFAULT_MODEL]
         self.assertEqual(entry["checksum"], "0" * 64)
@@ -221,6 +247,19 @@ class IndexTTSAdapterTests(unittest.TestCase):
         self.assertEqual(wave.shape[-1], expected_length)
         adapter._seed_generation.assert_called_once_with()
 
+    def test_generation_returns_unused_cuda_cache_to_other_applications(self):
+        adapter = object.__new__(index_tts.IndexTTS)
+        adapter.compute_device = torch.device("cuda")
+        adapter.model = _FakeSegmentModel()
+        adapter.sample_rate = index_tts.SAMPLE_RATE
+        adapter._inference_kwargs = lambda _: {"lang": "en"}
+        adapter._finish_audio = lambda audio, **_: index_tts.IndexTTS._wave_tensor(audio)
+
+        with mock.patch.object(torch.cuda, "empty_cache") as empty_cache:
+            wave = adapter._generate_segment("Hello", "voice.wav")
+
+        self.assertEqual(tuple(wave.shape), (1, 2))
+        empty_cache.assert_called_once_with()
 
 class IndexTTSTransformersCompatibilityTests(unittest.TestCase):
     def test_reference_conditioning_lru_reuses_preprocessing_and_tracks_file_changes(self):
@@ -294,6 +333,87 @@ class IndexTTSTransformersCompatibilityTests(unittest.TestCase):
 
         self.assertEqual(list(cache), ["a", "c"])
         self.assertNotIn("b", cache)
+
+    def test_reference_conditioning_cache_does_not_retain_autograd_graphs(self):
+        from indextts.infer_v2_5 import IndexTTS2
+
+        runtime = object.__new__(IndexTTS2)
+        runtime.device = "cpu"
+        runtime.speaker_conditioning_cache = OrderedDict()
+        runtime.emotion_conditioning_cache = OrderedDict()
+        runtime._load_and_cut_audio = mock.Mock(
+            return_value=(torch.zeros((1, 320), dtype=torch.float32), 16000)
+        )
+        runtime._resample_audio = mock.Mock(side_effect=lambda audio, *_: audio)
+        runtime.extract_features = mock.Mock(
+            return_value={
+                "input_features": torch.zeros((1, 4, 3)),
+                "attention_mask": torch.ones((1, 4), dtype=torch.long),
+            }
+        )
+        runtime.get_emb = mock.Mock(return_value=torch.ones((1, 4, 3)))
+        runtime.mel_fn = mock.Mock(return_value=torch.ones((1, 80, 5)))
+
+        campplus_weight = torch.nn.Parameter(torch.tensor(2.0))
+        length_regulator_weight = torch.nn.Parameter(torch.tensor(3.0))
+        runtime.campplus_model = lambda feat: feat.mean(dim=(1, 2)).unsqueeze(1) * campplus_weight
+
+        def length_regulator(embedding, **_):
+            return (embedding * length_regulator_weight,)
+
+        runtime.s2mel = types.SimpleNamespace(
+            models={"length_regulator": length_regulator}
+        )
+
+        with mock.patch.object(
+            __import__("indextts.infer_v2_5", fromlist=["torchaudio"]).torchaudio.compliance.kaldi,
+            "fbank",
+            return_value=torch.ones((5, 80)),
+        ):
+            with tempfile.TemporaryDirectory() as temp_dir:
+                reference = Path(temp_dir) / "reference.wav"
+                reference.write_bytes(b"reference")
+                prepared = runtime._prepare_speaker_conditioning(reference)
+
+        for value in prepared.values():
+            if isinstance(value, torch.Tensor):
+                self.assertFalse(value.requires_grad)
+                self.assertIsNone(value.grad_fn)
+
+    def test_diffusion_solver_does_not_retain_all_intermediate_states(self):
+        from indextts.s2mel.modules.flow_matching import BASECFM
+
+        runtime = object.__new__(BASECFM)
+        runtime.zero_prompt_speech_token = False
+
+        class TrackingEstimator:
+            def __init__(self):
+                self.references = []
+                self.maximum_live_states = 0
+
+            def __call__(self, x, *_):
+                self.references.append(weakref.ref(x))
+                self.maximum_live_states = max(
+                    self.maximum_live_states,
+                    sum(reference() is not None for reference in self.references),
+                )
+                return torch.zeros_like(x)
+
+        estimator = TrackingEstimator()
+        runtime.estimator = estimator
+        result = runtime.solve_euler(
+            torch.ones((1, 2, 4)),
+            torch.tensor([4]),
+            torch.zeros((1, 2, 1)),
+            torch.ones((1, 4, 3)),
+            torch.ones((1, 2)),
+            None,
+            torch.linspace(0, 1, 7),
+            inference_cfg_rate=0,
+        )
+
+        self.assertEqual(tuple(result.shape), (1, 2, 4))
+        self.assertLessEqual(estimator.maximum_live_states, 2)
 
     def test_pinned_wetext_normalizer_loads_both_languages(self):
         from indextts.utils.front import TextNormalizer

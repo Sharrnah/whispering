@@ -81,7 +81,7 @@ rem (echo %pyrecursivelimit%) > temp.txt & type audioWhisper.spec >> temp.txt & 
 rem 1. In your program's .spec file add this line near the top::
 rem      import sys ; sys.setrecursionlimit(sys.getrecursionlimit() * 5)
 
-pyinstaller audioWhisper.spec -y
+pyinstaller audioWhisper.spec -y --clean
 
 rem apply patch
 git apply patches/triton-nvidia-compiler.patch
