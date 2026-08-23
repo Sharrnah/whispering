@@ -1,4 +1,5 @@
 import io
+import gc
 import os
 import re
 from pathlib import Path
@@ -39,6 +40,26 @@ TTS_MODEL_LINKS = {
             "kokoro-v1_0.pth": "496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4"
         },
         "path": "kokoro-v1_0",
+    },
+    # Source: Thorsten-Voice/Kokoro@734e593d320a3d876bede7020f773dfd481a0cc7
+    # The application ZIP contains the default epoch-5 checkpoint and its
+    # matching voice pack. Keep the checkpoint and voice paired.
+    "Kokoro-German-Thorsten": {
+        "source_revision": "734e593d320a3d876bede7020f773dfd481a0cc7",
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/kokoro-tts/Kokoro-German-Thorsten.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/kokoro-tts/Kokoro-German-Thorsten.zip",
+            "https://s3.libs.space:9000/ai-models/kokoro-tts/Kokoro-German-Thorsten.zip",
+        ],
+        "checksum": "830844470d36cc0db93cb4a93eb6deaa8fe87d84e66405cfe043039ba4b03890",
+        "file_checksums": {
+            "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+            "README.md": "a2ffa2aca2c321d4bb49ef552e23e8e9f3cff8c03f918f77fcfc6fc4bd2a275b",
+            "config.json": "5abb01e2403b072bf03d04fde160443e209d7a0dad49a423be15196b9b43c17f",
+            "model.pth": "36dde15c4a800cfd1ab540ccb4476dbab604fe03ff7c937d976ebbf3b49e59ce",
+            "voices/thorsten.pt": "9d98b775ebce1cfc369e8f9a3ee8ee260cd612dffb477cba85749112362306d7",
+        },
+        "path": "Kokoro-German-Thorsten",
     },
     # espeak
     "eSpeak-NG": {
@@ -572,6 +593,26 @@ speed_mapping = {
 
 model_list = {
     "Default": ["kokoro-v1_0"],
+    "German": ["Kokoro-German-Thorsten"],
+}
+
+DEFAULT_MODEL = "kokoro-v1_0"
+THORSTEN_MODEL = "Kokoro-German-Thorsten"
+
+KOKORO_MODEL_CONFIGS = {
+    DEFAULT_MODEL: {
+        "model_file": "kokoro-v1_0.pth",
+        "language": None,
+        "default_voice": "af_heart",
+        "shared_voices": True,
+    },
+    THORSTEN_MODEL: {
+        "model_file": "model.pth",
+        "language": "d",
+        "default_voice": "thorsten",
+        "voice_files": ("voices/thorsten.pt",),
+        "shared_voices": False,
+    },
 }
 
 
@@ -590,6 +631,8 @@ class KokoroTTS(metaclass=SingletonMeta):
     pipeline = None
 
     last_language = ""
+    loaded_model_name = ""
+    loaded_device = ""
 
     special_settings = {
         "language": 'a',
@@ -601,6 +644,7 @@ class KokoroTTS(metaclass=SingletonMeta):
 
 
     _voice_cache = {}  # voice_name -> torch.Tensor
+    _model_lock = threading.RLock()
 
     split_patterns = {
         'fast': r'(?:[。？！、，；;,.?!]+|[\r\n]+)',
@@ -608,22 +652,30 @@ class KokoroTTS(metaclass=SingletonMeta):
     }
 
     def __init__(self):
+        self.model = None
+        self.pipeline = None
+        self.last_language = ""
+        self.loaded_model_name = ""
+        self.loaded_device = ""
+        self.voice_list = []
+        self._voice_cache = {}
+        self._model_lock = threading.RLock()
+        self.download_state = {"is_downloading": False}
+
         self.set_compute_device(settings.GetOption("tts_ai_device"))
+        if not self.download_model("eSpeak-NG"):
+            raise RuntimeError("Failed to install the Kokoro eSpeak-NG runtime.")
+        espeak_path = str(Path(cache_path / "eSpeak NG").resolve())
+        os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = str(
+            Path(cache_path / "eSpeak NG" / "libespeak-ng.dll").resolve()
+        )
+        os.environ["PHONEMIZER_ESPEAK_PATH"] = espeak_path
+        path_parts = os.environ.get("PATH", "").split(os.pathsep)
+        if espeak_path not in path_parts:
+            os.environ["PATH"] = os.pathsep.join([espeak_path, *path_parts])
 
-        if not self.pipeline:
-            self.download_model("eSpeak-NG")
-            self.download_model("kokoro-v1_0")
-            self.download_model("voices")
-            #os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = "C:\Program Files\eSpeak NG\libespeak-ng.dll"
-            os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = str(Path(cache_path / "eSpeak NG" / "libespeak-ng.dll").resolve())
-            os.environ["PHONEMIZER_ESPEAK_PATH"] = str(Path(cache_path / "eSpeak NG").resolve())
-            os.environ['PATH'] = ';'.join([str(Path(cache_path / "eSpeak NG").resolve())] + [os.environ['PATH']])
-
-            self.load()
-
-        if not self.voice_list:
-            self.update_voices()
-        pass
+        self._ensure_special_settings()
+        self.load()
 
     def set_compute_device(self, device):
         self.compute_device_str = device
@@ -640,7 +692,7 @@ class KokoroTTS(metaclass=SingletonMeta):
         return tuple([{"language": language, "models": models} for language, models in self.list_models().items()])
 
     def download_model(self, model_name):
-        downloader.download_model({
+        return downloader.download_model({
             "model_path": cache_path,
             "model_link_dict": TTS_MODEL_LINKS,
             "model_name": model_name,
@@ -675,49 +727,106 @@ class KokoroTTS(metaclass=SingletonMeta):
             self.audio_streamer = None
 
     def _get_model_name(self):
-        model = "kokoro-v1_0"
-        if len(settings.GetOption('tts_model')) == 2:
-            #language = settings.GetOption('tts_model')[0]
-            model = settings.GetOption('tts_model')[1]
+        model = DEFAULT_MODEL
+        selected_model = settings.GetOption('tts_model')
+        if isinstance(selected_model, (list, tuple)) and len(selected_model) >= 2:
+            model = selected_model[1]
             # remove language part from string example: " (en & zh)"
             model = re.sub(r'\(.*?\)', '', model).strip()
+        elif isinstance(selected_model, str) and selected_model.strip():
+            model = re.sub(r'\(.*?\)', '', selected_model).strip()
 
-        if model == "" or model not in TTS_MODEL_LINKS:
-            model = "kokoro-v1_0"
+        if model not in KOKORO_MODEL_CONFIGS:
+            model = DEFAULT_MODEL
         return model
 
-    def load(self, lang='a'):
+    def _get_requested_language(self):
+        language = self.special_settings.get("language", "a")
+        return language if isinstance(language, str) and language else "a"
+
+    @staticmethod
+    def _effective_language(model_name, requested_language):
+        model_language = KOKORO_MODEL_CONFIGS[model_name]["language"]
+        if model_language is not None:
+            return model_language
+        if requested_language in ("d", "de"):
+            print("German requires the Kokoro-German-Thorsten model; using American English instead.")
+            return "a"
+        return requested_language
+
+    def load(self, lang=None):
+        if lang is None:
+            self._ensure_special_settings()
+            lang = self._get_requested_language()
         self.load_model(lang)
 
+    def release_model(self):
+        self.pipeline = None
+        self.model = None
+        self.last_language = ""
+        self.loaded_model_name = ""
+        self.loaded_device = ""
+        self._voice_cache.clear()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+
     def load_model(self, lang='a'):
-        if self.model is None:
-            print(f"Loading Kokoro TTS model on device: {self.compute_device_str}")
-            self.model = KModel(
-                str(Path(cache_path / "kokoro-v1_0" / "config.json").resolve()),
-                str(Path(cache_path / "kokoro-v1_0" / "kokoro-v1_0.pth").resolve())
+        with self._model_lock:
+            model_name = self._get_model_name()
+            model_config = KOKORO_MODEL_CONFIGS[model_name]
+            lang = self._effective_language(model_name, lang)
+            self.set_compute_device(settings.GetOption("tts_ai_device"))
+
+            needs_reload = (
+                self.model is None
+                or self.loaded_model_name != model_name
+                or self.loaded_device != self.compute_device_str
             )
-        if self.pipeline is None or self.last_language != lang:
-            self.pipeline = KPipeline(lang_code=lang, model=self.model, device=self.compute_device)
-        pass
+            if needs_reload:
+                if not self.download_model(model_name):
+                    raise RuntimeError(f"Failed to install Kokoro model {model_name}.")
+                if model_config["shared_voices"] and not self.download_model("voices"):
+                    raise RuntimeError("Failed to install Kokoro voice packs.")
+
+                model_directory = Path(cache_path / TTS_MODEL_LINKS[model_name]["path"])
+                config_path = model_directory / "config.json"
+                model_path = model_directory / model_config["model_file"]
+
+                self.release_model()
+                print(f"Loading Kokoro TTS model {model_name} on device: {self.compute_device_str}")
+                loaded_model = KModel(str(config_path.resolve()), str(model_path.resolve()))
+                self.model = loaded_model.to(self.compute_device).eval()
+                self.loaded_model_name = model_name
+                self.loaded_device = self.compute_device_str
+
+            if self.pipeline is None or self.last_language != lang:
+                self.pipeline = KPipeline(lang_code=lang, model=self.model, device=self.compute_device)
+                self.last_language = lang
+            self.update_voices(model_name)
 
     def _get_voices(self):
         return self.voice_list
 
-    def update_voices(self):
-        # find all voices that have a .wav or .mp3 file
-        voice_files = [f.stem for f in voices_path.iterdir() if f.is_file() and (f.suffix == ".pt")]
-
+    def update_voices(self, model_name=None):
+        model_name = model_name or self._get_model_name()
+        model_config = KOKORO_MODEL_CONFIGS[model_name]
         voice_list = []
-        for voice_id in voice_files:
-            voice_file = voices_path / f"{voice_id}.pt"
+        if model_config["shared_voices"]:
+            voice_files = sorted(voices_path.glob("*.pt"))
+        else:
+            model_directory = Path(cache_path / TTS_MODEL_LINKS[model_name]["path"])
+            voice_files = [model_directory / voice_file for voice_file in model_config["voice_files"]]
 
+        for voice_file in voice_files:
             if voice_file.exists():
-                voice_list.append({"name": voice_id, "voice_filename": str(voice_file.resolve())})
+                voice_list.append({"name": voice_file.stem, "voice_filename": str(voice_file.resolve())})
         self.voice_list = voice_list
 
     def list_voices(self):
-        self.update_voices()
-        return [{"name": voice["name"], "value": voice["name"]} for voice in self._get_voices()]
+        with self._model_lock:
+            self.update_voices()
+            return [{"name": voice["name"], "value": voice["name"]} for voice in self._get_voices()]
 
     def get_voice_by_name(self, voice_name):
         for voice in self._get_voices():
@@ -726,16 +835,20 @@ class KokoroTTS(metaclass=SingletonMeta):
         return None
 
     def _get_voice_tensor(self, voice_name):
-        cached = self._voice_cache.get(voice_name)
-        if cached is not None:
-            return cached
         selected_voice = self.get_voice_by_name(voice_name)
         if selected_voice is None:
-            voice_name = "af_heart"
+            voice_name = KOKORO_MODEL_CONFIGS[self.loaded_model_name]["default_voice"]
             selected_voice = self.get_voice_by_name(voice_name)
-        voice_tensor = torch.load(selected_voice["voice_filename"], weights_only=True)
-        self._voice_cache[voice_name] = voice_tensor
-        return voice_tensor
+        if selected_voice is None:
+            raise RuntimeError(f"No compatible voice is installed for {self.loaded_model_name}.")
+
+        voice_path = selected_voice["voice_filename"]
+        cached = self._voice_cache.get(voice_path)
+        if cached is not None:
+            return voice_name, cached
+        voice_tensor = torch.load(voice_path, weights_only=True, map_location="cpu")
+        self._voice_cache[voice_path] = voice_tensor
+        return voice_name, voice_tensor
 
     def get_last_generation(self):
         return self.last_generation["audio"], self.last_generation["sample_rate"]
@@ -755,32 +868,39 @@ class KokoroTTS(metaclass=SingletonMeta):
         Returns:
             Yields tuples of (wav: torch.Tensor [1,N], voice_name: str, inserted_silence: bool, section_info: dict)
         """
-        tts_volume = settings.GetOption("tts_volume")
-        tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
+        with self._model_lock:
+            tts_volume = settings.GetOption("tts_volume")
+            tts_speed = speed_mapping.get(settings.GetOption('tts_prosody_rate'), 1)
 
-        voice_name = settings.GetOption('tts_voice') or "af_heart"
-        voice_tensor = self._get_voice_tensor(voice_name)
-        generator = self.pipeline(
-            text, voice=voice_tensor,
-            speed=tts_speed, split_pattern=self.split_patterns['fast']
-        )
-        for i, (gs, ps, audio) in enumerate(generator):
-            if tts_volume != 1.0:
-                audio = audio_tools.change_volume(audio, tts_volume)
+            requested_voice = settings.GetOption('tts_voice') or ""
+            voice_name, voice_tensor = self._get_voice_tensor(requested_voice)
+            split_pattern = (
+                None
+                if self.loaded_model_name == THORSTEN_MODEL
+                else self.split_patterns['fast']
+            )
+            generator = self.pipeline(
+                text, voice=voice_tensor,
+                speed=tts_speed, split_pattern=split_pattern
+            )
+            for i, (gs, ps, audio) in enumerate(generator):
+                if tts_volume != 1.0:
+                    audio = audio_tools.change_volume(audio, tts_volume)
 
-            # call custom plugin event method
-            plugin_audio = Plugins.plugin_custom_event_call('plugin_tts_after_audio', {'audio': audio, 'sample_rate': self.sample_rate})
-            if plugin_audio is not None and 'audio' in plugin_audio and plugin_audio['audio'] is not None:
-                audio = plugin_audio['audio']
+                plugin_audio = Plugins.plugin_custom_event_call(
+                    'plugin_tts_after_audio', {'audio': audio, 'sample_rate': self.sample_rate}
+                )
+                if plugin_audio is not None and plugin_audio.get('audio') is not None:
+                    audio = plugin_audio['audio']
 
-            yield audio, voice_name, False, {"voice_idx": 0, "segment_idx": i, "text": gs}
+                yield audio, voice_name, False, {"voice_idx": 0, "segment_idx": i, "text": gs}
 
     def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
         print("TTS requested Kokoro TTS")
 
         self._ensure_special_settings()
 
-        lang = self.special_settings["language"]
+        lang = self._get_requested_language()
         self.load(lang)
 
         audio_chunks = []
@@ -804,7 +924,7 @@ class KokoroTTS(metaclass=SingletonMeta):
         # ensure special settings are in global settings
         self._ensure_special_settings()
 
-        lang = self.special_settings["language"]
+        lang = self._get_requested_language()
         self.load(lang)
 
         self.init_audio_stream_playback()

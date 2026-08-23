@@ -1,7 +1,7 @@
 # https://github.com/yl4579/StyleTTS2/blob/main/Modules/istftnet.py
 import math
 from scipy.signal import get_window
-from torch.nn.utils import weight_norm
+from torch.nn.utils.parametrizations import weight_norm
 import numpy as np
 import torch
 import torch.nn as nn

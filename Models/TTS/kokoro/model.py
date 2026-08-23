@@ -9,6 +9,70 @@ from typing import Dict, Optional, Union
 import json
 import torch
 
+
+def _load_module_state(module, state_dict, section_name):
+    """Load one checkpoint section without silently accepting learned-weight gaps."""
+    try:
+        module.load_state_dict(state_dict)
+        return
+    except RuntimeError as load_error:
+        original_error = load_error
+        if not state_dict:
+            raise RuntimeError(
+                f"Kokoro checkpoint section {section_name!r} is incompatible with the runtime."
+            ) from original_error
+
+    normalized_state = (
+        {key[7:]: value for key, value in state_dict.items()}
+        if all(key.startswith('module.') for key in state_dict)
+        else dict(state_dict)
+    )
+    # torch's parametrization compatibility hook does not migrate legacy
+    # weight_g/weight_v keys when the parametrized layer is nested. Normalize
+    # them explicitly so the original Kokoro checkpoint stays supported.
+    legacy_weight_norm_suffixes = {
+        'weight_g': 'parametrizations.weight.original0',
+        'weight_v': 'parametrizations.weight.original1',
+    }
+    for old_suffix, new_suffix in legacy_weight_norm_suffixes.items():
+        for key in tuple(normalized_state):
+            if key == old_suffix or key.endswith(f'.{old_suffix}'):
+                prefix = key[:-len(old_suffix)]
+                normalized_state[f'{prefix}{new_suffix}'] = normalized_state.pop(key)
+    try:
+        module.load_state_dict(normalized_state, strict=True)
+        return
+    except RuntimeError:
+        pass
+
+    # Published Kokoro checkpoints omit the affine parameters of these
+    # InstanceNorm layers. Their initialized weight=1/bias=0 values are the
+    # identity transform, so explicitly supply only those known defaults. All
+    # learned weights and every unexpected key remain subject to strict load.
+    model_state = module.state_dict()
+    missing_keys = set(model_state).difference(normalized_state)
+    optional_instance_norm_keys = {
+        f"{name}.{parameter_name}" if name else parameter_name
+        for name, child in module.named_modules()
+        if isinstance(child, torch.nn.InstanceNorm1d) and child.affine
+        for parameter_name in ('weight', 'bias')
+    }
+    optional_missing = missing_keys.intersection(optional_instance_norm_keys)
+    if missing_keys != optional_missing:
+        raise RuntimeError(
+            f"Kokoro checkpoint section {section_name!r} is incompatible with the runtime."
+        ) from original_error
+    for key in optional_missing:
+        normalized_state[key] = model_state[key]
+
+    try:
+        module.load_state_dict(normalized_state, strict=True)
+    except RuntimeError as normalized_error:
+        raise RuntimeError(
+            f"Kokoro checkpoint section {section_name!r} is incompatible with the runtime."
+        ) from normalized_error
+
+
 class KModel(torch.nn.Module):
     '''
     KModel is a torch.nn.Module with 2 main responsibilities:
@@ -55,12 +119,7 @@ class KModel(torch.nn.Module):
             model = hf_hub_download(repo_id=KModel.REPO_ID, filename='kokoro-v1_0.pth')
         for key, state_dict in torch.load(model, map_location='cpu', weights_only=True).items():
             assert hasattr(self, key), key
-            try:
-                getattr(self, key).load_state_dict(state_dict)
-            except:
-                logger.debug(f"Did not load {key} from state_dict")
-                state_dict = {k[7:]: v for k, v in state_dict.items()}
-                getattr(self, key).load_state_dict(state_dict, strict=False)
+            _load_module_state(getattr(self, key), state_dict, key)
 
     @property
     def device(self):

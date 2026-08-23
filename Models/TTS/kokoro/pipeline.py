@@ -10,6 +10,7 @@ import re
 import torch
 
 ALIASES = {
+    'de': 'd',
     'en-us': 'a',
     'en-gb': 'b',
     'es': 'e',
@@ -27,6 +28,7 @@ LANG_CODES = dict(
     b='British English',
 
     # espeak-ng
+    d='de',
     e='es',
     f='fr-fr',
     h='hi',
@@ -121,10 +123,24 @@ class KPipeline:
             except ImportError:
                 logger.error("You need to `pip install misaki[zh]` to use lang_code='z'")
                 raise
+        elif lang_code == 'd':
+            from .german import GermanG2P
+            self.g2p = GermanG2P()
         else:
             language = LANG_CODES[lang_code]
             logger.warning(f"Using EspeakG2P(language='{language}'). Chunking logic not yet implemented, so long texts may be truncated unless you split them with '\\n'.")
             self.g2p = espeak.EspeakG2P(language=language)
+
+    def _phonemize(self, text: str) -> str:
+        """Normalize Misaki's version-dependent return shape for non-English G2P."""
+        result = self.g2p(text)
+        phonemes = result[0] if isinstance(result, tuple) else result
+        if self.lang_code == 'd' and phonemes:
+            # Thorsten's training frontend maps short German ue to the Kokoro
+            # vocabulary's available long-ue symbol. Without this, those words
+            # silently lose a phoneme because U+028F is outside the 178 tokens.
+            phonemes = phonemes.replace("\u028f", "y")
+        return phonemes or ''
 
     def load_single_voice(self, voice: str):
         if voice in self.voices:
@@ -413,7 +429,7 @@ class KPipeline:
                     if not chunk.strip():
                         continue
                         
-                    ps = self.g2p(chunk)
+                    ps = self._phonemize(chunk)
                     if not ps:
                         continue
                     elif len(ps) > 510:
@@ -422,4 +438,3 @@ class KPipeline:
                         
                     output = KPipeline.infer(model, ps, pack, speed) if model else None
                     yield self.Result(graphemes=chunk, phonemes=ps, output=output)
-
