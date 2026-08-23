@@ -61,6 +61,31 @@ TTS_MODEL_LINKS = {
         },
         "path": "Kokoro-German-Thorsten",
     },
+    # Model: zaakirio/kokoro-ru@27d078fe1c0cab919613a64e906919214385f21d
+    # RUAccent assets: ruaccent/accentuator@b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855
+    # RUAccent source: Den4ikAI/ruaccent@3ac0ad5f6508f6c1a4a604220042232c70a7baf9
+    "Kokoro-Russian-v2": {
+        "source_revision": "27d078fe1c0cab919613a64e906919214385f21d",
+        "frontend_revision": "b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855",
+        "ruaccent_source_revision": "3ac0ad5f6508f6c1a4a604220042232c70a7baf9",
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/kokoro-tts/Kokoro-Russian-v2.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/kokoro-tts/Kokoro-Russian-v2.zip",
+            "https://s3.libs.space:9000/ai-models/kokoro-tts/Kokoro-Russian-v2.zip",
+        ],
+        "checksum": "087cab15c54b9192477ed6626e8e5355d144c8c9114c7c03870429bd522eccea",
+        "file_checksums": {
+            "README.md": "905bcb403a9d99141a6ee6ee4e130c2e2f4dace3832f74a8db75fd6dc3842c61",
+            "RUACCENT_LICENSE": "5ccb796d1fa25aeec0cc7d3ada4915963cec3b7cacfa2cb39ce00c65761e7ad6",
+            "RUACCENT_README.md": "13de1b452c87d69d255e0c6b9e7dc6686e672d15746578ea3b20a7d0f4490d7e",
+            "config.json": "5abb01e2403b072bf03d04fde160443e209d7a0dad49a423be15196b9b43c17f",
+            "kokoro-ru-v2-base.pth": "3bbee5bc05cfa182afc365b9116eaed8355f939c3c0af8aa0e43fdc45343ca15",
+            "russian-frontend.zip": "39f5275831ee4a2c662a1dc05d860f877bc90eff530855b61db4f445a82355ce",
+            "voices/masha.pt": "464d64ae793647c3b3f9d1f08ce5b11c641a61799f0bca65f111e6aad5d0a362",
+            "voices/sveta.pt": "248c00e98f7ce20c31ff5537b52ea3d3b204a58845d86da73960f30f112f60a7",
+        },
+        "path": "Kokoro-Russian-v2",
+    },
     # espeak
     "eSpeak-NG": {
         "urls": [
@@ -594,10 +619,13 @@ speed_mapping = {
 model_list = {
     "Default": ["kokoro-v1_0"],
     "German": ["Kokoro-German-Thorsten"],
+    "Russian": ["Kokoro-Russian-v2"],
 }
 
 DEFAULT_MODEL = "kokoro-v1_0"
 THORSTEN_MODEL = "Kokoro-German-Thorsten"
+RUSSIAN_MODEL = "Kokoro-Russian-v2"
+NATIVE_FRONTEND_MODELS = frozenset((THORSTEN_MODEL, RUSSIAN_MODEL))
 
 KOKORO_MODEL_CONFIGS = {
     DEFAULT_MODEL: {
@@ -612,6 +640,15 @@ KOKORO_MODEL_CONFIGS = {
         "default_voice": "thorsten",
         "voice_files": ("voices/thorsten.pt",),
         "shared_voices": False,
+    },
+    RUSSIAN_MODEL: {
+        "model_file": "kokoro-ru-v2-base.pth",
+        "language": "r",
+        "default_voice": "sveta",
+        "voice_files": ("voices/sveta.pt", "voices/masha.pt"),
+        "shared_voices": False,
+        "frontend_archive": "russian-frontend.zip",
+        "frontend_checksum": "39f5275831ee4a2c662a1dc05d860f877bc90eff530855b61db4f445a82355ce",
     },
 }
 
@@ -752,6 +789,9 @@ class KokoroTTS(metaclass=SingletonMeta):
         if requested_language in ("d", "de"):
             print("German requires the Kokoro-German-Thorsten model; using American English instead.")
             return "a"
+        if requested_language in ("r", "ru"):
+            print("Russian requires the Kokoro-Russian-v2 model; using American English instead.")
+            return "a"
         return requested_language
 
     def load(self, lang=None):
@@ -775,6 +815,7 @@ class KokoroTTS(metaclass=SingletonMeta):
         with self._model_lock:
             model_name = self._get_model_name()
             model_config = KOKORO_MODEL_CONFIGS[model_name]
+            model_directory = Path(cache_path / TTS_MODEL_LINKS[model_name]["path"])
             lang = self._effective_language(model_name, lang)
             self.set_compute_device(settings.GetOption("tts_ai_device"))
 
@@ -789,7 +830,6 @@ class KokoroTTS(metaclass=SingletonMeta):
                 if model_config["shared_voices"] and not self.download_model("voices"):
                     raise RuntimeError("Failed to install Kokoro voice packs.")
 
-                model_directory = Path(cache_path / TTS_MODEL_LINKS[model_name]["path"])
                 config_path = model_directory / "config.json"
                 model_path = model_directory / model_config["model_file"]
 
@@ -801,7 +841,18 @@ class KokoroTTS(metaclass=SingletonMeta):
                 self.loaded_device = self.compute_device_str
 
             if self.pipeline is None or self.last_language != lang:
-                self.pipeline = KPipeline(lang_code=lang, model=self.model, device=self.compute_device)
+                pipeline_kwargs = {
+                    "lang_code": lang,
+                    "model": self.model,
+                    "device": self.compute_device,
+                }
+                if model_name == RUSSIAN_MODEL:
+                    pipeline_kwargs["language_assets"] = {
+                        "model_directory": model_directory,
+                        "frontend_archive": model_config["frontend_archive"],
+                        "frontend_checksum": model_config["frontend_checksum"],
+                    }
+                self.pipeline = KPipeline(**pipeline_kwargs)
                 self.last_language = lang
             self.update_voices(model_name)
 
@@ -876,7 +927,7 @@ class KokoroTTS(metaclass=SingletonMeta):
             voice_name, voice_tensor = self._get_voice_tensor(requested_voice)
             split_pattern = (
                 None
-                if self.loaded_model_name == THORSTEN_MODEL
+                if self.loaded_model_name in NATIVE_FRONTEND_MODELS
                 else self.split_patterns['fast']
             )
             generator = self.pipeline(

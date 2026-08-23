@@ -31,7 +31,8 @@ hiddenimports = [
     'language_tags', 'spacy', 'en_core_web_sm', 'misaki', 'fugashi', 'mojimoji', 'unidic', 'unidic-lite', 'ordered_set', 'phonemizer',
     'flash_attn', 'mistral_common', 'snac', 'peft', 'conformer', 'diffusers', 'spacy-pkuseg', 'spacy_pkuseg', 's3tokenizer',
     'espeakng_loader', 'unidic_lite', 'mamba_ssm', 'audiotools', 'past', 'future',
-    'indextts', 'qwen3_tts_runtime', 'munch', 'wetext', 'kaldifst'
+    'indextts', 'qwen3_tts_runtime', 'munch', 'wetext', 'kaldifst',
+    'ruaccent', 'pycrfsuite', 'razdel'
 ]
 hiddenimports += collect_submodules('indextts')
 hiddenimports += collect_submodules('qwen3_tts_runtime')
@@ -79,6 +80,9 @@ datas += copy_metadata('backoff')
 datas += copy_metadata('munch')
 datas += copy_metadata('wetext')
 datas += copy_metadata('kaldifst')
+datas += copy_metadata('ruaccent')
+datas += copy_metadata('python-crfsuite')
+datas += copy_metadata('razdel')
 
 # Preserve the upstream model-use terms in standalone distributions. Model
 # weights remain in the separately hosted/downloaded archive.
@@ -96,6 +100,9 @@ if os.path.isfile(qwen3_tts_license):
 kokoro_license = os.path.join(indextts_parent, 'kokoro', 'LICENSE')
 if os.path.isfile(kokoro_license):
     datas.append((kokoro_license, 'Models/TTS/kokoro'))
+ruaccent_license = os.path.join(indextts_parent, 'kokoro', 'RUACCENT_LICENSE')
+if os.path.isfile(ruaccent_license):
+    datas.append((ruaccent_license, 'Models/TTS/kokoro'))
 
 # ---- Bundle these as real modules (code + extensions) ----
 for pkg in [
@@ -112,7 +119,8 @@ for pkg in [
     'mamba_ssm', 'audiotools', 'x_transformers', 'snac', 'pyctcdecode',
     'triton.runtime.jit', 'triton.runtime.autotuner', 'triton.runtime.driver',
     's3tokenizer', 'spacy-pkuseg', 'spacy_pkuseg', 'compressed-tensors', 'gguf', 'ffmpeg',
-    'resemblyzer', 'dacite', 'fugashi', 'munch', 'wetext', 'kaldifst'
+    'resemblyzer', 'dacite', 'fugashi', 'munch', 'wetext', 'kaldifst',
+    'ruaccent', 'pycrfsuite', 'razdel'
 ]:
     d, b, h = collect_all(pkg)
     datas += d

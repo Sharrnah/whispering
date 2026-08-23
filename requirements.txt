@@ -176,6 +176,9 @@ misaki[en,jp,zh]
 fugashi
 mojimoji
 ordered_set
+ruaccent @ https://github.com/Den4ikAI/ruaccent/archive/3ac0ad5f6508f6c1a4a604220042232c70a7baf9.zip
+python-crfsuite==0.9.11
+razdel==0.5.0
 
 
 # OpenAudio (former Fishspeech) TTS S1 dependencies

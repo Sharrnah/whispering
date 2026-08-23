@@ -18,6 +18,7 @@ ALIASES = {
     'hi': 'h',
     'it': 'i',
     'pt-br': 'p',
+    'ru': 'r',
     'ja': 'j',
     'zh': 'z',
 }
@@ -34,6 +35,7 @@ LANG_CODES = dict(
     h='hi',
     i='it',
     p='pt-br',
+    r='Russian',
 
     # pip install misaki[ja]
     j='Japanese',
@@ -69,7 +71,8 @@ class KPipeline:
         lang_code: str,
         model: Union[KModel, bool] = True,
         trf: bool = False,
-        device: Optional[str] = None
+        device: Optional[str] = None,
+        language_assets: Optional[dict] = None,
     ):
         """Initialize a KPipeline.
         
@@ -126,6 +129,11 @@ class KPipeline:
         elif lang_code == 'd':
             from .german import GermanG2P
             self.g2p = GermanG2P()
+        elif lang_code == 'r':
+            from .russian import RussianG2P
+            if not language_assets:
+                raise ValueError("Russian Kokoro requires managed frontend assets")
+            self.g2p = RussianG2P(**language_assets)
         else:
             language = LANG_CODES[lang_code]
             logger.warning(f"Using EspeakG2P(language='{language}'). Chunking logic not yet implemented, so long texts may be truncated unless you split them with '\\n'.")
@@ -135,6 +143,11 @@ class KPipeline:
         """Normalize Misaki's version-dependent return shape for non-English G2P."""
         result = self.g2p(text)
         phonemes = result[0] if isinstance(result, tuple) else result
+        if self.lang_code == 'r' and isinstance(result, tuple) and result[1]:
+            raise ValueError(
+                "Russian Kokoro frontend emitted unsupported symbols: "
+                + ", ".join(sorted(result[1]))
+            )
         if self.lang_code == 'd' and phonemes:
             # Thorsten's training frontend maps short German ue to the Kokoro
             # vocabulary's available long-ue symbol. Without this, those words
