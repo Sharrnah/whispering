@@ -92,6 +92,11 @@ qwen3_tts_license = os.path.join(indextts_parent, 'qwen3_tts_runtime', 'LICENSE'
 if os.path.isfile(qwen3_tts_license):
     datas.append((qwen3_tts_license, 'qwen3_tts_runtime'))
 
+# Preserve the Apache-2.0 terms for the vendored Kokoro/German Misaki frontend.
+kokoro_license = os.path.join(indextts_parent, 'kokoro', 'LICENSE')
+if os.path.isfile(kokoro_license):
+    datas.append((kokoro_license, 'Models/TTS/kokoro'))
+
 # ---- Bundle these as real modules (code + extensions) ----
 for pkg in [
     'easyocr', 'winsdk', 'ctranslate2', 'torchaudio', 'torchcodec', 'scipy', 'lazy_loader',
