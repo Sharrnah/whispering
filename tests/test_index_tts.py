@@ -72,7 +72,7 @@ class IndexTTSAdapterTests(unittest.TestCase):
 
     def test_hosted_archive_manifest_is_offline_and_complete(self):
         entry = index_tts.TTS_MODEL_LINKS[index_tts.DEFAULT_MODEL]
-        self.assertEqual(entry["checksum"], "0" * 64)
+        self.assertEqual(entry["checksum"], "db4c1a599172976d0fcc8ebdefafabfed61d4275233485b96d1e9e7a9527372a")
         self.assertEqual(entry["path"], "IndexTTS-2.5")
         self.assertEqual(len(entry["urls"]), 3)
         self.assertTrue(all("huggingface" not in url.lower() for url in entry["urls"]))
@@ -99,6 +99,135 @@ class IndexTTSAdapterTests(unittest.TestCase):
         self.assertEqual(set(entry["file_checksums"]), required)
         self.assertTrue(all(len(value) == 64 for value in entry["file_checksums"].values()))
 
+    def test_german_checkpoint_is_a_verified_overlay_on_the_stock_model(self):
+        entry = index_tts.TTS_MODEL_LINKS[index_tts.GERMAN_MODEL]
+
+        self.assertEqual(entry["path"], index_tts.GERMAN_MODEL)
+        self.assertEqual(entry["base_model"], index_tts.DEFAULT_MODEL)
+        self.assertEqual(entry["gpt_checkpoint"], "gpt.pth")
+        self.assertEqual(entry["checksum"], "0" * 64)
+        self.assertEqual(
+            entry["file_checksums"],
+            {
+                "LICENSE": "cc7da9ea0f8a97ef15ab3bf0389e636ce79ffca1aef5489520796ac87d87a87b",
+                "README.md": "b54ab4b9259e1201a0b14ef195fcddaed2c5b9dff5219318ed0b68e7a1457b8f",
+                "gpt.pth": "5ae8c06cfa3beb0574f6197104ccba002ec1bd937d1c7835ad99b01132b25e52",
+            },
+        )
+        self.assertEqual(len(entry["urls"]), 3)
+        self.assertTrue(all("huggingface" not in url.lower() for url in entry["urls"]))
+        self.assertIn(index_tts.GERMAN_MODEL, index_tts.MODEL_LIST["German"])
+
+    def test_german_download_reuses_the_verified_stock_assets(self):
+        adapter = object.__new__(index_tts.IndexTTS)
+        adapter.download_state = {"is_downloading": False}
+        needs_download = mock.Mock(side_effect=[False, False])
+        fake_downloader = types.SimpleNamespace(
+            model_needs_download=needs_download,
+            download_model=mock.Mock(),
+        )
+
+        with mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
+            self.assertTrue(adapter.download_model(index_tts.GERMAN_MODEL))
+
+        self.assertEqual(
+            [call.args[0] for call in needs_download.call_args_list],
+            [
+                index_tts.IndexTTS._model_directory(index_tts.DEFAULT_MODEL),
+                index_tts.IndexTTS._model_directory(index_tts.GERMAN_MODEL),
+            ],
+        )
+        fake_downloader.download_model.assert_not_called()
+
+    def test_german_language_is_available_only_for_the_german_checkpoint(self):
+        adapter = object.__new__(index_tts.IndexTTS)
+        adapter.special_settings = {"language": "de"}
+
+        with mock.patch.object(
+            index_tts.settings,
+            "GetOption",
+            return_value=["German", index_tts.GERMAN_MODEL],
+        ):
+            self.assertEqual(adapter._language("Guten Morgen"), "de")
+
+        with mock.patch.object(
+            index_tts.settings,
+            "GetOption",
+            return_value=["Multilingual voice cloning", index_tts.DEFAULT_MODEL],
+        ):
+            self.assertEqual(adapter._language("Guten Morgen"), "en")
+
+    def test_german_model_loads_overlay_gpt_with_shared_base_directory(self):
+        captured = {}
+
+        class FakeRuntime:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+        adapter = object.__new__(index_tts.IndexTTS)
+        adapter.generation_lock = __import__("threading").RLock()
+        adapter.model = None
+        adapter.loaded_configuration = None
+        adapter.compute_device_str = "cuda"
+        adapter.compute_device = torch.device("cuda")
+        adapter._ensure_special_settings = lambda: None
+        adapter.set_compute_device = lambda _: None
+        adapter._effective_precision = lambda: "bfloat16"
+        adapter._get_model_name = lambda: index_tts.GERMAN_MODEL
+        adapter.download_model = lambda _: True
+        adapter.download_voices = lambda: True
+        adapter._runtime_class = lambda: FakeRuntime
+
+        with mock.patch.object(index_tts.settings, "GetOption", return_value="cuda"):
+            adapter.load()
+
+        self.assertEqual(
+            Path(captured["model_dir"]),
+            index_tts.IndexTTS._model_directory(index_tts.DEFAULT_MODEL).resolve(),
+        )
+        self.assertEqual(
+            Path(captured["cfg_path"]),
+            index_tts.IndexTTS._model_directory(index_tts.DEFAULT_MODEL).resolve() / "config.yaml",
+        )
+        self.assertEqual(
+            Path(captured["gpt_checkpoint_path"]),
+            index_tts.IndexTTS._model_directory(index_tts.GERMAN_MODEL).resolve() / "gpt.pth",
+        )
+        self.assertEqual(
+            adapter.loaded_configuration,
+            (index_tts.GERMAN_MODEL, "cuda", "bfloat16"),
+        )
+
+    def test_german_v2_normalizer_matches_the_training_frontend(self):
+        from indextts.utils.german_tn import normalize_german_v2
+
+        self.assertEqual(
+            normalize_german_v2("Am 3.10.2026 kostet es 12,50 € und 5 GB."),
+            "Am dritten Oktober zweitausendsechsundzwanzig kostet es zwölf Euro "
+            "fünfzig Cent und fünf Gigabyte.",
+        )
+        self.assertEqual(
+            normalize_german_v2("Am 24. August 2026 um 14:30 Uhr."),
+            "Am vierundzwanzigsten August zweitausendsechsundzwanzig um "
+            "vierzehn Uhr dreißig.",
+        )
+
+    def test_german_runtime_lowercases_after_v2_normalization(self):
+        runtime = ast.parse(
+            (TTS_RUNTIME_PARENT / "indextts" / "infer_v2_5.py").read_text(encoding="utf-8")
+        )
+        language_case_lists = [
+            node
+            for node in ast.walk(runtime)
+            if isinstance(node, ast.List)
+            and all(isinstance(item, ast.Constant) for item in node.elts)
+            and "ja" in [item.value for item in node.elts]
+            and "en" in [item.value for item in node.elts]
+        ]
+
+        self.assertTrue(language_case_lists)
+        self.assertTrue(any("de" in [item.value for item in node.elts] for node in language_case_lists))
+
     def test_vendored_runtime_contains_no_remote_model_downloader(self):
         forbidden = ("hf_hub_download", "snapshot_download", "modelscope.pipelines")
         runtime_files = [PROJECT_ROOT / "Models" / "TTS" / "index_tts.py"]
@@ -112,12 +241,12 @@ class IndexTTSAdapterTests(unittest.TestCase):
         adapter.download_state = {"is_downloading": False}
         download = mock.Mock()
         fake_downloader = types.SimpleNamespace(
-            model_needs_download=mock.Mock(return_value=True),
+            model_needs_download=mock.Mock(side_effect=[False, True]),
             download_model=download,
         )
         with mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
             with self.assertRaisesRegex(RuntimeError, "not currently available"):
-                adapter.download_model()
+                adapter.download_model(index_tts.GERMAN_MODEL)
         download.assert_not_called()
 
     def test_wave_tensor_normalizes_upstream_int16_scale(self):

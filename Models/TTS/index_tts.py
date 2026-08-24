@@ -19,6 +19,7 @@ from Models.TTS.text_segmentation import chunk_text, has_voice_tags, parse_voice
 
 SAMPLE_RATE = 22050
 DEFAULT_MODEL = "IndexTTS-2.5"
+GERMAN_MODEL = "IndexTTS-2.5-German"
 MODEL_CACHE_PATH = Path.cwd() / ".cache" / "index-tts"
 
 VOICES_PATH = MODEL_CACHE_PATH / "voices"
@@ -31,9 +32,14 @@ SUPPORTED_LANGUAGES = {
     "es": "Spanish",
 }
 
-# The ZIP hash intentionally remains zero until the application-hosted archive
-# has been assembled. The ZIP must contain this exact layout at its root. Model
-# files are sourced from the immutable revisions recorded below; Whispering
+MODEL_SUPPORTED_LANGUAGES = {
+    DEFAULT_MODEL: frozenset(SUPPORTED_LANGUAGES),
+    GERMAN_MODEL: frozenset((*SUPPORTED_LANGUAGES, "de")),
+}
+
+# Every ZIP contains its manifest layout directly at the archive root. A zero
+# archive hash marks a prepared-but-not-yet-uploaded model and is rejected before
+# network access. Model files come from the provenance recorded below; Whispering
 # Tiger never contacts Hugging Face to install them at runtime.
 TTS_MODEL_LINKS = {
     # IndexTeam/IndexTTS-2.5 @ c39ce5ba981572cb187443877ff559dfb246ce63
@@ -69,6 +75,28 @@ TTS_MODEL_LINKS = {
         },
         "path": DEFAULT_MODEL,
     },
+    # Locally trained from the stock IndexTTS 2.5 checkpoint with LoRA and
+    # exported as a complete merged GPT state dict. The auxiliary models stay
+    # shared with DEFAULT_MODEL, so this archive contains only the overlay.
+    GERMAN_MODEL: {
+        "urls": [
+            "https://eu2.contabostorage.com/bf1a89517e2643359087e5d8219c0c67:ai-models/index-tts/index-tts-2.5-german.zip",
+            "https://usc1.contabostorage.com/8fcf133c506f4e688c7ab9ad537b5c18:ai-models/index-tts/index-tts-2.5-german.zip",
+            "https://s3.libs.space:9000/ai-models/index-tts/index-tts-2.5-german.zip",
+        ],
+        # Replace this placeholder after the prepared overlay archive has been
+        # uploaded. A locally verified gpt.pth remains usable without a network
+        # request while development is in progress.
+        "checksum": "7e95ecc9c1f0fe1cec147c4290c4771e7e74cfb464c7d3b2b712e07416509c15",
+        "file_checksums": {
+            "LICENSE": "cc7da9ea0f8a97ef15ab3bf0389e636ce79ffca1aef5489520796ac87d87a87b",
+            "README.md": "b54ab4b9259e1201a0b14ef195fcddaed2c5b9dff5219318ed0b68e7a1457b8f",
+            "gpt.pth": "5ae8c06cfa3beb0574f6197104ccba002ec1bd937d1c7835ad99b01132b25e52",
+        },
+        "path": GERMAN_MODEL,
+        "base_model": DEFAULT_MODEL,
+        "gpt_checkpoint": "gpt.pth",
+    },
 }
 
 VOICE_MODEL_LINKS = {
@@ -98,7 +126,10 @@ VOICE_MODEL_LINKS = {
     },
 }
 
-MODEL_LIST = {"Multilingual voice cloning": [DEFAULT_MODEL]}
+MODEL_LIST = {
+    "Multilingual voice cloning": [DEFAULT_MODEL],
+    "German": [GERMAN_MODEL],
+}
 
 
 class IndexTTS(metaclass=SingletonMeta):
@@ -203,15 +234,23 @@ class IndexTTS(metaclass=SingletonMeta):
         import downloader
 
         model_entry = TTS_MODEL_LINKS[model_name]
+        base_model = model_entry.get("base_model")
+        if base_model and not self.download_model(base_model, force_non_ui_dl=force_non_ui_dl):
+            return False
         model_directory = self._model_directory(model_name)
         if not downloader.model_needs_download(model_directory, model_entry["file_checksums"]):
             return True
+        if model_entry["checksum"] == "0" * 64:
+            raise RuntimeError(
+                f"{model_name} is not currently available for automatic download. "
+                f"Install its verified files in {model_directory.resolve()}."
+            )
         return downloader.download_model(
             {
                 "model_path": MODEL_CACHE_PATH,
                 "model_link_dict": TTS_MODEL_LINKS,
                 "model_name": model_name,
-                "title": "Text to Speech (IndexTTS 2.5)",
+                "title": f"Text to Speech ({model_name})",
                 "alt_fallback": False,
                 "force_non_ui_dl": force_non_ui_dl,
                 "extract_format": "zip",
@@ -369,23 +408,30 @@ class IndexTTS(metaclass=SingletonMeta):
             self._ensure_special_settings()
             self.set_compute_device(settings.GetOption("tts_ai_device"))
             precision = self._effective_precision()
-            configuration = (self.compute_device_str, precision)
+            model_name = self._get_model_name()
+            configuration = (model_name, self.compute_device_str, precision)
             if self.model is not None and self.loaded_configuration == configuration:
                 return
             if self.model is not None:
                 self.release_model()
 
-            model_name = self._get_model_name()
             if not self.download_model(model_name):
-                raise RuntimeError("IndexTTS 2.5 model installation failed.")
+                raise RuntimeError(f"{model_name} model installation failed.")
             # The shared pack is optional when the user already supplied a
             # reference path, but prepare it for normal profile voice selection.
             if not self.download_voices():
                 print("IndexTTS voice sample pack could not be installed; custom references remain usable.")
 
-            model_directory = self._model_directory(model_name).resolve()
+            model_entry = TTS_MODEL_LINKS[model_name]
+            base_model_name = model_entry.get("base_model", model_name)
+            model_directory = self._model_directory(base_model_name).resolve()
+            gpt_checkpoint_path = None
+            if model_name != base_model_name:
+                gpt_checkpoint_path = (
+                    self._model_directory(model_name) / model_entry["gpt_checkpoint"]
+                ).resolve()
             print(
-                f"Loading IndexTTS 2.5 on {self.compute_device_str} "
+                f"Loading {model_name} on {self.compute_device_str} "
                 f"with {precision} precision..."
             )
             runtime_class = self._runtime_class()
@@ -399,9 +445,10 @@ class IndexTTS(metaclass=SingletonMeta):
                 use_accel=False,
                 use_torch_compile=False,
                 use_qwen_emo=False,
+                gpt_checkpoint_path=str(gpt_checkpoint_path) if gpt_checkpoint_path else None,
             )
             self.loaded_configuration = configuration
-            print("IndexTTS 2.5 loaded.")
+            print(f"{model_name} loaded.")
 
     def release_model(self):
         self.model = None
@@ -443,8 +490,10 @@ class IndexTTS(metaclass=SingletonMeta):
             except Exception as exc:
                 print(f"IndexTTS language detection failed ({exc}); using English.")
                 language = "en"
-        if language not in SUPPORTED_LANGUAGES:
-            print(f"IndexTTS does not support '{language}'; using English.")
+        model_name = self._get_model_name()
+        supported_languages = MODEL_SUPPORTED_LANGUAGES[model_name]
+        if language not in supported_languages:
+            print(f"{model_name} does not support '{language}'; using English.")
             language = "en"
         return language
 

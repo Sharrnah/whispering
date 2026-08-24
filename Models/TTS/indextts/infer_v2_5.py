@@ -23,6 +23,7 @@ from indextts.utils.front import TextNormalizer
 from indextts.utils.tokenizer import get_tokenizer, lang_to_token
 from indextts.utils.ja_g2p import JapaneseG2PProcessor
 from indextts.utils.nemo_tn import normalize_text as nemo_text_normalize
+from indextts.utils.german_tn import normalize_german_v2
 
 from indextts.s2mel.modules.commons import load_checkpoint2, MyModel
 from indextts.s2mel.modules.bigvgan import bigvgan
@@ -75,7 +76,8 @@ class IndexTTS2:
 
     def __init__(
             self, cfg_path="checkpoints/config.yaml", model_dir="checkpoints", use_bf16=False, device=None,
-            use_cuda_kernel=None,use_deepspeed=False, use_accel=False, use_torch_compile=False, use_qwen_emo=False
+            use_cuda_kernel=None, use_deepspeed=False, use_accel=False, use_torch_compile=False,
+            use_qwen_emo=False, gpt_checkpoint_path=None
     ):
         """
         Args:
@@ -90,6 +92,8 @@ class IndexTTS2:
             use_qwen_emo (bool): if True, load the QwenEmotion text-to-emotion model.
                 Required for ``infer(..., use_emo_text=True)``. Attempting to use emotion-text
                 guidance when this is disabled will raise a RuntimeError.
+            gpt_checkpoint_path (str | os.PathLike | None): optional verified local GPT
+                checkpoint overlay. Auxiliary assets continue to resolve from ``model_dir``.
         """
         if device is not None:
             self.device = device
@@ -136,7 +140,13 @@ class IndexTTS2:
             print(">> QwenEmotion not loaded (use_qwen_emo=False)")
 
         self.gpt = UnifiedVoice(**self.cfg.gpt, use_accel=self.use_accel, spk_cond_mode="campplus")
-        self.gpt_path = os.path.join(self.model_dir, self.cfg.gpt_checkpoint)
+        self.gpt_path = (
+            os.path.abspath(os.fspath(gpt_checkpoint_path))
+            if gpt_checkpoint_path is not None
+            else os.path.join(self.model_dir, self.cfg.gpt_checkpoint)
+        )
+        if not os.path.isfile(self.gpt_path):
+            raise FileNotFoundError(f"IndexTTS GPT checkpoint does not exist: {self.gpt_path}")
         load_checkpoint(self.gpt, self.gpt_path)
         self.gpt = self.gpt.to(self.device)
         if self.use_bf16:
@@ -774,9 +784,12 @@ class IndexTTS2:
                 text = self.text_process.normalize(text)
             elif lang.lower() in ['ja', 'es']:
                 text = nemo_text_normalize(text, lang.lower())
+            elif lang.lower() == 'de':
+                text = normalize_german_v2(text)
             print(f'text after normalization: {text}')
 
-        if lang.lower() in ['ja', 'zh', 'zhen', 'en']:
+        # Match the casing used to prepare each checkpoint's training text.
+        if lang.lower() in ['ja', 'zh', 'zhen', 'en', 'de']:
             text = text.lower()
         if lang.lower() == 'es':
             text = text.upper()
