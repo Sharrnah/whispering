@@ -234,6 +234,7 @@ _OVERRIDE_DATA = {
         "dropout": "dɹˈɑːpWt", "fallback": "fˈɔːlbæk", "finetuning": "fˈIn tˈuːnɪŋ",
         "gan": "ɡˈæn", "github": "ɡˈɪthab", "githubactions": "ɡˈɪt hˈʌb ˈɛkʃəns",
         "gpu": "dʒiːpiːjˈuː", "https": "ˌAʧtˌiːtˈiːpˌiːˈɛs", "huggingface": "hˈaɡɪŋfeɪs",
+        "hype": "hˈaɪp", "hypes": "hˈaɪps",
         "ipad": "ˈI pˈæd", "jameswebb": "ʤˈAmz wˈɛb", "json": "dʒˈeɪsən",
         "kde": "kˌAdˌiːˈiː", "louisvuitton": "lwˈi vyitˈɔ̃", "macos": "mˈɛk oː ˈɛs",
         "moetchandon": "mɔˈɛ ʃɑ̃dˈɔ̃", "nvidia": "ɛnˈviːdiːa", "ollama": "olˈaːma",
@@ -258,6 +259,26 @@ _OVERRIDE_DATA = {
 _LOOKUP_REPLACEMENTS = {"+": "plus", "&": "and", "@": "at"}
 _TRAILING_PUNCTUATION = frozenset(".,!?;:%)]}»”")
 _OVERRIDE_WORD = re.compile(r"[0-9A-Za-zÀ-ÖØ-öø-ÿß]+(?:['\-][0-9A-Za-zÀ-ÖØ-öø-ÿß]+)*\+?")
+_BYTE_COMPONENT = re.compile(r"byte", re.IGNORECASE)
+
+
+def respell_for_espeak_de(text: str) -> str:
+    """Respell unambiguous English loanword components for German eSpeak.
+
+    eSpeak pronounces standalone ``Byte`` correctly, but treats the same
+    component inside compounds as German ``-büte``. ``Bait`` produces the
+    intended checkpoint-native /baɪt/ phonemes for standalone, compound,
+    decimal/SI, binary/IEC, and plural forms.
+    """
+    def replace_byte(match: re.Match) -> str:
+        original = match.group(0)
+        if original.isupper():
+            return "BAIT"
+        if original[0].isupper():
+            return "Bait"
+        return "bait"
+
+    return _BYTE_COMPONENT.sub(replace_byte, text)
 
 
 def normalize_for_lookup(text: str) -> str:
@@ -302,7 +323,7 @@ class GermanG2P:
     def _espeak_phonemes(self, text: str) -> str:
         if not text or not text.strip():
             return ""
-        result = self.espeak(text)
+        result = self.espeak(respell_for_espeak_de(text))
         phonemes = result[0] if isinstance(result, tuple) else result
         return phonemes or ""
 
@@ -336,10 +357,7 @@ class GermanG2P:
             cursor = match.end()
 
         if cursor == 0:
-            result = self.espeak(text)
-            if isinstance(result, tuple):
-                return result
-            return result, None
+            return self._espeak_phonemes(text), None
 
         trailing = text[cursor:]
         if trailing.strip():
