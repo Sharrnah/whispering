@@ -435,7 +435,7 @@ class SettingsManager:
             "whisper_task": ["transcribe", "translate", "transcribe_translate"],
             "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "medusa_whisper", "qwen3_asr", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", "phi4", "voxtral", "phi4-onnx", "vibevoice_asr", "higgs_audio", ""],
             #"tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "parler", ""],
-            "tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "chatterbox", "index_tts", "qwen3_tts", "maya1", ""],
+            "tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "chatterbox", "index_tts", "qwen3_tts", "audio8_tts", "maya1", ""],
             "tts_ai_device": ["cuda", "cpu"],
             "txt_translator_device": ["cuda", "cpu"],
             "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "hunyuan_mt", "milmmt", "seamless_m4t", "phi4"],
