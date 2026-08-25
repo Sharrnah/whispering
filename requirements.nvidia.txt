@@ -18,7 +18,8 @@
 torch==2.7.1
 torchvision==0.22.1
 torchaudio==2.7.1
-flash-attn @ https://github.com/Sharrnah/flash-attention-win/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu128+torch2.7.0-cp311-cp311-win_amd64.whl
+# Community Windows wheel for upstream v2.8.3; asset SHA-256: c2501b8240cc34b95a3d13c9807aca49d0bfc0eac76ae002dd177cdbea250024
+flash-attn @ https://github.com/kingbri1/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3%2Bcu128torch2.7.0cxx11abiFALSE-cp311-cp311-win_amd64.whl
 
 # possible repo of prebuild flash attention wheels
 # https://github.com/kingbri1/flash-attention/releases

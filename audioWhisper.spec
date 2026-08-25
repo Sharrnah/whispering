@@ -29,7 +29,7 @@ hiddenimports = [
     'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio',
     'pyannote.pipeline', 'pyloudnorm', 'future', 'noisereduce', 'frozendict', 'torch_directml', 'x_transformers', 'inflect', 'backoff',
     'language_tags', 'spacy', 'en_core_web_sm', 'misaki', 'fugashi', 'mojimoji', 'unidic', 'unidic-lite', 'ordered_set', 'phonemizer',
-    'flash_attn', 'mistral_common', 'snac', 'peft', 'conformer', 'diffusers', 'spacy-pkuseg', 'spacy_pkuseg', 's3tokenizer',
+    'flash_attn', 'flash_attn_2_cuda', 'mistral_common', 'snac', 'peft', 'conformer', 'diffusers', 'spacy-pkuseg', 'spacy_pkuseg', 's3tokenizer',
     'espeakng_loader', 'unidic_lite', 'mamba_ssm', 'audiotools', 'past', 'future',
     'indextts', 'qwen3_tts_runtime', 'munch', 'wetext', 'kaldifst',
     'ruaccent', 'pycrfsuite', 'razdel'

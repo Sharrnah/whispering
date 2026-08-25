@@ -3,6 +3,7 @@ import traceback
 
 import settings
 import pykakasi
+from Models.cuda_inference import cuda_inference_guarded
 # import texttranslateM2M100
 from Models.TextTranslation import texttranslateM2M100_CTranslate2
 from Models.TextTranslation import texttranslateNLLB200
@@ -133,6 +134,11 @@ def _install_languages(translator):
     _active_translator_configuration = configuration
 
 
+@cuda_inference_guarded(
+    lambda: settings.GetOption("txt_translator_device"),
+    lambda: f"Text translation/{get_current_translator()}.load",
+    runtime_key=lambda: ("text_translation", get_current_translator()),
+)
 def InstallLanguages():
     with _translation_lock:
         _install_languages(get_current_translator())
@@ -167,6 +173,11 @@ def GetInstalledLanguageNames():
                 traceback.print_exc()
 
 
+@cuda_inference_guarded(
+    lambda: settings.GetOption("txt_translator_device"),
+    lambda: f"Text translation/{get_current_translator()}.translate",
+    runtime_key=lambda: ("text_translation", get_current_translator()),
+)
 def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
     global txt_translator_instance
     translation_text = text

@@ -3,6 +3,7 @@
 
 Tools included:
 clang
+cuda
 ffmpeg
 llvm
 msvc

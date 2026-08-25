@@ -12,6 +12,7 @@ import audio_tools
 from settings import SETTINGS as main_settings
 import VRC_OSCLib
 from Models import sentence_split
+from Models.cuda_inference import guard_cuda_model_loader
 from Models.TextTranslation import texttranslate
 import websocket
 import json
@@ -519,6 +520,7 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
         settings.SetOption("plugin_timer_stopped", True)
 
 
+@guard_cuda_model_loader("STT")
 def load_whisper(model, ai_device):
     cpu_threads = main_settings.GetOption("whisper_cpu_threads")
     num_workers = main_settings.GetOption("whisper_num_workers")
@@ -635,6 +637,7 @@ def load_whisper(model, ai_device):
     return None
 
 
+@guard_cuda_model_loader("Realtime STT")
 def load_realtime_whisper(model, ai_device):
     cpu_threads = main_settings.GetOption("whisper_cpu_threads")
     num_workers = main_settings.GetOption("whisper_num_workers")
