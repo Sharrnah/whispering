@@ -45,6 +45,17 @@ _DE_ABBREV = {
     "Prof.": "Professor",
 }
 
+_DE_PRONUNCIATION_HELPERS = {
+    "VRAM": "vie RAM",
+    "C#": "Cie-Sharp",
+    "C++": "C plus plus",
+    "AMD": "A-Em-D",
+    "NVIDIA": "En-Vidia",
+    "ARD": "A-Er-D",
+    "ZDF": "Zet-de ef",
+    "WDR": "We-De-Er",
+}
+
 _DE_UNITS = {
     "km/h": "Kilometer pro Stunde",
     "km²": "Quadratkilometer", "km2": "Quadratkilometer",
@@ -158,6 +169,16 @@ def _normalize_german(
 
     for abbr, full in sorted(_DE_ABBREV.items(), key=lambda item: -len(item[0])):
         text = re.sub(r"(?<!\w)" + re.escape(abbr), full, text, flags=re.IGNORECASE)
+
+    for word, pronunciation in sorted(
+        _DE_PRONUNCIATION_HELPERS.items(), key=lambda item: -len(item[0])
+    ):
+        text = re.sub(
+            r"(?<!\w)" + re.escape(word) + r"(?!\w)",
+            pronunciation,
+            text,
+            flags=re.IGNORECASE,
+        )
 
     def replace_date(match: re.Match[str]) -> str:
         day, month, year = (int(match.group(i)) for i in range(1, 4))

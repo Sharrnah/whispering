@@ -212,6 +212,14 @@ class IndexTTSAdapterTests(unittest.TestCase):
             "vierzehn Uhr dreißig.",
         )
 
+    def test_german_v2_normalizer_applies_pronunciation_helpers_to_whole_words(self):
+        from indextts.utils.german_tn import normalize_german_v2
+
+        self.assertEqual(
+            normalize_german_v2("Der VRAM ist voll, aber VRAMsized bleibt gleich."),
+            "Der vie RAM ist voll, aber VRAMsized bleibt gleich.",
+        )
+
     def test_german_runtime_lowercases_after_v2_normalization(self):
         runtime = ast.parse(
             (TTS_RUNTIME_PARENT / "indextts" / "infer_v2_5.py").read_text(encoding="utf-8")
