@@ -285,16 +285,14 @@ class SeamlessM4T(metaclass=SingletonMeta):
         if source_lang is not None and (source_lang == '' or source_lang.lower() == 'auto'):
             source_lang = None
 
-        #self.model.config.temperature = 1.0
-        self.model.config.repetition_penalty = repetition_penalty
-        self.model.config.length_penalty = length_penalty
-        self.model.config.no_repeat_ngram_size = no_repeat_ngram_size
-
-        inputs = self.processor(audios=audio_sample, src_lang=source_lang, sampling_rate=16000, return_tensors="pt")
+        inputs = self.processor(audio=audio_sample, src_lang=source_lang, sampling_rate=16000, return_tensors="pt")
         inputs = {name: tensor.to(dtype=self.precision).to(self.device) for name, tensor in inputs.items()}
 
         output_tokens = self.model.generate(**inputs, tgt_lang=target_lang,
                                             text_num_beams=beam_size, speech_do_sample=True,
+                                            text_repetition_penalty=repetition_penalty,
+                                            text_length_penalty=length_penalty,
+                                            text_no_repeat_ngram_size=no_repeat_ngram_size,
                                             return_intermediate_token_ids=True,
                                             generate_speech=generate_speech,
                                             #spkr_id=0
