@@ -47,10 +47,24 @@ All possible options of the settings file.
 
 _Default name is `settings.yaml`, but can be customized with the `--config` option._
 
+Per-application capture requires Windows, WASAPI, and enabled VAD. The saved
+PID is only an exact hint; the executable name is the durable identity. If the
+application restarts with a new PID, capture waits with silent input and
+reconnects automatically once that executable identifies one unambiguous
+process tree. While VAD is active, Settings can replace the running audio input
+without reloading the STT model. The same panel validates and replaces the
+playback endpoint without restarting the backend; retained streaming players
+are re-opened on the selected device. Input switching discards an
+unfinished phrase from the previous source, and a failed stream open restores
+the previous input automatically. The legacy non-VAD `speech_recognition`
+recorder remains startup-only.
+
 ```yaml
 # audio settings
 audio_api: "MME",  # The name of the audio API. (MME, DirectSound, WASAPI)
 audio_input_device: "",  # audio input device name - used by whispering tiger UI to select audio input device by name
+audio_input_process: "",  # Windows/WASAPI executable name for per-application capture (empty uses the normal input device)
+audio_input_process_id: 0,  # PID hint selected by the UI; automatically resolved again by executable name after a restart
 audio_output_device: "",  # audio output device name - used by whispering tiger UI to select audio output device by name
 device_index: None,  # input device index for STT
 

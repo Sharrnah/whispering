@@ -175,6 +175,9 @@ class AudioProcessor:
 
                  verbose=False
                  ):
+        # Stream replacement waits for an in-flight callback before clearing
+        # source-specific VAD/phrase state.
+        self._audio_input_state_lock = threading.RLock()
         self.frames = []
         self.default_sample_rate = default_sample_rate
         self.previous_audio_chunk = None
@@ -270,20 +273,20 @@ class AudioProcessor:
                 if self.settings.GetOption("mic_passthrough_routing") and self.default_mic_audio_streamer is not None:
                     if self.default_mic_audio_streamer is not None:
 
-                        energy = self.settings.GetOption("energy")
-                        confidence_threshold = float(self.settings.GetOption("vad_confidence_threshold"))
-                        try:
-                            resampled_audio_chunk = audio_tools.resample_audio(in_data, self.recorded_sample_rate,
-                                                                          self.default_sample_rate, target_channels=1,
-                                                                          input_channels=self.input_channel_num).tobytes()
-                            new_confidence, peak_amplitude = process_audio_chunk(resampled_audio_chunk, self.default_sample_rate,
-                                                                                 self.vad_model)
-                            if self.should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold,
-                                                           keyboard_key=self.push_to_talk_key):
-                                self.default_mic_audio_streamer.add_audio_chunk(resampled_audio_chunk)
-                        except Exception as e:
-                            print("mic passthrough processing error:", e)
-
+                        with self._audio_input_state_lock:
+                            energy = self.settings.GetOption("energy")
+                            confidence_threshold = float(self.settings.GetOption("vad_confidence_threshold"))
+                            try:
+                                resampled_audio_chunk = audio_tools.resample_audio(in_data, self.recorded_sample_rate,
+                                                                              self.default_sample_rate, target_channels=1,
+                                                                              input_channels=self.input_channel_num).tobytes()
+                                new_confidence, peak_amplitude = process_audio_chunk(resampled_audio_chunk, self.default_sample_rate,
+                                                                                     self.vad_model)
+                                if self.should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold,
+                                                               keyboard_key=self.push_to_talk_key):
+                                    self.default_mic_audio_streamer.add_audio_chunk(resampled_audio_chunk)
+                            except Exception as e:
+                                print("mic passthrough processing error:", e)
 
         self.mic_passthrough_thread = threading.Thread(target=mic_passthrough_thread_func, daemon=True)
         self.mic_passthrough_thread.start()
@@ -294,6 +297,44 @@ class AudioProcessor:
         # self.timer_thread.start()
         # self.timer_reset_event.set()
         # self.last_callback_time = time.time()
+
+    def reset_for_audio_input_switch(self):
+        with self._audio_input_state_lock:
+            self._reset_for_audio_input_switch_locked()
+
+    def _reset_for_audio_input_switch_locked(self):
+        """Discard source-specific state after the current stream has stopped."""
+        now = time.time()
+        self.frames = []
+        self.previous_audio_chunk = None
+        self.start_rec_on_volume_threshold = False
+        self.keyboard_rec_force_stop = False
+        self.start_time = now
+        self.pause_time = now
+        self.intermediate_time_start = now
+        self.last_callback_time = now
+        self.last_recorded_chunk_time = now
+        self._new_speaker = False
+        self.new_speaker_audio = None
+        self.speaker_turn_detected = False
+        self.audio_filter_buffer = None
+
+        while True:
+            try:
+                self.mic_passthrough_queue.get_nowait()
+                self.mic_passthrough_queue.task_done()
+            except queue.Empty:
+                break
+
+        if self.turn_model is not None and hasattr(self.turn_model, "clear_session"):
+            self.turn_model.clear_session()
+
+        silero_model = getattr(self.vad_model, "_vad_model", None)
+        if silero_model is not None and hasattr(silero_model, "reset_states"):
+            try:
+                silero_model.reset_states()
+            except Exception as exc:
+                print(f"Could not reset VAD state after switching audio input: {exc}")
 
     def should_start_recording(self, peak_amplitude, energy, new_confidence, confidence_threshold, keyboard_key=None):
         return ((keyboard_key is not None and keyboard.is_pressed(
@@ -324,6 +365,10 @@ class AudioProcessor:
     #        self.timer_reset_event.clear()
 
     def callback(self, in_data, frame_count, time_info, status):
+        with self._audio_input_state_lock:
+            return self._callback_locked(in_data, frame_count, time_info, status)
+
+    def _callback_locked(self, in_data, frame_count, time_info, status):
         # Reset the timer each time the callback is triggered
         # self.last_callback_time = time.time()
         # self.timer_reset_event.set()

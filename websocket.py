@@ -465,6 +465,106 @@ class WebSocketServer:
 
 async def custom_message_handler(server_instance, msg_obj, websocket):
     global UI_CONNECTED
+    if msg_obj["type"] == "audio_input_switch":
+        request_value = msg_obj.get("value") or {}
+        request_id = str(request_value.get("request_id") or "") if isinstance(request_value, dict) else ""
+        try:
+            selected_input = await asyncio.to_thread(
+                audio_tools.switch_main_app_audio_input,
+                request_value,
+            )
+        except Exception as exc:
+            print(f"Could not switch audio input: {exc}")
+            await server_instance.send(websocket, json.dumps({
+                "type": "audio_input_switch_result",
+                "data": {
+                    "request_id": request_id,
+                    "success": False,
+                    "error": str(exc),
+                },
+            }))
+            return
+
+        for setting_name in (
+            "audio_api",
+            "audio_input_device",
+            "audio_input_process",
+            "audio_input_process_id",
+            "device_index",
+            "device_default_in_index",
+        ):
+            settings.SetOption(setting_name, selected_input[setting_name])
+
+        print(
+            "Switched audio input to "
+            f"{selected_input['audio_input_device']} "
+            f"through {selected_input['audio_api']}."
+        )
+        await server_instance.send(websocket, json.dumps({
+            "type": "audio_input_switch_result",
+            "data": {
+                "request_id": request_id,
+                "success": True,
+                "input": selected_input,
+            },
+        }))
+        await server_instance.broadcast(
+            json.dumps({
+                "type": "translate_settings",
+                "data": settings.SETTINGS.get_all_settings(),
+            })
+        )
+        return
+
+    if msg_obj["type"] == "audio_output_switch":
+        request_value = msg_obj.get("value") or {}
+        request_id = str(request_value.get("request_id") or "") if isinstance(request_value, dict) else ""
+        try:
+            selected_output = await asyncio.to_thread(
+                audio_tools.switch_main_app_audio_output,
+                request_value,
+            )
+        except Exception as exc:
+            print(f"Could not switch audio output: {exc}")
+            await server_instance.send(websocket, json.dumps({
+                "type": "audio_output_switch_result",
+                "data": {
+                    "request_id": request_id,
+                    "success": False,
+                    "error": str(exc),
+                },
+            }))
+            return
+
+        for setting_name in (
+            "audio_api",
+            "audio_output_device",
+            "device_out_index",
+            "device_default_out_index",
+        ):
+            settings.SetOption(setting_name, selected_output[setting_name])
+
+        print(
+            "Switched audio output to "
+            f"{selected_output['audio_output_device']} "
+            f"through {selected_output['audio_api']}."
+        )
+        await server_instance.send(websocket, json.dumps({
+            "type": "audio_output_switch_result",
+            "data": {
+                "request_id": request_id,
+                "success": True,
+                "output": selected_output,
+            },
+        }))
+        await server_instance.broadcast(
+            json.dumps({
+                "type": "translate_settings",
+                "data": settings.SETTINGS.get_all_settings(),
+            })
+        )
+        return
+
     if msg_obj["type"] == "setting_change":
 
         # handle plugin activation / deactivation before setting the option

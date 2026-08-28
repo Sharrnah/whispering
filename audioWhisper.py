@@ -144,6 +144,11 @@ if __name__ == '__main__':
             print(f"Could not flush settings during shutdown: {save_error}")
             traceback.print_exc()
 
+        try:
+            audio_tools.close_main_app_audio_input()
+        except Exception as audio_error:
+            print(f"Could not close audio input during shutdown: {audio_error}")
+
         processmanager.cleanup_subprocesses()
 
         # it raises SystemExit(0):
@@ -255,6 +260,10 @@ if __name__ == '__main__':
     @click.option('--detect_energy_time', default=10, help='detect energy level time it records for.', type=int)
     @click.option('--audio_input_device', default="Default", help='audio input device name. (used for detect_energy',
                   type=str)
+    @click.option('--audio_input_process', default='',
+                  help='Windows executable name to capture with WASAPI process loopback.', type=str)
+    @click.option('--audio_input_process_id', default=0,
+                  help='PID hint for --audio_input_process (resolved again by executable name if stale).', type=int)
     @click.option('--ui_download', default=False, is_flag=True,
                   help='use UI application for downloads.', type=bool)
     @click.option('--devices', default='False', help='print all available devices id', type=str)
@@ -411,8 +420,20 @@ if __name__ == '__main__':
         audio_api = settings.SETTINGS.SetOption("audio_api", settings.SETTINGS.get_argument_setting_fallback(ctx, "audio_api", "audio_api"))
         audio_api_index, audio_api_name = audio_tools.get_audio_api_index_by_name(audio_api)
 
+        audio_input_process = str(settings.SETTINGS.SetOption(
+            "audio_input_process",
+            settings.SETTINGS.get_argument_setting_fallback(
+                ctx, "audio_input_process", "audio_input_process"
+            ),
+        ) or "").strip()
+        audio_input_process_id = settings.SETTINGS.SetOption(
+            "audio_input_process_id",
+            settings.SETTINGS.get_argument_setting_fallback(
+                ctx, "audio_input_process_id", "audio_input_process_id"
+            ),
+        ) or 0
         audio_input_device = settings.SETTINGS.GetOption("audio_input_device")
-        if audio_input_device is not None and audio_input_device != "":
+        if not audio_input_process and audio_input_device is not None and audio_input_device != "":
             if audio_input_device.lower() == "Default".lower():
                 device_index = None
             else:
@@ -634,6 +655,20 @@ if __name__ == '__main__':
         # Initialize VAD model
         vad_enabled = settings.SETTINGS.SetOption("vad_enabled",
                                          settings.SETTINGS.get_argument_setting_fallback(ctx, "vad_enabled", "vad_enabled"))
+        if audio_input_process:
+            if platform.system() != "Windows":
+                raise RuntimeError(
+                    "Per-application WASAPI capture is only available on Windows. "
+                    "Select a normal audio input device for this platform."
+                )
+            if str(audio_api).casefold() != "wasapi":
+                raise RuntimeError(
+                    "Per-application audio capture requires the WASAPI audio API."
+                )
+            if not vad_enabled:
+                raise RuntimeError(
+                    "Per-application audio capture requires VAD to be enabled."
+                )
         try:
             vad_thread_num = int(float(settings.SETTINGS.SetOption("vad_thread_num",
                                             settings.SETTINGS.get_argument_setting_fallback(ctx, "vad_thread_num", "vad_thread_num"))))
@@ -691,7 +726,7 @@ if __name__ == '__main__':
             vad_model.set_vad_frames_per_buffer(vad_frames_per_buffer)
 
             # set default devices if not set
-            if device_index is None or device_index < 0:
+            if not audio_input_process and (device_index is None or device_index < 0):
                 device_index = device_default_in_index
 
             default_sample_rate = SAMPLE_RATE
@@ -735,9 +770,10 @@ if __name__ == '__main__':
                 verbose=verbose,
             )
 
-            # initialize audio stream
-            stream, needs_sample_rate_conversion, recorded_sample_rate, is_mono = audio_tools.start_recording_audio_stream(
-                device_index,
+            # Own only the callback stream behind a small controller. This keeps
+            # the existing AudioProcessor/model lifecycle intact while allowing
+            # a running VAD session to replace its input safely.
+            input_stream_controller = audio_tools.AudioInputStreamController(
                 sample_format=FORMAT,
                 sample_rate=SAMPLE_RATE,
                 channels=CHANNELS,
@@ -745,21 +781,30 @@ if __name__ == '__main__':
                 py_audio=audio_tools.main_app_py_audio,
                 audio_processor=processor,
             )
-
-            # Start the stream
-            stream.start_stream()
+            input_stream_controller.start({
+                "audio_api": audio_api,
+                "audio_input_device": audio_input_device,
+                "audio_input_process": audio_input_process,
+                "audio_input_process_id": audio_input_process_id,
+                "device_index": device_index,
+            })
+            audio_tools.set_main_app_audio_input_controller(input_stream_controller)
 
             #orig_recorded_sample_rate = recorded_sample_rate
 
-            audioprocessor.start_whisper_thread()
+            try:
+                audioprocessor.start_whisper_thread()
 
-            #continue_recording = True
+                #continue_recording = True
 
-            while stream.is_active():
-                time.sleep(0.1)
-                #if not settings.SETTINGS.GetOption("stt_enabled"):
-                #    time.sleep(0.1)
-                #    continue
+                while input_stream_controller.is_active():
+                    time.sleep(0.1)
+                    #if not settings.SETTINGS.GetOption("stt_enabled"):
+                    #    time.sleep(0.1)
+                    #    continue
+            finally:
+                audio_tools.clear_main_app_audio_input_controller(input_stream_controller)
+                input_stream_controller.close()
 
         else:
             # load the speech recognizer and set the initial energy threshold and pause threshold

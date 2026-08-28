@@ -60,6 +60,8 @@ class SettingsManager:
             # audio settings
             "audio_api": "MME",  # The name of the audio API. (MME, DirectSound, WASAPI)
             "audio_input_device": "",  # audio input device name - used by whispering tiger UI to select audio input device by name
+            "audio_input_process": "",  # executable name for Windows WASAPI per-application capture
+            "audio_input_process_id": 0,  # last selected PID; resolved again by executable name after an app restart
             "audio_output_device": "",  # audio output device name - used by whispering tiger UI to select audio output device by name
             "device_index": None,  # input device index for STT
             "device_out_index": None,  # output device index for TTS

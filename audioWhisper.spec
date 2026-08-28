@@ -32,7 +32,7 @@ hiddenimports = [
     'flash_attn', 'flash_attn_2_cuda', 'mistral_common', 'snac', 'peft', 'conformer', 'diffusers', 'spacy-pkuseg', 'spacy_pkuseg', 's3tokenizer',
     'espeakng_loader', 'unidic_lite', 'mamba_ssm', 'audiotools', 'past', 'future',
     'indextts', 'qwen3_tts_runtime', 'munch', 'wetext', 'kaldifst',
-    'ruaccent', 'pycrfsuite', 'razdel'
+    'ruaccent', 'pycrfsuite', 'razdel', 'Utilities.windows_process_loopback'
 ]
 hiddenimports += collect_submodules('indextts')
 hiddenimports += collect_submodules('qwen3_tts_runtime')

@@ -3,6 +3,7 @@ import struct
 import threading
 import traceback
 import wave
+import weakref
 
 import numpy
 import pyloudnorm
@@ -26,6 +27,9 @@ import Utilities
 
 
 main_app_py_audio = pyaudio.PyAudio()
+
+_main_app_audio_input_controller = None
+_main_app_audio_input_controller_lock = threading.RLock()
 
 
 class PyAudioPool:
@@ -388,6 +392,41 @@ stop_flags = {}  # Dictionary to manage stop flags for each tag
 audio_threads = []  # List to manage all audio threads
 audio_thread_lock = threading.Lock()
 audio_list_lock = threading.Lock()  # Lock to protect the audio_threads list
+_audio_streamers = weakref.WeakSet()
+_audio_streamers_lock = threading.RLock()
+
+
+def _register_audio_streamer(streamer):
+    with _audio_streamers_lock:
+        _audio_streamers.add(streamer)
+
+
+def switch_registered_audio_streamers(device_index):
+    """Move retained stream players to a new device, rolling back as a group."""
+    with _audio_streamers_lock:
+        changed_streamers = []
+        try:
+            for streamer in list(_audio_streamers):
+                previous_device = streamer.device_index
+                if previous_device == device_index and streamer.stream is not None:
+                    continue
+                streamer.switch_output_device(device_index)
+                changed_streamers.append((streamer, previous_device))
+        except BaseException as switch_error:
+            rollback_errors = []
+            for streamer, previous_device in reversed(changed_streamers):
+                try:
+                    streamer.switch_output_device(previous_device)
+                except BaseException as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            if rollback_errors:
+                raise RuntimeError(
+                    "Could not switch all playback streams, and one or more streams "
+                    f"could not be restored: {'; '.join(rollback_errors)}"
+                ) from switch_error
+            raise RuntimeError(
+                f"Could not switch the playback device; the previous output was restored: {switch_error}"
+            ) from switch_error
 
 
 def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2, channels=2, sample_rate=44100,
@@ -563,7 +602,34 @@ def calculate_chunk_size(recorded_sample_rate, target_sample_rate, chunk):
     return int(chunk * resampling_ratio)
 
 def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt16, sample_rate=16000, channels=1,
-                                 chunk=512, py_audio=None, audio_processor=None):
+                                 chunk=512, py_audio=None, audio_processor=None,
+                                 process_executable="", process_id=0):
+    if process_executable:
+        callback = (
+            audio_processor.callback
+            if audio_processor is not None and hasattr(audio_processor, "callback")
+            else None
+        )
+        if callback is None:
+            raise ValueError(
+                "An audio processor callback is required for WASAPI application capture."
+            )
+
+        from Utilities.windows_process_loopback import create_process_loopback_stream
+
+        stream = create_process_loopback_stream(
+            executable=process_executable,
+            preferred_pid=process_id,
+            callback=callback,
+            sample_rate=sample_rate,
+            channels=channels,
+            frames_per_buffer=chunk,
+        )
+        audio_processor.needs_sample_rate_conversion = False
+        audio_processor.recorded_sample_rate = sample_rate
+        audio_processor.input_channel_num = channels
+        return stream, False, sample_rate, channels
+
     if py_audio is None:
         py_audio = pyaudio.PyAudio()
 
@@ -585,7 +651,8 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
                                input=True,
                                input_device_index=device_index,
                                frames_per_buffer=initial_chunk_size,
-                               stream_callback=callback)
+                               stream_callback=callback,
+                               start=callback is None)
     except Exception as e:
         print(f"Failed to open stream with channels={channels} and rate={sample_rate}: {e}")
         print("Attempting to use default device settings...")
@@ -607,7 +674,8 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
                                    input=True,
                                    input_device_index=device_index,
                                    frames_per_buffer=initial_chunk_size,
-                                   stream_callback=callback)
+                                   stream_callback=callback,
+                                   start=callback is None)
             num_of_channels = 2
         except Exception as e:
             print(f"Failed with 2 channels at default rate {recorded_sample_rate}: {e}")
@@ -620,7 +688,8 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
                                        input=True,
                                        input_device_index=device_index,
                                        frames_per_buffer=initial_chunk_size,
-                                       stream_callback=callback)
+                                       stream_callback=callback,
+                                       start=callback is None)
                 num_of_channels = 1
             except Exception as e:
                 print(f"Failed with 1 channel at default rate {recorded_sample_rate}: {e}")
@@ -634,7 +703,8 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
                                            input=True,
                                            input_device_index=device_index,
                                            frames_per_buffer=initial_chunk_size,
-                                           stream_callback=callback)
+                                           stream_callback=callback,
+                                           start=callback is None)
                     num_of_channels = max_channels
                 except Exception as e:
                     print(f"Failed with max channels ({max_channels}) at default rate {recorded_sample_rate}: {e}")
@@ -647,6 +717,348 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
         audio_processor.input_channel_num = num_of_channels
 
     return stream, needs_sample_rate_conversion, recorded_sample_rate, num_of_channels
+
+
+def resolve_audio_input_configuration(configuration):
+    """Resolve a persisted/UI audio selection to a PyAudio input configuration."""
+    if not isinstance(configuration, dict):
+        raise TypeError("Audio input configuration must be an object.")
+
+    audio_api = str(configuration.get("audio_api") or "").strip()
+    if not audio_api:
+        raise ValueError("An audio API is required to switch the audio input.")
+    audio_api_index, audio_api_name = get_audio_api_index_by_name(audio_api)
+    if not audio_api_name:
+        raise ValueError(f"Audio API {audio_api!r} is not available on this system.")
+
+    process_executable = str(configuration.get("audio_input_process") or "").strip()
+    try:
+        process_id = int(configuration.get("audio_input_process_id") or 0)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("The application process ID must be a number.") from exc
+    if process_id < 0:
+        raise ValueError("The application process ID cannot be negative.")
+
+    device_name = str(configuration.get("audio_input_device") or "").strip()
+    default_device_index = get_default_audio_device_index_by_api(audio_api, True)
+
+    if process_executable:
+        if platform.system() != "Windows":
+            raise RuntimeError(
+                "Per-application WASAPI capture is only available on Windows."
+            )
+        if "wasapi" not in audio_api_name.casefold():
+            raise RuntimeError(
+                "Per-application audio capture requires the WASAPI audio API."
+            )
+        if not device_name:
+            device_name = process_executable
+        return {
+            "audio_api": audio_api,
+            "audio_input_device": device_name,
+            "audio_input_process": process_executable,
+            "audio_input_process_id": process_id,
+            "device_index": -1,
+            "device_default_in_index": default_device_index,
+            "_stream_device_index": None,
+        }
+
+    configured_index = configuration.get("device_index")
+    if not device_name and configured_index not in (None, "", -1, "-1"):
+        try:
+            stream_device_index = int(configured_index)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("The audio input device index must be a number.") from exc
+        try:
+            device_info = main_app_py_audio.get_device_info_by_index(stream_device_index)
+            device_name = device_info.get("name", "")
+            if isinstance(device_name, bytes):
+                device_name = Utilities.safe_decode(device_name)
+        except Exception:
+            device_name = str(stream_device_index)
+        persisted_device_index = stream_device_index
+    elif not device_name or device_name.casefold() == "default":
+        device_name = "Default"
+        stream_device_index = default_device_index
+        persisted_device_index = -1
+    else:
+        stream_device_index = get_audio_device_index_by_name_and_api(
+            device_name, audio_api_index, True, default=None
+        )
+        if stream_device_index is None:
+            raise ValueError(
+                f"Audio input device {device_name!r} is not available through {audio_api}."
+            )
+        persisted_device_index = stream_device_index
+
+    return {
+        "audio_api": audio_api,
+        "audio_input_device": str(device_name),
+        "audio_input_process": "",
+        "audio_input_process_id": 0,
+        "device_index": persisted_device_index,
+        "device_default_in_index": default_device_index,
+        "_stream_device_index": stream_device_index,
+    }
+
+
+def resolve_audio_output_configuration(configuration):
+    """Resolve a persisted/UI audio selection to a PyAudio output configuration."""
+    if not isinstance(configuration, dict):
+        raise TypeError("Audio output configuration must be an object.")
+
+    audio_api = str(configuration.get("audio_api") or "").strip()
+    if not audio_api:
+        raise ValueError("An audio API is required to switch the audio output.")
+    audio_api_index, audio_api_name = get_audio_api_index_by_name(audio_api)
+    if not audio_api_name:
+        raise ValueError(f"Audio API {audio_api!r} is not available on this system.")
+
+    device_name = str(configuration.get("audio_output_device") or "").strip()
+    default_device_index = get_default_audio_device_index_by_api(audio_api, False)
+    configured_index = configuration.get("device_out_index")
+
+    if not device_name and configured_index not in (None, "", -1, "-1"):
+        try:
+            stream_device_index = int(configured_index)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("The audio output device index must be a number.") from exc
+        try:
+            device_info = main_app_py_audio.get_device_info_by_index(stream_device_index)
+            device_name = device_info.get("name", "")
+            if isinstance(device_name, bytes):
+                device_name = Utilities.safe_decode(device_name)
+        except Exception:
+            device_name = str(stream_device_index)
+        persisted_device_index = stream_device_index
+    elif not device_name or device_name.casefold() == "default":
+        if default_device_index is None:
+            raise ValueError(f"No default audio output is available through {audio_api}.")
+        device_name = "Default"
+        stream_device_index = default_device_index
+        persisted_device_index = None
+    else:
+        stream_device_index = get_audio_device_index_by_name_and_api(
+            device_name, audio_api_index, False, default=None
+        )
+        if stream_device_index is None:
+            raise ValueError(
+                f"Audio output device {device_name!r} is not available through {audio_api}."
+            )
+        persisted_device_index = stream_device_index
+
+    return {
+        "audio_api": audio_api,
+        "audio_output_device": str(device_name),
+        "device_out_index": persisted_device_index,
+        "device_default_out_index": default_device_index,
+        "_stream_device_index": stream_device_index,
+    }
+
+
+def validate_audio_output_configuration(configuration):
+    """Open and close the endpoint so a failed UI switch can roll back."""
+    device_index = configuration.get("_stream_device_index")
+    probe_audio = pyaudio.PyAudio()
+    probe_stream = None
+    try:
+        device_info = probe_audio.get_device_info_by_index(device_index)
+        max_channels = int(device_info.get("maxOutputChannels") or 0)
+        if max_channels < 1:
+            raise ValueError("The selected device does not provide an audio output.")
+        channels = min(2, max_channels)
+        sample_rate = int(device_info.get("defaultSampleRate") or 44100)
+        probe_stream = probe_audio.open(
+            format=pyaudio.paInt16,
+            channels=channels,
+            rate=sample_rate,
+            output=True,
+            output_device_index=device_index,
+            frames_per_buffer=256,
+            start=False,
+        )
+    finally:
+        if probe_stream is not None:
+            probe_stream.close()
+        probe_audio.terminate()
+
+
+def switch_main_app_audio_output(configuration):
+    """Validate a playback endpoint and retarget retained output streams."""
+    resolved = resolve_audio_output_configuration(configuration)
+    validate_audio_output_configuration(resolved)
+    switch_registered_audio_streamers(resolved["_stream_device_index"])
+    return {
+        key: value
+        for key, value in resolved.items()
+        if not key.startswith("_")
+    }
+
+
+class AudioInputStreamController:
+    """Own the callback input stream so it can be replaced without reloading STT."""
+
+    def __init__(self, *, sample_format, sample_rate, channels, chunk, py_audio,
+                 audio_processor, stream_factory=None, configuration_resolver=None):
+        self.sample_format = sample_format
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self.chunk = chunk
+        self.py_audio = py_audio
+        self.audio_processor = audio_processor
+        self._stream_factory = stream_factory or start_recording_audio_stream
+        self._configuration_resolver = (
+            configuration_resolver or resolve_audio_input_configuration
+        )
+        self._lock = threading.RLock()
+        self._stream = None
+        self._configuration = None
+
+    @staticmethod
+    def _public_configuration(configuration):
+        return {
+            key: value
+            for key, value in configuration.items()
+            if not key.startswith("_")
+        }
+
+    @staticmethod
+    def _stop_and_close_stream(stream):
+        if stream is None:
+            return
+        try:
+            active = stream.is_active() if hasattr(stream, "is_active") else True
+            if active and hasattr(stream, "stop_stream"):
+                stream.stop_stream()
+        finally:
+            if hasattr(stream, "close"):
+                stream.close()
+
+    def _open_resolved(self, configuration):
+        stream = None
+        try:
+            stream, _, _, _ = self._stream_factory(
+                configuration.get("_stream_device_index"),
+                sample_format=self.sample_format,
+                sample_rate=self.sample_rate,
+                channels=self.channels,
+                chunk=self.chunk,
+                py_audio=self.py_audio,
+                audio_processor=self.audio_processor,
+                process_executable=configuration.get("audio_input_process", ""),
+                process_id=configuration.get("audio_input_process_id", 0),
+            )
+            active = stream.is_active() if hasattr(stream, "is_active") else False
+            if not active:
+                stream.start_stream()
+            return stream
+        except BaseException:
+            if stream is not None:
+                try:
+                    self._stop_and_close_stream(stream)
+                except Exception:
+                    pass
+            raise
+
+    def start(self, configuration):
+        with self._lock:
+            if self._stream is not None:
+                raise RuntimeError("The audio input stream is already running.")
+            resolved = self._configuration_resolver(dict(configuration))
+            self._stream = self._open_resolved(resolved)
+            self._configuration = resolved
+            return self._public_configuration(resolved)
+
+    def switch(self, configuration):
+        with self._lock:
+            resolved = self._configuration_resolver(dict(configuration))
+            if self._configuration is not None and (
+                self._public_configuration(resolved)
+                == self._public_configuration(self._configuration)
+            ):
+                return self._public_configuration(self._configuration)
+
+            old_stream = self._stream
+            old_configuration = self._configuration
+            if old_stream is None or old_configuration is None:
+                self._stream = self._open_resolved(resolved)
+                self._configuration = resolved
+                return self._public_configuration(resolved)
+
+            self._stop_and_close_stream(old_stream)
+            self._stream = None
+            self.audio_processor.reset_for_audio_input_switch()
+
+            try:
+                new_stream = self._open_resolved(resolved)
+            except BaseException as switch_error:
+                try:
+                    self.audio_processor.reset_for_audio_input_switch()
+                    restored_stream = self._open_resolved(old_configuration)
+                except BaseException as restore_error:
+                    self._configuration = None
+                    raise RuntimeError(
+                        "Could not switch the audio input, and the previous input "
+                        f"could not be restored: {restore_error}"
+                    ) from switch_error
+                self._stream = restored_stream
+                self._configuration = old_configuration
+                raise RuntimeError(
+                    "Could not switch the audio input. The previous input was "
+                    f"restored: {switch_error}"
+                ) from switch_error
+
+            self._stream = new_stream
+            self._configuration = resolved
+            return self._public_configuration(resolved)
+
+    def is_active(self):
+        with self._lock:
+            if self._stream is None:
+                return False
+            try:
+                return bool(self._stream.is_active())
+            except Exception:
+                return False
+
+    def close(self):
+        with self._lock:
+            stream = self._stream
+            self._stream = None
+            if stream is not None:
+                self._stop_and_close_stream(stream)
+
+
+def set_main_app_audio_input_controller(controller):
+    global _main_app_audio_input_controller
+    with _main_app_audio_input_controller_lock:
+        _main_app_audio_input_controller = controller
+
+
+def clear_main_app_audio_input_controller(controller=None):
+    global _main_app_audio_input_controller
+    with _main_app_audio_input_controller_lock:
+        if controller is None or _main_app_audio_input_controller is controller:
+            _main_app_audio_input_controller = None
+
+
+def switch_main_app_audio_input(configuration):
+    with _main_app_audio_input_controller_lock:
+        controller = _main_app_audio_input_controller
+    if controller is None:
+        raise RuntimeError(
+            "Live audio input switching is not available yet. Wait for backend "
+            "startup to finish; if it remains unavailable, enable VAD in the "
+            "profile and restart the backend once."
+        )
+    return controller.switch(configuration)
+
+
+def close_main_app_audio_input():
+    with _main_app_audio_input_controller_lock:
+        controller = _main_app_audio_input_controller
+    if controller is not None:
+        controller.close()
 
 
 # Function to calculate LUFS
@@ -1217,7 +1629,6 @@ class AudioStreamer:
         self.stop_playing_timeout = 2.0
         self.p = None
         self.stream = None
-        self.init_stream(source_sample_rate)
         self.before_playback_hook_func = None
         self.verbose = False
         # ────────────────────────────────────────────────────────────────────
@@ -1235,7 +1646,12 @@ class AudioStreamer:
 
         self._start_timer: threading.Timer | None = None
         self._start_lock = threading.Lock()
+        self._device_lock = threading.RLock()
+        self._stop_event = threading.Event()
         self._first_chunk_seen = False  # ← tracks first real chunk
+
+        self.init_stream(source_sample_rate)
+        _register_audio_streamer(self)
         # ────────────────────────────────────────────────────────────────────
 
     # ----------------------------------------------------------------------
@@ -1243,15 +1659,16 @@ class AudioStreamer:
     # ----------------------------------------------------------------------
     def _timeout_start_playback(self):
         """Timer callback: force playback because timeout expired."""
-        with self._start_lock:
-            self._start_timer = None
-            if self.playback_thread is None or not self.playback_thread.is_alive():
-                if self.verbose:
-                    print(
-                        f"Starting playback due to timeout "
-                        f"({self.start_playback_timeout}s without new data)"
-                    )
-                self.start_playback()
+        with self._device_lock:
+            with self._start_lock:
+                self._start_timer = None
+                if self.playback_thread is None or not self.playback_thread.is_alive():
+                    if self.verbose:
+                        print(
+                            f"Starting playback due to timeout "
+                            f"({self.start_playback_timeout}s without new data)"
+                        )
+                    self.start_playback()
 
     def set_before_playback_hook(self, hook_func):
         self.before_playback_hook_func = hook_func
@@ -1260,21 +1677,32 @@ class AudioStreamer:
     def init_stream(self, desired_sample_rate):
         if self.p is not None:
             pyaudio_pool.release(self.p)
-        self.p = pyaudio_pool.acquire()
-
-        self.actual_sample_rate = get_closest_sample_rate_of_device(
-            self.device_index, desired_sample_rate
-        )
-        self.stream = self.p.open(
-            format=self.p.get_format_from_width(np.dtype(self.dtype).itemsize),
-            channels=self.playback_channels,
-            rate=int(self.actual_sample_rate),
-            output=True,
-            output_device_index=self.device_index,
-        )
+            self.p = None
+        audio_interface = pyaudio_pool.acquire()
+        try:
+            actual_sample_rate = get_closest_sample_rate_of_device(
+                self.device_index, desired_sample_rate
+            )
+            stream = audio_interface.open(
+                format=audio_interface.get_format_from_width(np.dtype(self.dtype).itemsize),
+                channels=self.playback_channels,
+                rate=int(actual_sample_rate),
+                output=True,
+                output_device_index=self.device_index,
+            )
+        except BaseException:
+            pyaudio_pool.release(audio_interface)
+            raise
+        self.p = audio_interface
+        self.actual_sample_rate = actual_sample_rate
+        self.stream = stream
 
     # ----------------------------------------------------------------------
     def add_audio_chunk(self, chunk: bytes | bytearray):
+        with self._device_lock:
+            self._add_audio_chunk_locked(chunk)
+
+    def _add_audio_chunk_locked(self, chunk: bytes | bytearray):
         """Append audio data and decide whether/when to start playback."""
         if self.verbose:
             print("adding audio chunk of size:", len(chunk))
@@ -1334,18 +1762,22 @@ class AudioStreamer:
 
     # ----------------------------------------------------------------------
     def start_playback(self):
+        self._stop_event.clear()
+
         def playback_loop():
             data_accumulated = bytearray()
             last_data_time = time.time()
             has_data_been_written = False
 
-            while True:
+            while not self._stop_event.is_set():
                 available_size = self.buffer.get_available_size()
 
                 if available_size > 0:
                     data_accumulated += self.buffer.read(available_size)
 
                 while len(data_accumulated) >= self.buffer_size:
+                    if self._stop_event.is_set():
+                        break
                     data_to_play = bytes(data_accumulated[:self.buffer_size])
                     data_accumulated = data_accumulated[self.buffer_size:]
                     last_data_time = time.time()
@@ -1371,7 +1803,11 @@ class AudioStreamer:
                         self.stream.write(data_to_play)
                     has_data_been_written = True
 
-                if available_size > 0 and len(data_accumulated) == 0:
+                if (
+                        not self._stop_event.is_set()
+                        and available_size > 0
+                        and len(data_accumulated) == 0
+                ):
                     # Flush the tail (with padding)
                     data_accumulated = self.buffer.get_all_remaining_data()
                     padding = b"\x00" * (self.buffer_size - len(data_accumulated))
@@ -1432,6 +1868,11 @@ class AudioStreamer:
     # ----------------------------------------------------------------------
     def stop(self):
         """Manually stop playback and reset buffering state."""
+        with self._device_lock:
+            self._stop_locked()
+
+    def _stop_locked(self):
+        self._stop_event.set()
         with self._start_lock:
             if self._start_timer is not None:
                 self._start_timer.cancel()
@@ -1439,22 +1880,53 @@ class AudioStreamer:
             self._first_chunk_seen = False  # reset for next session
 
         print("stopping audio streamer...")
+        playback_thread = self.playback_thread
         with audio_list_lock:
-            if (self.playback_thread, self.tag) in audio_threads:
-                audio_threads.remove((self.playback_thread, self.tag))
+            if (playback_thread, self.tag) in audio_threads:
+                audio_threads.remove((playback_thread, self.tag))
 
-        if self.playback_thread and self.playback_thread.is_alive():
-            self.playback_thread.join()
+        if (
+                playback_thread
+                and playback_thread.is_alive()
+                and playback_thread is not threading.current_thread()
+        ):
+            playback_thread.join()
+
+        self.buffer.get_all_remaining_data()
 
         if self.stream:
             self.stream.stop_stream()
             self.stream.close()
             self.stream = None
 
-        pyaudio_pool.release(self.p)
+        if self.p is not None:
+            pyaudio_pool.release(self.p)
         self.p = None
         self.playback_thread = None
         print("Stopped audio streamer")
+
+    def switch_output_device(self, device_index):
+        """Re-open this retained player on another output without replacing it."""
+        with self._device_lock:
+            if self.device_index == device_index and self.stream is not None:
+                return
+            previous_device = self.device_index
+            self._stop_locked()
+            self.device_index = device_index
+            try:
+                self.init_stream(self.source_sample_rate)
+            except BaseException as switch_error:
+                self.device_index = previous_device
+                try:
+                    self.init_stream(self.source_sample_rate)
+                except BaseException as restore_error:
+                    raise RuntimeError(
+                        "The new playback device failed, and the previous device "
+                        f"could not be restored: {restore_error}"
+                    ) from switch_error
+                raise RuntimeError(
+                    f"The new playback device failed; the previous device was restored: {switch_error}"
+                ) from switch_error
 
 
 class WavWriter:
