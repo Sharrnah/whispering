@@ -13,6 +13,7 @@ import base64
 
 import Utilities
 import audio_tools
+import audio_routes
 import processmanager
 
 from Models.TextTranslation import texttranslate
@@ -465,6 +466,57 @@ class WebSocketServer:
 
 async def custom_message_handler(server_instance, msg_obj, websocket):
     global UI_CONNECTED
+    if msg_obj["type"] == "audio_routes_update":
+        request_value = msg_obj.get("value") or {}
+        request_id = str(request_value.get("request_id") or "") if isinstance(request_value, dict) else ""
+        if not isinstance(request_value, dict):
+            request_value = {}
+        try:
+            routes = request_value.get("routes", [])
+            if "main_audio_plugins" in request_value:
+                selected = await asyncio.to_thread(
+                    audio_routes.apply_audio_routes,
+                    routes,
+                    request_value.get("main_audio_plugins"),
+                )
+            else:
+                selected = await asyncio.to_thread(
+                    audio_routes.apply_audio_routes,
+                    routes,
+                )
+        except Exception as exc:
+            print(f"Could not apply additional audio routes: {exc}")
+            await server_instance.send(websocket, json.dumps({
+                "type": "audio_routes_update_result",
+                "data": {
+                    "request_id": request_id,
+                    "success": False,
+                    "error": str(exc),
+                },
+            }))
+            return
+
+        # Persist only after every new stream has opened. SettingsManager merges
+        # these two dirty keys against the latest UI-written profile revision.
+        settings.SetOption("additional_audio_routes", selected["routes"])
+        settings.SetOption("main_audio_plugins", selected["main_audio_plugins"])
+        await server_instance.send(websocket, json.dumps({
+            "type": "audio_routes_update_result",
+            "data": {
+                "request_id": request_id,
+                "success": True,
+                "routes": selected["routes"],
+                "main_audio_plugins": selected["main_audio_plugins"],
+            },
+        }))
+        await server_instance.broadcast(
+            json.dumps({
+                "type": "translate_settings",
+                "data": settings.SETTINGS.get_all_settings(),
+            })
+        )
+        return
+
     if msg_obj["type"] == "audio_input_switch":
         request_value = msg_obj.get("value") or {}
         request_id = str(request_value.get("request_id") or "") if isinstance(request_value, dict) else ""
@@ -568,14 +620,16 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
     if msg_obj["type"] == "setting_change":
 
         # handle plugin activation / deactivation before setting the option
+        newly_enabled_plugins = []
         if msg_obj["name"] == "plugins":
+            previous_plugins = dict(settings.GetOption("plugins") or {})
             for plugin_name, is_enabled in list(msg_obj["value"].items()):
                 for plugin_inst in Plugins.plugins:
                     if plugin_name == type(plugin_inst).__name__:
-                        if plugin_name in settings.GetOption("plugins") and is_enabled != settings.GetOption("plugins")[
-                            plugin_name]:
+                        if bool(is_enabled) != bool(previous_plugins.get(plugin_name, False)):
                             settings.SetOption(msg_obj["name"], msg_obj["value"])
                             if is_enabled:
+                                newly_enabled_plugins.append(plugin_name)
                                 if hasattr(plugin_inst, 'on_enable'):
                                     try:
                                         plugin_inst.on_enable()
@@ -591,6 +645,12 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
                                         traceback.print_exc()
 
         settings.SetOption(msg_obj["name"], msg_obj["value"])
+        if newly_enabled_plugins:
+            main_plugins_changed, main_audio_plugins = (
+                audio_routes.enable_plugins_for_main(newly_enabled_plugins)
+            )
+            if main_plugins_changed:
+                settings.SetOption("main_audio_plugins", main_audio_plugins)
         server_instance.broadcast_message(
             json.dumps({"type": "translate_settings", "data": settings.SETTINGS.get_all_settings()}),
             exclude_client=websocket)  # broadcast updated settings to all clients
@@ -784,6 +844,11 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
         except Exception as save_error:
             print(f"Could not flush settings during shutdown: {save_error}")
             traceback.print_exc()
+        try:
+            audio_routes.close_audio_routes()
+            audio_tools.close_main_app_audio_input()
+        except Exception as audio_error:
+            print(f"Could not close audio routes during shutdown: {audio_error}")
         processmanager.cleanup_subprocesses()
         try:
             sys.stdout.flush()

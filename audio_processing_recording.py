@@ -120,6 +120,17 @@ def call_plugin_realtime_sts(plugins, wavefiledata, sample_rate, input_channels=
                 traceback.print_exc()
 
 
+def has_realtime_sts_plugin(plugins):
+    """Avoid a callback thread when no selected plugin consumes raw audio."""
+    for plugin_inst in (plugins or ()):
+        if not hasattr(plugin_inst, 'realtime_sts'):
+            continue
+        if hasattr(plugin_inst, 'is_enabled') and not plugin_inst.is_enabled(False):
+            continue
+        return True
+    return False
+
+
 def process_audio_chunk(audio_chunk, sample_rate, vad_model=None):
     audio_int16 = np.frombuffer(audio_chunk, np.int16)
     audio_float32 = int2float(audio_int16)
@@ -173,6 +184,10 @@ class AudioProcessor:
                  before_recording_running_callback_func=None,
                  before_recording_stopped_callback_func=None,
 
+                 source_id="main",
+                 source_name="Microphone",
+                 enable_mic_passthrough=True,
+
                  verbose=False
                  ):
         # Stream replacement waits for an in-flight callback before clearing
@@ -213,6 +228,8 @@ class AudioProcessor:
 
         self.audio_queue = audio_queue
         self.settings = settings
+        self.source_id = str(source_id or "main")
+        self.source_name = str(source_name or self.source_id)
 
         self.diarization_model = None
         self.typing_indicator_function = typing_indicator_function
@@ -231,8 +248,9 @@ class AudioProcessor:
 
         self.default_mic_audio_streamer = None
         self.mic_passthrough_queue = queue.Queue(maxsize=100)
+        self._mic_passthrough_closed = threading.Event()
         def mic_passthrough_thread_func():
-            while True:
+            while not self._mic_passthrough_closed.is_set():
                 # initialize the audio streamer for mic passthrough
                 if self.default_mic_audio_streamer is None and self.settings.GetOption("mic_passthrough_routing"):
                     try:
@@ -288,8 +306,10 @@ class AudioProcessor:
                             except Exception as e:
                                 print("mic passthrough processing error:", e)
 
-        self.mic_passthrough_thread = threading.Thread(target=mic_passthrough_thread_func, daemon=True)
-        self.mic_passthrough_thread.start()
+        self.mic_passthrough_thread = None
+        if enable_mic_passthrough:
+            self.mic_passthrough_thread = threading.Thread(target=mic_passthrough_thread_func, daemon=True)
+            self.mic_passthrough_thread.start()
 
         # run callback after timeout even if no audio was detected (and such callback not called by pyAudio)
         # self.timer_reset_event = threading.Event()
@@ -301,6 +321,33 @@ class AudioProcessor:
     def reset_for_audio_input_switch(self):
         with self._audio_input_state_lock:
             self._reset_for_audio_input_switch_locked()
+
+    def close(self):
+        """Stop auxiliary processor resources owned outside the input stream."""
+        self._mic_passthrough_closed.set()
+        if self.default_mic_audio_streamer is not None:
+            try:
+                self.default_mic_audio_streamer.stop()
+            except Exception as exc:
+                print(f"Could not stop microphone passthrough: {exc}")
+            self.default_mic_audio_streamer = None
+
+    def _settings_for_queue(self):
+        snapshot = getattr(self.settings, "snapshot", None)
+        if callable(snapshot):
+            return snapshot()
+        return self.settings
+
+    def _queue_audio(self, audio_data, final):
+        self.audio_queue.put({
+            'time': time.time_ns(),
+            'data': audio_data,
+            'final': bool(final),
+            'settings': self._settings_for_queue(),
+            'plugins': self.plugins,
+            'source_id': self.source_id,
+            'source_name': self.source_name,
+        })
 
     def _reset_for_audio_input_switch_locked(self):
         """Discard source-specific state after the current stream has stopped."""
@@ -392,11 +439,12 @@ class AudioProcessor:
                         pass  # If still full, proceed without returning early
 
 
-        threading.Thread(
-            target=call_plugin_realtime_sts,
-            args=(self.plugins, in_data, self.recorded_sample_rate, self.input_channel_num),
-            daemon=False,
-        ).start()
+        if has_realtime_sts_plugin(self.plugins):
+            threading.Thread(
+                target=call_plugin_realtime_sts,
+                args=(self.plugins, in_data, self.recorded_sample_rate, self.input_channel_num),
+                daemon=True,
+            ).start()
 
         if not self.settings.GetOption("stt_enabled"):
             return None, pyaudio.paContinue
@@ -630,11 +678,9 @@ class AudioProcessor:
 
                     if isinstance(wave_file_bytes, list):
                         for audio_segment in wave_file_bytes:
-                            self.audio_queue.put(
-                                {'time': time.time_ns(), 'data': audio_segment, 'final': True, 'settings': self.settings, 'plugins': self.plugins})
+                            self._queue_audio(audio_segment, True)
                     else:
-                        self.audio_queue.put(
-                            {'time': time.time_ns(), 'data': wave_file_bytes, 'final': True, 'settings': self.settings, 'plugins': self.plugins})
+                        self._queue_audio(wave_file_bytes, True)
                     # vad_iterator.reset_states()  # reset model states after each audio
 
                     # write wav file if configured to do so
@@ -841,8 +887,7 @@ class AudioProcessor:
                                     self._new_speaker = True
                                 #elif not isinstance(wave_file_bytes, list):
                             else:
-                                self.audio_queue.put(
-                                    {'time': time.time_ns(), 'data': wave_file_bytes, 'final': False, 'settings': self.settings, 'plugins': self.plugins})
+                                self._queue_audio(wave_file_bytes, False)
 
                         else:
                             self.frames = []

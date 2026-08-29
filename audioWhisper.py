@@ -109,13 +109,14 @@ if __name__ == '__main__':
     import transformers
     import audio_tools
     import audio_processing_recording
+    import audio_routes
+
+    atexit.register(audio_routes.close_audio_routes)
 
     import VRC_OSCServer
 
     import wave
 
-    from Models.STS import DeepFilterNet
-    from Models.STS import Noisereduce
     from Models.STS import VAD
     from Models.STS import SmartTurn
 
@@ -143,6 +144,11 @@ if __name__ == '__main__':
         except Exception as save_error:
             print(f"Could not flush settings during shutdown: {save_error}")
             traceback.print_exc()
+
+        try:
+            audio_routes.close_audio_routes()
+        except Exception as route_error:
+            print(f"Could not close additional audio routes during shutdown: {route_error}")
 
         try:
             audio_tools.close_main_app_audio_input()
@@ -493,6 +499,14 @@ if __name__ == '__main__':
             settings.SETTINGS.SetOption("current_language", "en")
         elif "_whisper" in settings.SETTINGS.GetOption("stt_type") or "whisper_" in settings.SETTINGS.GetOption("stt_type"):
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.whisper_get_languages())
+            normalized_language = audioprocessor.normalize_whisper_language(language)
+            persisted_language = normalized_language or ""
+            if persisted_language != str(language or ""):
+                print(
+                    f"Normalized Whisper language {language!r} to "
+                    f"{persisted_language or 'Auto'!r}."
+                )
+                settings.SETTINGS.SetOption("current_language", persisted_language)
         elif settings.SETTINGS.GetOption("stt_type") == "seamless_m4t":
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.seamless_m4t_get_languages())
         elif settings.SETTINGS.GetOption("stt_type") == "mms":
@@ -645,11 +659,13 @@ if __name__ == '__main__':
         if settings.SETTINGS.GetOption("denoise_audio") == "deepfilter":
             websocket.set_loading_state("loading_denoiser", True)
             post_filter = settings.SETTINGS.GetOption("denoise_audio_post_filter")
-            audio_enhancer = DeepFilterNet.DeepFilterNet(post_filter=post_filter)
+            audio_enhancer = audio_routes.get_audio_enhancer(
+                "deepfilter", post_filter=post_filter
+            )
             websocket.set_loading_state("loading_denoiser", False)
         elif settings.SETTINGS.GetOption("denoise_audio") == "noise_reduce":
             websocket.set_loading_state("loading_denoiser", True)
-            audio_enhancer = Noisereduce.Noisereduce()
+            audio_enhancer = audio_routes.get_audio_enhancer("noise_reduce")
             websocket.set_loading_state("loading_denoiser", False)
 
         # Initialize VAD model
@@ -704,6 +720,20 @@ if __name__ == '__main__':
         # prepare the plugin timer calls
         call_plugin_timer(Plugins)
 
+        # Additional capture routes reuse the primary STT queue/model. Each
+        # route owns only its stream, phrase/VAD state, and small VAD instance.
+        route_manager = audio_routes.AudioRouteManager(
+            settings.SETTINGS,
+            Plugins.plugins,
+            audioprocessor.q,
+        )
+        # Begin the one shared model load while additional streams/VAD state
+        # are being prepared. Later branch-local calls are idempotent.
+        audioprocessor.start_whisper_thread()
+        route_manager.start_from_settings()
+        audio_routes.set_audio_route_manager(route_manager)
+        main_audio_plugins = route_manager.main_plugins()
+
         # start OSC Server
         #if settings.GetOption("osc_sync_mute") or settings.GetOption("osc_sync_afk"):
         if settings.GetOption("osc_server_ip") != "" and settings.GetOption("osc_server_ip") != "0":
@@ -753,7 +783,7 @@ if __name__ == '__main__':
                 keyboard_rec_force_stop=keyboard_rec_force_stop,
                 vad_model=vad_model,
                 turn_model=turn_model,
-                plugins=Plugins.plugins,
+                plugins=main_audio_plugins,
                 audio_enhancer=audio_enhancer,
                 osc_ip=osc_ip,
                 osc_port=osc_port,
@@ -769,6 +799,7 @@ if __name__ == '__main__':
                 before_recording_running_callback_func=audio_processing_recording.main_app_before_recording_running_callback,
                 verbose=verbose,
             )
+            route_manager.set_main_processor(processor)
 
             # Own only the callback stream behind a small controller. This keeps
             # the existing AudioProcessor/model lifecycle intact while allowing
@@ -883,7 +914,15 @@ if __name__ == '__main__':
 
                     # add audio data to the queue
                     wav_audio_bytes = audio_tools.audio_bytes_to_wav(audio_data, channels=CHANNELS, sample_rate=SAMPLE_RATE)
-                    audioprocessor.q.put({'time': time.time_ns(), 'data': wav_audio_bytes, 'final': True, 'settings': settings.SETTINGS, 'plugins': Plugins.plugins})
+                    audioprocessor.q.put({
+                        'time': time.time_ns(),
+                        'data': wav_audio_bytes,
+                        'final': True,
+                        'settings': settings.SETTINGS,
+                        'plugins': route_manager.main_plugins(),
+                        'source_id': 'main',
+                        'source_name': 'Microphone',
+                    })
 
                     # set typing indicator for VRChat and websocket clients
                     typing_indicator_thread = threading.Thread(target=typing_indicator_function,
