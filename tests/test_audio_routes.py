@@ -408,6 +408,120 @@ class AudioRouteManagerTests(unittest.TestCase):
         self.assertTrue(created[0].closed)
         self.assertGreaterEqual(len(created), 3)
 
+    def test_route_toggle_does_not_restart_an_unrelated_stream(self):
+        base = _Settings()
+        audio_queue = mock.Mock()
+
+        class FakeRoute:
+            def __init__(self, config, *_args):
+                self.config = copy.deepcopy(config)
+                self.closed = False
+
+            def start(self):
+                return self.config
+
+            def close(self):
+                self.closed = True
+
+        manager = audio_routes.AudioRouteManager(base, [], audio_queue)
+        with mock.patch.object(audio_routes, "AudioRoute", FakeRoute):
+            manager.apply([
+                _route(enabled=False),
+                _route(
+                    id="discord",
+                    name="Discord",
+                    audio_input_process="discord.exe",
+                    audio_input_process_id=84,
+                ),
+            ], [])
+            discord_runtime = manager._routes["discord"]
+
+            manager.set_route_enabled("game", True)
+            game_runtime = manager._routes["game"]
+
+            self.assertIs(manager._routes["discord"], discord_runtime)
+            self.assertFalse(discord_runtime.closed)
+            self.assertTrue(manager.configuration()["routes"][0]["enabled"])
+
+            manager.set_route_enabled("game", False)
+
+        self.assertTrue(game_runtime.closed)
+        self.assertIs(manager._routes["discord"], discord_runtime)
+        self.assertFalse(discord_runtime.closed)
+        self.assertFalse(manager.configuration()["routes"][0]["enabled"])
+        self.assertEqual(
+            audio_queue.discard_source.call_args_list,
+            [mock.call("game"), mock.call("game")],
+        )
+
+    def test_failed_route_edit_restores_only_that_route(self):
+        base = _Settings()
+
+        class FakeRoute:
+            def __init__(self, config, *_args):
+                self.config = copy.deepcopy(config)
+                self.closed = False
+
+            def start(self):
+                if self.config["audio_input_process"] == "missing.exe":
+                    raise OSError("application is not running")
+                return self.config
+
+            def close(self):
+                self.closed = True
+
+        manager = audio_routes.AudioRouteManager(base, [], object())
+        with mock.patch.object(audio_routes, "AudioRoute", FakeRoute):
+            manager.apply([
+                _route(),
+                _route(
+                    id="discord",
+                    name="Discord",
+                    audio_input_process="discord.exe",
+                    audio_input_process_id=84,
+                ),
+            ], [])
+            original_game = manager._routes["game"]
+            original_discord = manager._routes["discord"]
+
+            with self.assertRaisesRegex(RuntimeError, "previous stream was restored"):
+                manager.upsert_route(_route(audio_input_process="missing.exe"))
+
+        self.assertTrue(original_game.closed)
+        self.assertIs(manager._routes["discord"], original_discord)
+        self.assertFalse(original_discord.closed)
+        self.assertEqual(
+            manager.configuration()["routes"][0]["audio_input_process"],
+            "game.exe",
+        )
+
+    def test_plugin_routing_updates_live_processors_without_restarting(self):
+        plugins = [_PluginA(), _PluginB()]
+        manager = audio_routes.AudioRouteManager(_Settings(), plugins, object())
+        route_settings = mock.Mock()
+        route_processor = mock.Mock()
+        runtime = mock.Mock()
+        runtime.config = audio_routes.normalize_route(_route(), 0, manager.base_settings)
+        runtime.settings = route_settings
+        runtime.all_plugins = plugins
+        runtime.processor = route_processor
+        runtime._report_unavailable_plugins = mock.Mock()
+        main_processor = mock.Mock()
+        manager._configs = [copy.deepcopy(runtime.config)]
+        manager._routes = {"game": runtime}
+        manager._main_audio_plugins = []
+        manager._main_processor = main_processor
+
+        selected = manager.update_plugin_routing(
+            {"game": ["_PluginA"]}, ["_PluginB"]
+        )
+
+        self.assertEqual(selected["routes"][0]["plugins"], ["_PluginA"])
+        self.assertEqual(runtime.plugins, [plugins[0]])
+        self.assertEqual(route_processor.plugins, [plugins[0]])
+        route_settings.update.assert_called_once()
+        self.assertEqual(main_processor.plugins, [plugins[1]])
+
 
 class AudioRouteLifecycleTests(unittest.TestCase):
     def test_route_opens_application_capture_with_source_and_plugin_identity(self):

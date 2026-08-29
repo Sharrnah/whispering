@@ -125,6 +125,24 @@ class RouteTranscriptionQueue:
             if self._unfinished_tasks == 0:
                 self._condition.notify_all()
 
+    def discard_source(self, source_id):
+        """Remove queued work for one stopped route, preserving other lanes."""
+        normalized_source = str(source_id or "main")
+        with self._condition:
+            lane = self._lanes.pop(normalized_source, None)
+            removed = len(lane) if lane is not None else 0
+            if removed:
+                self._unfinished_tasks -= removed
+            if normalized_source in self._ready_source_set:
+                self._ready_source_set.discard(normalized_source)
+                self._ready_sources = deque(
+                    ready_source for ready_source in self._ready_sources
+                    if ready_source != normalized_source
+                )
+            if self._unfinished_tasks == 0:
+                self._condition.notify_all()
+            return removed
+
     def join(self):
         with self._condition:
             while self._unfinished_tasks:
@@ -139,4 +157,3 @@ class RouteTranscriptionQueue:
 
     def full(self):
         return False
-

@@ -565,6 +565,180 @@ class AudioRouteManager:
     def main_plugins(self):
         return select_plugins(self.all_plugins, self._main_audio_plugins)
 
+    def _config_index(self, route_id):
+        for index, config in enumerate(self._configs):
+            if config["id"] == route_id:
+                return index
+        return None
+
+    def _start_single_route(self, config):
+        route = AudioRoute(
+            copy.deepcopy(config), self.base_settings, self.all_plugins,
+            self.audio_queue, self.audio_enhancer_resolver
+        )
+        try:
+            route.start()
+        except BaseException:
+            try:
+                route.close()
+            except Exception as close_error:
+                print(f"Could not clean up failed audio route: {close_error}")
+            raise
+        return route, copy.deepcopy(route.config)
+
+    def _discard_queued_route_audio(self, route_id):
+        discard_source = getattr(self.audio_queue, "discard_source", None)
+        if callable(discard_source):
+            discard_source(route_id)
+
+    def upsert_route(self, route_config):
+        """Add or replace one route without interrupting unrelated streams."""
+        if not isinstance(route_config, dict):
+            raise ValueError("The audio route must be an object.")
+
+        with self._lock:
+            requested_id = str(route_config.get("id") or "").strip()
+            if not requested_id:
+                raise ValueError("The audio route needs a stable ID.")
+            existing_index = self._config_index(requested_id)
+            normalize_index = (
+                existing_index if existing_index is not None else len(self._configs)
+            )
+            normalized = normalize_route(
+                copy.deepcopy(route_config), normalize_index, self.base_settings
+            )
+            existing_index = self._config_index(normalized["id"])
+            if existing_index is None and len(self._configs) >= MAX_ADDITIONAL_ROUTES:
+                raise ValueError(
+                    f"At most {MAX_ADDITIONAL_ROUTES} additional audio routes are supported."
+                )
+
+            previous_config = (
+                copy.deepcopy(self._configs[existing_index])
+                if existing_index is not None else None
+            )
+            previous_runtime = self._routes.get(normalized["id"])
+            if (
+                previous_config == normalized
+                and (not normalized["enabled"] or previous_runtime is not None)
+            ):
+                return self.configuration()
+
+            if previous_config is not None:
+                self._discard_queued_route_audio(normalized["id"])
+
+            if previous_runtime is not None:
+                self._routes.pop(normalized["id"], None)
+                try:
+                    previous_runtime.close()
+                except Exception as close_error:
+                    print(
+                        f"Could not close audio route {normalized['name']!r} "
+                        f"before updating it: {close_error}"
+                    )
+
+            candidate = None
+            selected_config = copy.deepcopy(normalized)
+            try:
+                if normalized["enabled"]:
+                    candidate, selected_config = self._start_single_route(normalized)
+            except BaseException as update_error:
+                if previous_runtime is not None and previous_config["enabled"]:
+                    try:
+                        restored, restored_config = self._start_single_route(
+                            previous_config
+                        )
+                        self._routes[previous_config["id"]] = restored
+                        self._configs[existing_index] = restored_config
+                    except BaseException as restore_error:
+                        raise RuntimeError(
+                            "Could not update the audio route, and its previous "
+                            f"stream could not be restored: {restore_error}"
+                        ) from update_error
+                    raise RuntimeError(
+                        "Could not update the audio route. Its previous stream "
+                        f"was restored: {update_error}"
+                    ) from update_error
+                raise RuntimeError(
+                    f"Could not start the audio route: {update_error}"
+                ) from update_error
+
+            if existing_index is None:
+                self._configs.append(selected_config)
+            else:
+                self._configs[existing_index] = selected_config
+            if candidate is not None:
+                self._routes[selected_config["id"]] = candidate
+            return self.configuration()
+
+    def set_route_enabled(self, route_id, enabled):
+        with self._lock:
+            index = self._config_index(str(route_id or "").strip())
+            if index is None:
+                raise ValueError(f"Unknown audio route: {route_id!r}.")
+            updated = copy.deepcopy(self._configs[index])
+            updated["enabled"] = _as_bool(enabled)
+            return self.upsert_route(updated)
+
+    def delete_route(self, route_id):
+        with self._lock:
+            normalized_id = str(route_id or "").strip()
+            index = self._config_index(normalized_id)
+            if index is None:
+                raise ValueError(f"Unknown audio route: {route_id!r}.")
+            runtime = self._routes.pop(normalized_id, None)
+            self._discard_queued_route_audio(normalized_id)
+            if runtime is not None:
+                try:
+                    runtime.close()
+                except Exception as close_error:
+                    print(
+                        f"Could not completely close audio route "
+                        f"{runtime.config.get('name')!r}: {close_error}"
+                    )
+            del self._configs[index]
+            return self.configuration()
+
+    def update_plugin_routing(self, route_plugins, main_audio_plugins):
+        """Apply plugin allowlists live without reopening capture devices."""
+        if not isinstance(route_plugins, dict):
+            raise ValueError("route_plugins must be an object keyed by route ID.")
+        normalized_plugins = {
+            str(route_id): _plugin_names(names, "plugins")
+            for route_id, names in route_plugins.items()
+        }
+        normalized_main = normalize_main_audio_plugins(main_audio_plugins)
+
+        with self._lock:
+            configured_ids = {config["id"] for config in self._configs}
+            unknown_ids = set(normalized_plugins) - configured_ids
+            if unknown_ids:
+                unknown = sorted(unknown_ids)[0]
+                raise ValueError(f"Unknown audio route: {unknown!r}.")
+
+            for index, config in enumerate(self._configs):
+                if config["id"] not in normalized_plugins:
+                    continue
+                updated = copy.deepcopy(config)
+                updated["plugins"] = normalized_plugins[config["id"]]
+                self._configs[index] = updated
+
+                runtime = self._routes.get(config["id"])
+                if runtime is None:
+                    continue
+                runtime.config = copy.deepcopy(updated)
+                runtime.settings.update(updated)
+                runtime.plugins = select_plugins(
+                    runtime.all_plugins, updated["plugins"]
+                )
+                if runtime.processor is not None:
+                    runtime.processor.plugins = runtime.plugins
+
+            self._main_audio_plugins = normalized_main
+            if self._main_processor is not None:
+                self._main_processor.plugins = self.main_plugins()
+            return self.configuration()
+
     def enable_plugins_for_main(self, plugin_names):
         """Add newly enabled plugins to an explicit microphone allowlist."""
         requested = _plugin_names(plugin_names, "plugins")
@@ -659,7 +833,7 @@ class AudioRouteManager:
                             print(f"Could not clean up failed audio route: {close_error}")
                     print(
                         f"Could not start audio route {config['name']!r}: {exc}. "
-                        "It remains configured and can be applied again from the UI."
+                        "It remains configured and can be retried from the UI."
                     )
             self._configs = copy.deepcopy(routes)
             setter = getattr(self.base_settings, "SetOption", None)
@@ -749,6 +923,42 @@ def enable_plugins_for_main(plugin_names):
     if manager is None:
         return False, None
     return manager.enable_plugins_for_main(plugin_names)
+
+
+def upsert_audio_route(route_config):
+    manager = get_audio_route_manager()
+    if manager is None:
+        raise RuntimeError(
+            "Additional audio routes are not available until backend startup is complete."
+        )
+    return manager.upsert_route(route_config)
+
+
+def set_audio_route_enabled(route_id, enabled):
+    manager = get_audio_route_manager()
+    if manager is None:
+        raise RuntimeError(
+            "Additional audio routes are not available until backend startup is complete."
+        )
+    return manager.set_route_enabled(route_id, enabled)
+
+
+def delete_audio_route(route_id):
+    manager = get_audio_route_manager()
+    if manager is None:
+        raise RuntimeError(
+            "Additional audio routes are not available until backend startup is complete."
+        )
+    return manager.delete_route(route_id)
+
+
+def update_audio_route_plugin_routing(route_plugins, main_audio_plugins):
+    manager = get_audio_route_manager()
+    if manager is None:
+        raise RuntimeError(
+            "Additional audio routes are not available until backend startup is complete."
+        )
+    return manager.update_plugin_routing(route_plugins, main_audio_plugins)
 
 
 def close_audio_routes():

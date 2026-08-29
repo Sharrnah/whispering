@@ -13,6 +13,19 @@ def _item(source, label, final=False):
 
 
 class RouteTranscriptionQueueTests(unittest.TestCase):
+
+    def test_discard_source_removes_only_that_routes_waiting_work(self):
+        work = RouteTranscriptionQueue()
+        work.put({"source_id": "game", "final": True, "data": "game-1"})
+        work.put({"source_id": "discord", "final": True, "data": "discord"})
+        work.put({"source_id": "game", "final": True, "data": "game-2"})
+
+        self.assertEqual(work.discard_source("game"), 2)
+        self.assertEqual(work.qsize(), 1)
+        self.assertEqual(work.get_nowait()["data"], "discord")
+        work.task_done()
+        work.join()
+
     def test_realtime_drafts_are_replaced_per_source(self):
         work = RouteTranscriptionQueue()
         work.put(_item("game", "draft 1"))
@@ -67,4 +80,3 @@ class RouteTranscriptionQueueTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

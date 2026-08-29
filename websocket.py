@@ -471,21 +471,47 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
         request_id = str(request_value.get("request_id") or "") if isinstance(request_value, dict) else ""
         if not isinstance(request_value, dict):
             request_value = {}
+        operation = str(request_value.get("operation") or "replace")
         try:
-            routes = request_value.get("routes", [])
-            if "main_audio_plugins" in request_value:
+            if operation == "set_enabled":
                 selected = await asyncio.to_thread(
-                    audio_routes.apply_audio_routes,
-                    routes,
+                    audio_routes.set_audio_route_enabled,
+                    request_value.get("route_id"),
+                    request_value.get("enabled"),
+                )
+            elif operation == "upsert":
+                selected = await asyncio.to_thread(
+                    audio_routes.upsert_audio_route,
+                    request_value.get("route"),
+                )
+            elif operation == "delete":
+                selected = await asyncio.to_thread(
+                    audio_routes.delete_audio_route,
+                    request_value.get("route_id"),
+                )
+            elif operation == "plugin_routing":
+                selected = await asyncio.to_thread(
+                    audio_routes.update_audio_route_plugin_routing,
+                    request_value.get("route_plugins", {}),
                     request_value.get("main_audio_plugins"),
                 )
+            elif operation == "replace":
+                routes = request_value.get("routes", [])
+                if "main_audio_plugins" in request_value:
+                    selected = await asyncio.to_thread(
+                        audio_routes.apply_audio_routes,
+                        routes,
+                        request_value.get("main_audio_plugins"),
+                    )
+                else:
+                    selected = await asyncio.to_thread(
+                        audio_routes.apply_audio_routes,
+                        routes,
+                    )
             else:
-                selected = await asyncio.to_thread(
-                    audio_routes.apply_audio_routes,
-                    routes,
-                )
+                raise ValueError(f"Unsupported audio route operation: {operation!r}.")
         except Exception as exc:
-            print(f"Could not apply additional audio routes: {exc}")
+            print(f"Could not update additional audio routes: {exc}")
             await server_instance.send(websocket, json.dumps({
                 "type": "audio_routes_update_result",
                 "data": {
@@ -496,10 +522,11 @@ async def custom_message_handler(server_instance, msg_obj, websocket):
             }))
             return
 
-        # Persist only after every new stream has opened. SettingsManager merges
-        # these two dirty keys against the latest UI-written profile revision.
+        # Persist only after the route operation succeeds. SettingsManager
+        # merges these dirty keys against the latest UI-written profile revision.
         settings.SetOption("additional_audio_routes", selected["routes"])
-        settings.SetOption("main_audio_plugins", selected["main_audio_plugins"])
+        if operation in {"replace", "plugin_routing"}:
+            settings.SetOption("main_audio_plugins", selected["main_audio_plugins"])
         await server_instance.send(websocket, json.dumps({
             "type": "audio_routes_update_result",
             "data": {
