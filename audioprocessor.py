@@ -791,6 +791,135 @@ def convert_numpy_to_audio_bytes(audio_data_numpy: np.ndarray, sample_rate: int 
 
     return audio_bytes_io.read()
 
+
+def _postprocess_denoised_pcm(audio_pcm, settings):
+    """Apply the normal recording cleanup after asynchronous denoising."""
+    samples = np.asarray(audio_pcm, dtype=np.int16).reshape(-1)
+    block_size_samples = int(whisper.audio.SAMPLE_RATE * 0.400)
+
+    if settings.GetOption("normalize_enabled") and samples.size >= block_size_samples:
+        normalized = audio_tools.convert_audio_datatype_to_float(samples)
+        normalized, _ = audio_tools.normalize_audio_lufs(
+            normalized,
+            whisper.audio.SAMPLE_RATE,
+            settings.GetOption("normalize_lower_threshold"),
+            settings.GetOption("normalize_upper_threshold"),
+            settings.GetOption("normalize_gain_factor"),
+            verbose=bool(settings.GetOption("verbose")),
+        )
+        samples = audio_tools.convert_audio_datatype_to_integer(
+            normalized,
+            np.int16,
+        )
+
+    if settings.GetOption("silence_cutting_enabled") and samples.size >= block_size_samples:
+        samples = audio_tools.remove_silence_parts(
+            samples,
+            whisper.audio.SAMPLE_RATE,
+            silence_offset=settings.GetOption("silence_offset"),
+            max_silence_length=settings.GetOption("max_silence_length"),
+            keep_silence_length=settings.GetOption("keep_silence_length"),
+            verbose=bool(settings.GetOption("verbose")),
+        )
+
+    return np.ascontiguousarray(samples, dtype=np.int16).tobytes()
+
+
+def enhance_queued_realtime_audio(queue_data, denoise_streams):
+    """Enhance queued draft/final audio instead of the capture callback."""
+    denoise_pcm = queue_data.get("denoise_pcm")
+    settings = queue_data["settings"]
+    mode = str(settings.GetOption("denoise_audio") or "").strip().casefold()
+    if denoise_pcm is None or not mode:
+        return queue_data["data"]
+
+    source_id = str(queue_data.get("source_id") or "main")
+    post_filter = bool(settings.GetOption("denoise_audio_post_filter"))
+    stream_key = (mode, post_filter)
+    cached = denoise_streams.get(source_id)
+    if cached is None or cached[0] != stream_key:
+        if cached is not None:
+            cached[1].reset()
+        # Imported lazily to avoid the audio_routes -> audioprocessor startup
+        # dependency becoming a module-level cycle.
+        import audio_routes
+
+        enhancer = audio_routes.get_audio_enhancer(
+            mode,
+            post_filter=post_filter,
+        )
+        stream = enhancer.create_stream(
+            whisper.audio.SAMPLE_RATE,
+            input_channels=1,
+            output_channels=1,
+        )
+        denoise_streams[source_id] = (stream_key, stream)
+    else:
+        stream = cached[1]
+
+    enhanced = stream.enhance_prefix(
+        denoise_pcm,
+        strength=settings.GetOption("denoise_strength"),
+    )
+    processed_pcm = _postprocess_denoised_pcm(enhanced, settings)
+    if not processed_pcm:
+        return b""
+    return audio_tools.audio_bytes_to_wav(
+        processed_pcm,
+        channels=1,
+        sample_rate=whisper.audio.SAMPLE_RATE,
+    )
+
+
+def run_queued_final_audio_consumers(audio, queue_data):
+    """Deliver worker-enhanced final PCM to STS plugins and WAV export."""
+    if not queue_data.get("run_final_audio_consumers"):
+        return
+
+    settings = queue_data["settings"]
+    plugins = queue_data.get("plugins")
+    if plugins is not None:
+        try:
+            pcm = audio_tools.wav_bytes_to_numpy_array(audio)
+            if pcm is not None:
+                pcm = np.ascontiguousarray(pcm, dtype=np.int16).reshape(-1)
+                # Imported lazily to avoid adding a module-level dependency to
+                # the recorder while application startup is still assembling.
+                import audio_processing_recording
+
+                audio_processing_recording.call_plugin_sts(
+                    plugins,
+                    pcm.tobytes(),
+                    whisper.audio.SAMPLE_RATE,
+                )
+        except Exception as exc:
+            print(f"Could not deliver enhanced audio to STS plugins: {exc}")
+            traceback.print_exc()
+
+    transcription_save_audio_dir = settings.GetOption(
+        "transcription_save_audio_dir"
+    )
+    if transcription_save_audio_dir:
+        try:
+            start_time_str = Utilities.ns_to_datetime(
+                queue_data.get("time", time.time_ns()),
+                formatting='%Y-%m-%d %H_%M_%S-%f',
+            )
+            audio_file_path = (
+                Path(transcription_save_audio_dir)
+                / f"audio_transcript_{start_time_str}.wav"
+            )
+            audio_file_path.write_bytes(bytes(audio))
+        except Exception as exc:
+            print(f"Could not save enhanced transcription audio: {exc}")
+            traceback.print_exc()
+
+
+def reset_queued_realtime_denoiser(denoise_streams, source_id):
+    cached = denoise_streams.pop(str(source_id or "main"), None)
+    if cached is not None:
+        cached[1].reset()
+
 def whisper_result_thread(result, audio_timestamp, final_audio, settings, plugins,
                           source_id="main", source_name="Microphone"):
     result["audio_source_id"] = str(source_id or "main")
@@ -1256,6 +1385,7 @@ def whisper_worker():
 
     last_audio_times = {}
     last_whisper_results = {}
+    realtime_denoise_streams = {}
 
     print("Whispering Tiger is now ready!")
 
@@ -1293,6 +1423,23 @@ def whisper_worker():
             if audio_timestamp < last_audio_times.get(source_id, 0) and not final_audio:
                 continue
 
+            try:
+                audio = enhance_queued_realtime_audio(
+                    queue_data,
+                    realtime_denoise_streams,
+                )
+            except Exception as exc:
+                print(f"Queued noise cancellation failed; using unfiltered audio: {exc}")
+                traceback.print_exc()
+                audio = queue_data["data"]
+
+            # Silence removal may intentionally discard an enhanced draft.
+            if audio is None or len(audio) == 0:
+                continue
+
+            if final_audio:
+                run_queued_final_audio_consumers(audio, queue_data)
+
             # The loaded model is intentionally entered by this worker only.
             # Multiple capture routes continue recording while inference runs,
             # and their completed utterances wait in fair source-local lanes.
@@ -1307,6 +1454,11 @@ def whisper_worker():
             if result_text is not None:
                 last_whisper_results[source_id] = result_text
         finally:
+            if final_audio:
+                reset_queued_realtime_denoiser(
+                    realtime_denoise_streams,
+                    source_id,
+                )
             q.task_done()
 
 

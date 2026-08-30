@@ -130,7 +130,10 @@ class SettingsManager:
             "normalize_upper_threshold": -16.0,
             "normalize_gain_factor": 2.0,
             "denoise_audio": "",  # if enabled, audio will be de-noised before processing. (Can be empty, "deepfilter" or "noise_reduce")
-            "denoise_audio_before_trigger": False,  # if enabled, noise cancellation will be applied on the audio chunks before recording trigger conditions are detected.
+            # Opt-in: a background worker confirms the volume of a raw
+            # Volume + VAD candidate after denoising. Default-off avoids
+            # trigger-decision latency and rejection of quiet speech.
+            "denoise_audio_before_trigger": False,
             "denoise_audio_post_filter": False,  # Enable post filter for some minor, extra noise reduction.
             "denoise_strength": 1.0,  # strength of noise reduction (0.0 - 1.0)
             # Legacy compatibility only. STT inference now uses one serialized

@@ -874,7 +874,24 @@ if __name__ == '__main__':
                     # get and save audio to wav file
                     audio = r.listen(source, phrase_time_limit=phrase_time_limit)
 
-                    audio_data = audio.get_wav_data()
+                    # All preprocessing below expects raw signed PCM16. Passing
+                    # get_wav_data() here treated the RIFF header as samples and
+                    # then wrapped the result in a second WAV container.
+                    audio_data = audio.get_raw_data(
+                        convert_rate=SAMPLE_RATE,
+                        convert_width=2,
+                    )
+
+                    # The non-VAD recorder must resume listening immediately.
+                    # Send untouched PCM to the STT worker for enhancement and
+                    # retain the normal post-processed WAV as its fail-open
+                    # fallback; never run the denoiser in this capture loop.
+                    denoise_pcm = None
+                    if (
+                        settings.SETTINGS.GetOption("denoise_audio")
+                        and audio_enhancer is not None
+                    ):
+                        denoise_pcm = bytes(audio_data)
 
                     silence_cutting_enabled = settings.SETTINGS.GetOption("silence_cutting_enabled")
                     silence_offset = settings.SETTINGS.GetOption("silence_offset")
@@ -907,14 +924,9 @@ if __name__ == '__main__':
                             )
                             audio_data = audio_data.tobytes()
 
-                    # denoise audio
-                    if settings.SETTINGS.GetOption("denoise_audio") == "deepfilter" and audio_enhancer is not None:
-                        denoise_strength = settings.SETTINGS.GetOption("denoise_strength")
-                        audio_data = audio_enhancer.enhance_audio(audio_data, strength=denoise_strength).tobytes()
-
                     # add audio data to the queue
                     wav_audio_bytes = audio_tools.audio_bytes_to_wav(audio_data, channels=CHANNELS, sample_rate=SAMPLE_RATE)
-                    audioprocessor.q.put({
+                    queue_item = {
                         'time': time.time_ns(),
                         'data': wav_audio_bytes,
                         'final': True,
@@ -922,7 +934,11 @@ if __name__ == '__main__':
                         'plugins': route_manager.main_plugins(),
                         'source_id': 'main',
                         'source_name': 'Microphone',
-                    })
+                    }
+                    if denoise_pcm is not None:
+                        queue_item['denoise_pcm'] = denoise_pcm
+                        queue_item['run_final_audio_consumers'] = True
+                    audioprocessor.q.put(queue_item)
 
                     # set typing indicator for VRChat and websocket clients
                     typing_indicator_thread = threading.Thread(target=typing_indicator_function,

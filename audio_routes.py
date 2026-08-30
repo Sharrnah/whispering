@@ -8,6 +8,7 @@ import audio_processing_recording
 import audio_tools
 import VRC_OSCLib
 from Models.STS import SmartTurn, VAD
+from Models.STS.AudioEnhancer import IncrementalAudioEnhancer
 
 
 SAMPLE_RATE = 16000
@@ -41,6 +42,10 @@ class _SynchronizedAudioEnhancer:
     def enhance_audio(self, *args, **kwargs):
         with self._lock:
             return self._enhancer.enhance_audio(*args, **kwargs)
+
+    def create_stream(self, sample_rate, **kwargs):
+        """Create independent prefix/cache state around the shared model."""
+        return IncrementalAudioEnhancer(self, sample_rate, **kwargs)
 
 
 def get_audio_enhancer(mode, post_filter=False):
