@@ -1,9 +1,9 @@
 import numpy as np
-import torch
 from scipy.io import wavfile
 
 import audio_tools
 from Models.Singleton import SingletonMeta
+from Models.STS.AudioEnhancer import float32_to_pcm16
 import noisereduce as nr
 # from noisereduce.torchgate import TorchGate as TG
 
@@ -16,46 +16,54 @@ class Noisereduce(metaclass=SingletonMeta):
         pass
 
     def int2float(self, sound):
-        abs_max = np.abs(sound).max()
-        sound = sound.astype('float32')
-        if abs_max > 0:
-            sound *= 1 / abs_max
-        sound = sound.squeeze()  # depends on the use case
-        return sound
+        """Convert PCM to normalized float audio without boosting its noise floor."""
+        sound = np.asarray(sound)
+        if np.issubdtype(sound.dtype, np.integer):
+            scale = float(max(abs(np.iinfo(sound.dtype).min), np.iinfo(sound.dtype).max))
+            sound = sound.astype(np.float32) / scale
+        else:
+            sound = sound.astype(np.float32, copy=False)
+        return sound.squeeze()
 
     def enhance_audio(self, audio_bytes, sample_rate=16000, output_sample_rate=16000, input_channels=1, output_channels=1, strength=1.0):
-        audio_full_int16 = np.frombuffer(audio_bytes, np.int16)
-        audio_bytes = self.int2float(audio_full_int16)
+        strength = float(np.clip(strength, 0.0, 1.0))
+        input_channels = max(1, int(input_channels or 1))
+        output_channels = max(1, int(output_channels or 1))
 
-        audio_tensor = torch.frombuffer(audio_bytes, dtype=torch.float32).unsqueeze_(0)
-        # reduce noise on tensor
-        enhanced_audio = nr.reduce_noise(y=audio_tensor, sr=sample_rate, prop_decrease=strength)
+        audio_full_int16 = np.frombuffer(audio_bytes, dtype=np.int16)
+        if audio_full_int16.size % input_channels:
+            raise ValueError("PCM sample count is not divisible by input_channels.")
+        if (
+            strength <= 0.0
+            and int(sample_rate) == int(output_sample_rate)
+            and input_channels == output_channels
+        ):
+            return audio_full_int16.copy()
+        audio_float = (
+            audio_full_int16.reshape(-1, input_channels).astype(np.float32)
+            / 32768.0
+        ).mean(axis=1)
 
-        # convert torch tensor to bytes
-        enhanced_audio = torch.as_tensor(enhanced_audio)
+        if strength <= 0.0 or audio_float.size == 0:
+            enhanced_audio = audio_float
+        else:
+            enhanced_audio = nr.reduce_noise(
+                y=audio_float,
+                sr=sample_rate,
+                prop_decrease=strength,
+                use_tqdm=False,
+            )
+            enhanced_audio = np.asarray(enhanced_audio, dtype=np.float32).reshape(-1)
 
-        if enhanced_audio.ndim == 1:
-            enhanced_audio.unsqueeze_(0)
-
-        if enhanced_audio.dtype != torch.int16:
-            enhanced_audio = (enhanced_audio * (1 << 15)).to(torch.int16)
-        elif enhanced_audio.dtype != torch.float32:
-            enhanced_audio = enhanced_audio.to(torch.float32) / (1 << 15)
-
-        enhanced_audio = enhanced_audio.squeeze().numpy().astype(np.int16).tobytes()
-
-        audio_bytes = audio_tools.resample_audio(enhanced_audio, sample_rate, output_sample_rate, output_channels,
-                                                 input_channels=input_channels)
-
-        # clear variables
-        enhanced_audio = None
-        del enhanced_audio
-        audio_tensor = None
-        del audio_tensor
-        audio_full_int16 = None
-        del audio_full_int16
-
-        return audio_bytes
+        enhanced_audio = audio_tools.resample_audio(
+            enhanced_audio,
+            sample_rate,
+            output_sample_rate,
+            target_channels=output_channels,
+            input_channels=1,
+            dtype="float32",
+        )
+        return float32_to_pcm16(enhanced_audio)
 
     def noise_reduction_file(self, path) -> bytes:
         """

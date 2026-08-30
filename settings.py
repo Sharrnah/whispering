@@ -66,6 +66,14 @@ class SettingsManager:
             "device_index": None,  # input device index for STT
             "device_out_index": None,  # output device index for TTS
 
+            # Native additional capture routes. These routes reuse the primary
+            # STT model and only override source-specific capture, language,
+            # translation, output, and plugin routing settings.
+            "additional_audio_routes": [],
+            # None keeps the legacy behavior (all plugins receive microphone
+            # audio). An explicit list, including an empty one, is an allowlist.
+            "main_audio_plugins": None,
+
             # whisper settings
             "stt_enabled": True,  # enable STT (if disabled, stops sending audio to whisper)
             "ai_device": None,  # can be None (auto), "cuda" or "cpu".
@@ -122,10 +130,15 @@ class SettingsManager:
             "normalize_upper_threshold": -16.0,
             "normalize_gain_factor": 2.0,
             "denoise_audio": "",  # if enabled, audio will be de-noised before processing. (Can be empty, "deepfilter" or "noise_reduce")
-            "denoise_audio_before_trigger": False,  # if enabled, noise cancellation will be applied on the audio chunks before recording trigger conditions are detected.
+            # Opt-in: a background worker confirms the volume of a raw
+            # Volume + VAD candidate after denoising. Default-off avoids
+            # trigger-decision latency and rejection of quiet speech.
+            "denoise_audio_before_trigger": False,
             "denoise_audio_post_filter": False,  # Enable post filter for some minor, extra noise reduction.
             "denoise_strength": 1.0,  # strength of noise reduction (0.0 - 1.0)
-            "thread_per_transcription": True,  # Use a separate thread for each transcription.
+            # Legacy compatibility only. STT inference now uses one serialized
+            # shared-model worker so mutable model state is never entered twice.
+            "thread_per_transcription": False,
             "speaker_diarization": False,  # Enable speaker diarization.
             "speaker_change_split": True,  # Split audio at speaker changes. (when speaker diarization is enabled)
             "min_speaker_length": 0.5,  # minimum length a speaker should talk. (to reduce speaker change fluctuations)

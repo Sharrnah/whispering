@@ -1,4 +1,5 @@
 import os
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -55,7 +56,7 @@ def truncate_audio_to_last_n_seconds(audio_array, n_seconds=8, sample_rate=16000
 class SmartTurn:
     feature_extractor = None
     session = None
-    audio_array = np.array([])
+    _runtime_lock = threading.RLock()
 
     device = "cpu"
     providers = None
@@ -70,38 +71,42 @@ class SmartTurn:
         self.sample_rate = sample_rate
         self.min_audio_length = min_audio_length
         self.max_buffer_seconds = max_buffer_seconds
+        self.audio_array = np.array([], dtype=np.float32)
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        try:
-            downloader.download_model({
-                "model_path": cache_path,
-                "model_link_dict": MODEL_LINKS,
-                "model_name": "smart-turn3.2",
-                "title": "Smart Turn",
+        runtime = type(self)
+        with runtime._runtime_lock:
+            if runtime.session is not None:
+                return
 
-                "alt_fallback": False,
-                "force_non_ui_dl": False,
-                "extract_format": "zip",
-            }, self.download_state)
-        except Exception as e:
-            print("Error loading smart turn model.")
-            print(e)
+            try:
+                downloader.download_model({
+                    "model_path": cache_path,
+                    "model_link_dict": MODEL_LINKS,
+                    "model_name": "smart-turn3.2",
+                    "title": "Smart Turn",
 
-        if self.feature_extractor is None:
-            self.feature_extractor = WhisperFeatureExtractor(chunk_length=8)
-        if self.session is None:
-            self.providers = ["CPUExecutionProvider"]
+                    "alt_fallback": False,
+                    "force_non_ui_dl": False,
+                    "extract_format": "zip",
+                }, runtime.download_state)
+            except Exception as e:
+                print("Error loading smart turn model.")
+                print(e)
+
+            if runtime.feature_extractor is None:
+                runtime.feature_extractor = WhisperFeatureExtractor(chunk_length=8)
+            runtime.providers = ["CPUExecutionProvider"]
             try:
                 avail = ort.get_available_providers()
                 if self.device == "cuda" and "CUDAExecutionProvider" in avail:
                     print("Loading Smart Turn using ONNX Runtime with CUDAExecutionProvider")
-                    self.providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-                    self.session = self.build_session(str(Path(cache_path / "smart-turn-v3.2-gpu.onnx").resolve()))
+                    runtime.providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+                    runtime.session = self.build_session(str(Path(cache_path / "smart-turn-v3.2-gpu.onnx").resolve()))
                 else:
                     print("Loading Smart Turn using ONNX Runtime with CPUExecutionProvider")
-                    self.providers = ["CPUExecutionProvider"]
-                    self.session = self.build_session(str(Path(cache_path / "smart-turn-v3.2-cpu.onnx").resolve()))
+                    runtime.session = self.build_session(str(Path(cache_path / "smart-turn-v3.2-cpu.onnx").resolve()))
             except Exception as e:
                 print("Error initializing ONNX Runtime session for Smart Turn.")
                 print(e)
@@ -116,7 +121,11 @@ class SmartTurn:
         so.inter_op_num_threads = 1
         so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
-        return ort.InferenceSession(onnx_path, providers=self.providers, sess_options=so)
+        return ort.InferenceSession(
+            onnx_path,
+            providers=type(self).providers,
+            sess_options=so,
+        )
 
     def clear_session(self):
         """Clear the current audio session."""
@@ -161,22 +170,27 @@ class SmartTurn:
         audio_for_infer = truncate_audio_to_last_n_seconds(self.audio_array, n_seconds=infer_seconds, sample_rate=self.sample_rate)
 
         # Process audio using Whisper's feature extractor
-        inputs = self.feature_extractor(
-            audio_for_infer,
-            sampling_rate=self.sample_rate,
-            return_tensors="np",
-            padding="max_length",
-            max_length=infer_seconds * self.sample_rate,
-            truncation=True,
-            do_normalize=True,
-        )
+        runtime = type(self)
+        with runtime._runtime_lock:
+            if runtime.feature_extractor is None or runtime.session is None:
+                raise RuntimeError("Smart Turn model is not loaded.")
+            inputs = runtime.feature_extractor(
+                audio_for_infer,
+                sampling_rate=self.sample_rate,
+                return_tensors="np",
+                padding="max_length",
+                max_length=infer_seconds * self.sample_rate,
+                truncation=True,
+                do_normalize=True,
+            )
 
-        # Extract features and ensure correct shape for ONNX
-        input_features = inputs.input_features.squeeze(0).astype(np.float32)
-        input_features = np.expand_dims(input_features, axis=0)  # Add batch dimension
+            # Extract features and ensure correct shape for ONNX
+            input_features = inputs.input_features.squeeze(0).astype(np.float32)
+            input_features = np.expand_dims(input_features, axis=0)  # Add batch dimension
 
-        # Run ONNX inference
-        outputs = self.session.run(None, {"input_features": input_features})
+            # Share one runtime session, but never enter it from two capture
+            # callbacks at once.
+            outputs = runtime.session.run(None, {"input_features": input_features})
 
         # Extract probability (ONNX model returns sigmoid probabilities)
         probability = outputs[0][0].item()

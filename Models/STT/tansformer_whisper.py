@@ -187,34 +187,46 @@ class TransformerWhisper(metaclass=SingletonMeta):
 
         compute_dtype = self._str_to_dtype_dict(self.compute_type).get('dtype', torch.float32)
 
-        return_language = language
+        auto_language = language is None or str(language).strip().casefold() in {"", "auto", "none", "null"}
+        generation_language = None if auto_language else language
+        return_language = generation_language
 
         if self.model is not None and self.processor is not None:
-            processor_result = self.processor(audio_sample, sampling_rate=16000, return_tensors="pt", return_attention_mask=True).to(self.compute_device).to(compute_dtype)
+            # Whisper's feature extractor truncates to 30 seconds by default. Keeping
+            # truncation disabled lets Transformers' native timestamp-based generate
+            # loop consume the complete mel spectrogram in sequential 30-second
+            # windows. The default max-length padding remains useful for short audio.
+            processor_result = self.processor(
+                audio_sample,
+                sampling_rate=16000,
+                return_tensors="pt",
+                return_attention_mask=True,
+                truncation=False,
+            ).to(self.compute_device).to(compute_dtype)
             input_features = processor_result.input_features
             attention_mask = processor_result.attention_mask
 
             transcriptions = [""]
             with torch.no_grad():
 
+                if auto_language:
+                    return_language = self._detect_language(input_features)
+                    if return_language is not None and self._is_multilingual_model():
+                        # Supplying the detected code avoids making generate perform
+                        # the same language-detection pass a second time.
+                        generation_language = return_language
+
                 # result = self.pipe(audio_sample, return_timestamps="word", generate_kwargs={"task": task, "language": language, "num_beams": beam_size})
                 # print("result")
                 # print(result)
 
                 predicted_ids = self.model.generate(input_features=input_features,
-                                                    task=task, language=language, num_beams=beam_size,
+                                                    task=task, language=generation_language, num_beams=beam_size,
                                                     return_timestamps=True,
                                                     forced_decoder_ids=None,
                                                     attention_mask=attention_mask,
                                                     )
                 transcriptions = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)
-
-                # @todo this does not work anymore to get the detected language
-                #pred_language = self.processor.batch_decode(predicted_ids[:, 1:2], skip_special_tokens=False)
-                # remove "<|" and "|>" from pred_language
-                #if len(pred_language) > 0:
-                #    pred_language = [lang.strip("<|>") for lang in pred_language]
-                #    return_language = pred_language[0]
 
             result_text = ''.join(transcriptions).strip()
 
@@ -229,6 +241,43 @@ class TransformerWhisper(metaclass=SingletonMeta):
                 'type': task,
                 'language': return_language
             }
+
+    def _is_multilingual_model(self):
+        generation_config = getattr(self.model, "generation_config", None)
+        lang_to_id = getattr(generation_config, "lang_to_id", None)
+        is_multilingual = getattr(generation_config, "is_multilingual", None)
+        return bool(lang_to_id) if is_multilingual is None else bool(is_multilingual)
+
+    def _detect_language(self, input_features):
+        generation_config = getattr(self.model, "generation_config", None)
+        lang_to_id = getattr(generation_config, "lang_to_id", None)
+
+        # English-only Whisper checkpoints do not have language tokens or run
+        # language detection, but their output language is known.
+        if getattr(generation_config, "is_multilingual", None) is False:
+            return "en"
+
+        if not lang_to_id or not hasattr(self.model, "detect_language"):
+            return None
+
+        try:
+            detected_ids = self.model.detect_language(
+                input_features=input_features,
+                generation_config=generation_config,
+            )
+            detected_id = int(detected_ids.reshape(-1)[0].item())
+        except Exception as error:
+            print(f"Warning: Whisper-Transformer language detection failed: {error}")
+            return None
+
+        for language_token, language_id in lang_to_id.items():
+            if int(language_id) == detected_id:
+                if language_token.startswith("<|") and language_token.endswith("|>"):
+                    return language_token[2:-2]
+                return language_token
+
+        print(f"Warning: Whisper-Transformer returned unknown language token id {detected_id}.")
+        return None
 
     def release_model(self):
         if self.model is not None:

@@ -101,6 +101,34 @@ class SettingsPersistenceTests(unittest.TestCase):
             self.assertEqual(saved["process_id"], 0)
             self.assertEqual(backend._dirty_settings, {})
 
+    def test_newer_ui_audio_routes_win_over_a_delayed_backend_save(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            profile_path = Path(temp_dir) / "profile.yaml"
+            original_routes = [{"id": "game", "name": "Old game", "enabled": True}]
+            profile_path.write_text(
+                yaml.safe_dump({"additional_audio_routes": original_routes}),
+                encoding="utf-8",
+            )
+
+            backend = SettingsManager()
+            backend.load_yaml(profile_path)
+            with mock.patch.object(backend, "debounced_save_yaml"):
+                backend.set_option(
+                    "additional_audio_routes",
+                    [{"id": "game", "name": "Backend edit", "enabled": True}],
+                )
+
+            ui_routes = [{"id": "game", "name": "Newest UI edit", "enabled": False}]
+            profile_path.write_text(
+                yaml.safe_dump({"additional_audio_routes": ui_routes}),
+                encoding="utf-8",
+            )
+            backend.flush_pending_save()
+
+            saved = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["additional_audio_routes"], ui_routes)
+            self.assertEqual(backend.get_option("additional_audio_routes"), ui_routes)
+
 
 if __name__ == "__main__":
     unittest.main()

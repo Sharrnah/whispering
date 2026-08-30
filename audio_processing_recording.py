@@ -2,6 +2,7 @@
 import inspect
 import time
 import traceback
+from collections import deque
 
 import platform
 if platform.system() == 'Windows':
@@ -18,11 +19,16 @@ from whisper import audio as whisper_audio
 import wave
 import Utilities
 import Models.STS.SpeakerDiarization as speaker_diarization
+from Models.STS.AudioEnhancer import as_pcm16_array
 import queue
 
 SAMPLE_RATE = whisper_audio.SAMPLE_RATE
 CHUNK = int(SAMPLE_RATE / 10)
 CHANNELS = 1
+
+_TRIGGER_FILTER_CONTEXT_SECONDS = 0.5
+_TRIGGER_FILTER_PREROLL_SECONDS = 0.5
+_TRIGGER_FILTER_SUBMIT_INTERVAL_SECONDS = 0.1
 
 
 MAIN_APP_BEFORE_CALLBACK_FUNC_LISTS = {
@@ -120,6 +126,17 @@ def call_plugin_realtime_sts(plugins, wavefiledata, sample_rate, input_channels=
                 traceback.print_exc()
 
 
+def has_realtime_sts_plugin(plugins):
+    """Avoid a callback thread when no selected plugin consumes raw audio."""
+    for plugin_inst in (plugins or ()):
+        if not hasattr(plugin_inst, 'realtime_sts'):
+            continue
+        if hasattr(plugin_inst, 'is_enabled') and not plugin_inst.is_enabled(False):
+            continue
+        return True
+    return False
+
+
 def process_audio_chunk(audio_chunk, sample_rate, vad_model=None):
     audio_int16 = np.frombuffer(audio_chunk, np.int16)
     audio_float32 = int2float(audio_int16)
@@ -127,7 +144,12 @@ def process_audio_chunk(audio_chunk, sample_rate, vad_model=None):
         new_confidence = vad_model.run_vad(torch.from_numpy(audio_float32), sample_rate).item()
     else:
         new_confidence = 9.9
-    peak_amplitude = np.max(np.abs(audio_int16))
+    # Convert each extrema to Python int before negation. np.abs(int16(-32768))
+    # overflows back to -32768, which could otherwise hide a full-scale peak.
+    peak_amplitude = max(
+        int(np.max(audio_int16)),
+        -int(np.min(audio_int16)),
+    )
 
     # clear the variables
     audio_int16 = None
@@ -173,6 +195,10 @@ class AudioProcessor:
                  before_recording_running_callback_func=None,
                  before_recording_stopped_callback_func=None,
 
+                 source_id="main",
+                 source_name="Microphone",
+                 enable_mic_passthrough=True,
+
                  verbose=False
                  ):
         # Stream replacement waits for an in-flight callback before clearing
@@ -213,6 +239,8 @@ class AudioProcessor:
 
         self.audio_queue = audio_queue
         self.settings = settings
+        self.source_id = str(source_id or "main")
+        self.source_name = str(source_name or self.source_id)
 
         self.diarization_model = None
         self.typing_indicator_function = typing_indicator_function
@@ -227,12 +255,37 @@ class AudioProcessor:
         self.before_recording_starts_callback_func = before_recording_starts_callback_func
         self.before_recording_running_callback_func = before_recording_running_callback_func
 
+        # Kept as a compatibility attribute for older integrations. Trigger
+        # confirmation now uses bounded chunk deques and a dedicated worker.
         self.audio_filter_buffer = None
+        self._trigger_filter_lock = threading.RLock()
+        self._trigger_filter_requests = queue.Queue(maxsize=1)
+        self._trigger_filter_results = queue.Queue()
+        self._trigger_filter_closed = threading.Event()
+        self._trigger_filter_generation = 0
+        self._trigger_filter_next_request_id = 0
+        self._trigger_filter_latest_request_id = 0
+        self._trigger_filter_last_submit_time = 0.0
+        self._trigger_filter_enabled = False
+        self._trigger_filter_context = deque()
+        self._trigger_filter_context_bytes = 0
+        self._trigger_filter_preroll = deque()
+        self._trigger_filter_preroll_bytes = 0
+        self._trigger_filter_candidate_frames = None
+        self._trigger_filter_thread = None
+        if self.audio_enhancer is not None:
+            self._trigger_filter_thread = threading.Thread(
+                target=self._trigger_filter_worker,
+                name=f"denoised-trigger-{self.source_id}",
+                daemon=True,
+            )
+            self._trigger_filter_thread.start()
 
         self.default_mic_audio_streamer = None
         self.mic_passthrough_queue = queue.Queue(maxsize=100)
+        self._mic_passthrough_closed = threading.Event()
         def mic_passthrough_thread_func():
-            while True:
+            while not self._mic_passthrough_closed.is_set():
                 # initialize the audio streamer for mic passthrough
                 if self.default_mic_audio_streamer is None and self.settings.GetOption("mic_passthrough_routing"):
                     try:
@@ -288,8 +341,10 @@ class AudioProcessor:
                             except Exception as e:
                                 print("mic passthrough processing error:", e)
 
-        self.mic_passthrough_thread = threading.Thread(target=mic_passthrough_thread_func, daemon=True)
-        self.mic_passthrough_thread.start()
+        self.mic_passthrough_thread = None
+        if enable_mic_passthrough:
+            self.mic_passthrough_thread = threading.Thread(target=mic_passthrough_thread_func, daemon=True)
+            self.mic_passthrough_thread.start()
 
         # run callback after timeout even if no audio was detected (and such callback not called by pyAudio)
         # self.timer_reset_event = threading.Event()
@@ -301,6 +356,326 @@ class AudioProcessor:
     def reset_for_audio_input_switch(self):
         with self._audio_input_state_lock:
             self._reset_for_audio_input_switch_locked()
+
+    def close(self):
+        """Stop auxiliary processor resources owned outside the input stream."""
+        self._mic_passthrough_closed.set()
+        self._close_trigger_filter_worker()
+        if self.default_mic_audio_streamer is not None:
+            try:
+                self.default_mic_audio_streamer.stop()
+            except Exception as exc:
+                print(f"Could not stop microphone passthrough: {exc}")
+            self.default_mic_audio_streamer = None
+
+    def _settings_for_queue(self):
+        snapshot = getattr(self.settings, "snapshot", None)
+        if callable(snapshot):
+            return snapshot()
+        return self.settings
+
+    @staticmethod
+    def _drain_queue(target_queue):
+        if target_queue is None:
+            return
+        while True:
+            try:
+                target_queue.get_nowait()
+                target_queue.task_done()
+            except queue.Empty:
+                return
+
+    @staticmethod
+    def _append_bounded_chunk(chunks, byte_count, chunk, byte_limit):
+        chunk = bytes(chunk)
+        chunks.append(chunk)
+        byte_count += len(chunk)
+        # Keep complete recorder chunks so pre-roll can be inserted into
+        # ``frames`` without changing channel/sample boundaries.
+        while byte_count > byte_limit and len(chunks) > 1:
+            byte_count -= len(chunks.popleft())
+        return byte_count
+
+    def _reset_trigger_filter_state(self, *, enabled=None):
+        """Invalidate pending checks and discard source-specific trigger audio."""
+        trigger_lock = getattr(self, "_trigger_filter_lock", None)
+        if trigger_lock is None:
+            self.audio_filter_buffer = None
+            return
+
+        with trigger_lock:
+            self._trigger_filter_generation += 1
+            self._trigger_filter_latest_request_id = 0
+            self._trigger_filter_last_submit_time = 0.0
+            if enabled is not None:
+                self._trigger_filter_enabled = bool(enabled)
+            self._trigger_filter_context.clear()
+            self._trigger_filter_context_bytes = 0
+            self._trigger_filter_preroll.clear()
+            self._trigger_filter_preroll_bytes = 0
+            self._trigger_filter_candidate_frames = None
+            self.audio_filter_buffer = None
+            self._drain_queue(self._trigger_filter_requests)
+            self._drain_queue(self._trigger_filter_results)
+
+    def _set_trigger_filter_enabled(self, enabled):
+        enabled = bool(enabled)
+        trigger_lock = getattr(self, "_trigger_filter_lock", None)
+        if trigger_lock is None:
+            return
+        with trigger_lock:
+            changed = enabled != self._trigger_filter_enabled
+        if changed:
+            self._reset_trigger_filter_state(enabled=enabled)
+
+    def _track_trigger_filter_audio(self, test_audio_chunk, recorder_audio_chunk):
+        """Retain bounded model context and lossless raw candidate pre-roll."""
+        with self._trigger_filter_lock:
+            if not self._trigger_filter_enabled:
+                return
+
+            context_limit = max(
+                2,
+                int(
+                    self.default_sample_rate
+                    * _TRIGGER_FILTER_CONTEXT_SECONDS
+                    * np.dtype(np.int16).itemsize
+                ),
+            )
+            recorded_rate = int(self.recorded_sample_rate or self.default_sample_rate)
+            recorded_channels = max(1, int(self.input_channel_num or 1))
+            preroll_limit = max(
+                2,
+                int(
+                    recorded_rate
+                    * _TRIGGER_FILTER_PREROLL_SECONDS
+                    * recorded_channels
+                    * np.dtype(np.int16).itemsize
+                ),
+            )
+            self._trigger_filter_context_bytes = self._append_bounded_chunk(
+                self._trigger_filter_context,
+                self._trigger_filter_context_bytes,
+                test_audio_chunk,
+                context_limit,
+            )
+            self._trigger_filter_preroll_bytes = self._append_bounded_chunk(
+                self._trigger_filter_preroll,
+                self._trigger_filter_preroll_bytes,
+                recorder_audio_chunk,
+                preroll_limit,
+            )
+            if self._trigger_filter_candidate_frames is not None:
+                self._trigger_filter_candidate_frames.append(
+                    bytes(recorder_audio_chunk)
+                )
+
+    def _queue_latest_trigger_filter_request(self, request):
+        """Coalesce queued checks without ever waiting in the callback."""
+        for _ in range(2):
+            try:
+                self._trigger_filter_requests.put_nowait(request)
+                return True
+            except queue.Full:
+                try:
+                    self._trigger_filter_requests.get_nowait()
+                    self._trigger_filter_requests.task_done()
+                except queue.Empty:
+                    pass
+        return False
+
+    def _submit_trigger_filter_request(
+        self,
+        *,
+        chunk_samples,
+        energy,
+        raw_confidence,
+        raw_peak,
+        strength,
+    ):
+        """Snapshot and enqueue a candidate; model inference is worker-only."""
+        now = time.monotonic()
+        with self._trigger_filter_lock:
+            if (
+                not self._trigger_filter_enabled
+                or self._trigger_filter_closed.is_set()
+                or now - self._trigger_filter_last_submit_time
+                < _TRIGGER_FILTER_SUBMIT_INTERVAL_SECONDS
+            ):
+                return False
+            if not self._trigger_filter_context:
+                return False
+
+            self._trigger_filter_next_request_id += 1
+            request_id = self._trigger_filter_next_request_id
+            generation = self._trigger_filter_generation
+            request = {
+                "generation": generation,
+                "request_id": request_id,
+                "audio": b"".join(self._trigger_filter_context),
+                "chunk_samples": max(0, int(chunk_samples)),
+                "energy": float(energy),
+                "raw_confidence": float(raw_confidence),
+                "raw_peak": int(raw_peak),
+                "strength": float(strength),
+            }
+            if self._trigger_filter_candidate_frames is None:
+                self._trigger_filter_candidate_frames = list(
+                    self._trigger_filter_preroll
+                )
+
+            if not self._queue_latest_trigger_filter_request(request):
+                return False
+            self._trigger_filter_latest_request_id = request_id
+            self._trigger_filter_last_submit_time = now
+            return True
+
+    def _trigger_filter_worker(self):
+        """Denoise trigger candidates away from the recorder callback."""
+        while not self._trigger_filter_closed.is_set():
+            try:
+                request = self._trigger_filter_requests.get(timeout=0.1)
+            except queue.Empty:
+                continue
+
+            try:
+                if request is None:
+                    return
+                with self._trigger_filter_lock:
+                    if request["generation"] != self._trigger_filter_generation:
+                        continue
+
+                error = None
+                try:
+                    enhanced = self.audio_enhancer.enhance_audio(
+                        request["audio"],
+                        sample_rate=self.default_sample_rate,
+                        output_sample_rate=self.default_sample_rate,
+                        input_channels=1,
+                        output_channels=1,
+                        strength=request["strength"],
+                    )
+                    enhanced = as_pcm16_array(enhanced)
+                    chunk_samples = request["chunk_samples"]
+                    if chunk_samples:
+                        enhanced = enhanced[-chunk_samples:]
+                    peak = (
+                        int(np.max(np.abs(enhanced.astype(np.int32))))
+                        if enhanced.size
+                        else 0
+                    )
+                    accepted = 0 < request["energy"] <= peak
+                except Exception as exc:
+                    # A broken filter must not make recording impossible.
+                    # Preserve the already-qualified raw trigger and report it.
+                    error = str(exc)
+                    peak = request["raw_peak"]
+                    accepted = 0 < request["energy"] <= peak
+                    print(
+                        "Noise cancellation trigger check failed; "
+                        f"using the raw trigger: {exc}"
+                    )
+                    traceback.print_exc()
+
+                self._trigger_filter_results.put({
+                    "generation": request["generation"],
+                    "request_id": request["request_id"],
+                    "accepted": bool(accepted),
+                    "peak": peak,
+                    "raw_confidence": request["raw_confidence"],
+                    "error": error,
+                })
+            finally:
+                self._trigger_filter_requests.task_done()
+
+    def _poll_trigger_filter_result(self):
+        """Return a confirmed result and retire a final rejected candidate."""
+        results = []
+        while True:
+            try:
+                results.append(self._trigger_filter_results.get_nowait())
+                self._trigger_filter_results.task_done()
+            except queue.Empty:
+                break
+
+        if not results:
+            return None
+
+        with self._trigger_filter_lock:
+            generation = self._trigger_filter_generation
+            current_results = [
+                result
+                for result in results
+                if result["generation"] == generation
+            ]
+            for result in current_results:
+                if result["accepted"]:
+                    return result
+
+            if any(
+                result["request_id"] == self._trigger_filter_latest_request_id
+                for result in current_results
+            ):
+                self._trigger_filter_candidate_frames = None
+            return None
+
+    def _discard_trigger_candidate_for_result(self, result):
+        with self._trigger_filter_lock:
+            if (
+                result is not None
+                and result["generation"] == self._trigger_filter_generation
+                and result["request_id"]
+                == self._trigger_filter_latest_request_id
+            ):
+                self._trigger_filter_candidate_frames = None
+
+    def _consume_trigger_candidate_frames(self):
+        with self._trigger_filter_lock:
+            frames = list(self._trigger_filter_candidate_frames or ())
+            enabled = self._trigger_filter_enabled
+        self._reset_trigger_filter_state(enabled=enabled)
+        return frames
+
+    def _close_trigger_filter_worker(self):
+        trigger_closed = getattr(self, "_trigger_filter_closed", None)
+        if trigger_closed is None:
+            return
+        trigger_closed.set()
+        self._reset_trigger_filter_state(enabled=False)
+        requests = self._trigger_filter_requests
+        try:
+            requests.put_nowait(None)
+        except queue.Full:
+            self._drain_queue(requests)
+            try:
+                requests.put_nowait(None)
+            except queue.Full:
+                pass
+        worker = getattr(self, "_trigger_filter_thread", None)
+        if worker is not None and worker is not threading.current_thread():
+            worker.join(timeout=1.0)
+
+    def _queue_audio(
+        self,
+        audio_data,
+        final,
+        denoise_pcm=None,
+        run_final_audio_consumers=False,
+    ):
+        queue_item = {
+            'time': time.time_ns(),
+            'data': audio_data,
+            'final': bool(final),
+            'settings': self._settings_for_queue(),
+            'plugins': self.plugins,
+            'source_id': self.source_id,
+            'source_name': self.source_name,
+        }
+        if denoise_pcm is not None:
+            queue_item['denoise_pcm'] = denoise_pcm
+        if run_final_audio_consumers:
+            queue_item['run_final_audio_consumers'] = True
+        self.audio_queue.put(queue_item)
 
     def _reset_for_audio_input_switch_locked(self):
         """Discard source-specific state after the current stream has stopped."""
@@ -317,7 +692,7 @@ class AudioProcessor:
         self._new_speaker = False
         self.new_speaker_audio = None
         self.speaker_turn_detected = False
-        self.audio_filter_buffer = None
+        self._reset_trigger_filter_state(enabled=False)
 
         while True:
             try:
@@ -392,11 +767,12 @@ class AudioProcessor:
                         pass  # If still full, proceed without returning early
 
 
-        threading.Thread(
-            target=call_plugin_realtime_sts,
-            args=(self.plugins, in_data, self.recorded_sample_rate, self.input_channel_num),
-            daemon=False,
-        ).start()
+        if has_realtime_sts_plugin(self.plugins):
+            threading.Thread(
+                target=call_plugin_realtime_sts,
+                args=(self.plugins, in_data, self.recorded_sample_rate, self.input_channel_num),
+                daemon=True,
+            ).start()
 
         if not self.settings.GetOption("stt_enabled"):
             return None, pyaudio.paContinue
@@ -439,18 +815,12 @@ class AudioProcessor:
             elapsed_intermediate_time = end_time - self.intermediate_time_start
 
             confidence_threshold = float(self.settings.GetOption("vad_confidence_threshold"))
-
-            ########
-            # create denoise ring buffer
-            ########
-            if self.audio_filter_buffer is None and self.settings.GetOption("denoise_audio") != "" and self.settings.GetOption("denoise_audio_before_trigger") and self.audio_enhancer is not None:
-                # calculate block size for 10 seconds audio
-                ringbuffer_channel_num = 1
-                ringbuffer_audio_bytes_per_sample = 2
-                ringbuffer_audio_length = 10  # ringbuffer audio length in seconds
-                ringbuffer_size = int(self.default_sample_rate * ringbuffer_audio_length * ringbuffer_channel_num * ringbuffer_audio_bytes_per_sample)
-                print("sample size for noise cancelling ring buffer:", ringbuffer_size)
-                self.audio_filter_buffer = audio_tools.CircularByteBuffer(ringbuffer_size)
+            denoise_before_trigger = bool(
+                self.settings.GetOption("denoise_audio")
+                and self.settings.GetOption("denoise_audio_before_trigger")
+                and self.audio_enhancer is not None
+            )
+            self._set_trigger_filter_enabled(denoise_before_trigger)
 
             # copy bytes into variables
             test_audio_chunk = in_data[:]
@@ -463,81 +833,75 @@ class AudioProcessor:
                                                               input_channels=self.input_channel_num).tobytes()
 
             new_confidence, peak_amplitude = 0, 0
+            trigger_filter_result = None
             if test_audio_chunk is not None:
-                # denoise audio
-                if self.settings.GetOption("denoise_audio") != "" and self.settings.GetOption("denoise_audio_before_trigger") and self.audio_enhancer is not None and self.audio_filter_buffer is not None:
-                    # @TODO: audio chunks probably need overlay to prevent crackling noise (possibly buffer underrun because of the processing time of noise filter?)
-                    self.audio_filter_buffer.append(test_audio_chunk)
-                    new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.default_sample_rate,
-                                                                         self.vad_model)
-                    if 0 < energy <= peak_amplitude and new_confidence >= confidence_threshold:
-                        #print("denoising...")
-                        ########
-                        # denoise using a ring buffer (to always work over a larger audio snipped.
-                        ########
-                        denoise_strength = self.settings.GetOption("denoise_strength")
-                        test_audio_buffered = self.audio_filter_buffer.get_ordered_buffer()
-                        test_audio_chunk_buffered_enhanced = self.audio_enhancer.enhance_audio(test_audio_buffered,
-                                                                                               sample_rate=self.default_sample_rate,
-                                                                                               output_sample_rate=self.default_sample_rate,
-                                                                                               strength=denoise_strength
-                                                                                               )
-                        chunk_length = len(test_audio_chunk)
-                        test_audio_chunk_denoise = test_audio_chunk_buffered_enhanced[-chunk_length:].tobytes()
-                        # check confidence and peak amplitude again with denoised audio chunk
-                        new_confidence_denoised, peak_amplitude_denoised = process_audio_chunk(test_audio_chunk_denoise, self.default_sample_rate,
-                                                                             self.vad_model)
+                try:
+                    new_confidence, peak_amplitude = process_audio_chunk(
+                        test_audio_chunk, self.default_sample_rate, self.vad_model
+                    )
 
-                        ########
-                        # denoise only on the single chunk
-                        ########
-                        # test_audio_chunk_buffered_enhanced = self.audio_enhancer.enhance_audio(test_audio_chunk, sample_rate=self.default_sample_rate, output_sample_rate=self.default_sample_rate)
-                        # new_confidence_denoised, peak_amplitude_denoised = process_audio_chunk(test_audio_chunk_buffered_enhanced, self.default_sample_rate,
-                        #                                                       self.vad_model)
+                    if (
+                        denoise_before_trigger
+                        and not self.start_rec_on_volume_threshold
+                    ):
+                        self._track_trigger_filter_audio(
+                            test_audio_chunk,
+                            audio_chunk,
+                        )
 
-                        # set the lower value depending on if the initial or denoised values are lower
-                        if new_confidence_denoised < new_confidence:
-                            new_confidence = new_confidence_denoised
-                        if peak_amplitude_denoised < peak_amplitude:
-                            peak_amplitude = peak_amplitude_denoised
-                else:
-                    try:
-                        new_confidence, peak_amplitude = process_audio_chunk(test_audio_chunk, self.default_sample_rate,
-                                                                     self.vad_model)
-                        if vad_smart_turn_enabled and self.turn_model is not None:
-                            min_turn_audio_length = self.settings.GetOption("vad_smart_turn_min_length")
-                            turn_pause_length = float(self.settings.GetOption("vad_smart_turn_pause_length"))
-                            self.turn_model.set_min_audio_length(min_turn_audio_length)
+                    raw_trigger_candidate = (
+                        denoise_before_trigger
+                        and not self.start_rec_on_volume_threshold
+                        and 0 < energy <= peak_amplitude
+                        and new_confidence >= confidence_threshold
+                    )
+                    if raw_trigger_candidate:
+                        self._submit_trigger_filter_request(
+                            chunk_samples=(
+                                len(test_audio_chunk)
+                                // np.dtype(np.int16).itemsize
+                            ),
+                            energy=energy,
+                            raw_confidence=new_confidence,
+                            raw_peak=peak_amplitude,
+                            strength=self.settings.GetOption("denoise_strength"),
+                        )
+                    if denoise_before_trigger:
+                        trigger_filter_result = (
+                            self._poll_trigger_filter_result()
+                        )
 
-                            # Always accumulate audio while we consider it speech.
-                            # Inference is only triggered after a pause (see below).
-                            if new_confidence >= confidence_threshold:
-                                try:
-                                    self.turn_model.add_audio(int2float(np.frombuffer(test_audio_chunk, np.int16)))
-                                except Exception as e:
-                                    print(f"Error adding audio to SmartTurn buffer: {e}")
+                    if vad_smart_turn_enabled and self.turn_model is not None:
+                        min_turn_audio_length = self.settings.GetOption("vad_smart_turn_min_length")
+                        turn_pause_length = float(self.settings.GetOption("vad_smart_turn_pause_length"))
+                        self.turn_model.set_min_audio_length(min_turn_audio_length)
 
-                            # Only evaluate SmartTurn after we've had a continuous pause (no speech) for turn_pause_length.
-                            # self.pause_time is updated on speech (see below), so this measures time since last speech.
-                            if (
-                                 #len(self.frames) > 0
-                                 #and turn_pause_length > 0.0
-                                 new_confidence < confidence_threshold
-                                 and (time.time() - self.pause_time) > turn_pause_length
-                             ):
-                                turn_probability_threshold = self.settings.GetOption("vad_smart_turn_probability_threshold")
-                                turn_result = self.turn_model.predict_from_buffer(
-                                    probability_threshold=turn_probability_threshold
-                                )
-                                if turn_result["prediction"]:
-                                    self.speaker_turn_detected = True
-                                    self.turn_model.clear_session()
-                                    #if self.verbose:
-                                    print("Speaker turn detected.")
+                        # Always accumulate audio while we consider it speech.
+                        # Inference is only triggered after a pause (see below).
+                        if new_confidence >= confidence_threshold:
+                            try:
+                                self.turn_model.add_audio(int2float(np.frombuffer(test_audio_chunk, np.int16)))
+                            except Exception as e:
+                                print(f"Error adding audio to SmartTurn buffer: {e}")
 
-                    except Exception as e:
-                        print(f"Error processing audio_chunk: {e}")
-                        traceback.print_exc()
+                        # Only evaluate SmartTurn after we've had a continuous pause (no speech) for turn_pause_length.
+                        # self.pause_time is updated on speech (see below), so this measures time since last speech.
+                        if (
+                             new_confidence < confidence_threshold
+                             and (time.time() - self.pause_time) > turn_pause_length
+                         ):
+                            turn_probability_threshold = self.settings.GetOption("vad_smart_turn_probability_threshold")
+                            turn_result = self.turn_model.predict_from_buffer(
+                                probability_threshold=turn_probability_threshold
+                            )
+                            if turn_result["prediction"]:
+                                self.speaker_turn_detected = True
+                                self.turn_model.clear_session()
+                                print("Speaker turn detected.")
+
+                except Exception as e:
+                    print(f"Error processing audio_chunk: {e}")
+                    traceback.print_exc()
 
             # put frames with recognized speech into a list and send to whisper
             if (clip_duration is not None and len(self.frames) > fps) or (
@@ -569,6 +933,16 @@ class AudioProcessor:
                                                               self.default_sample_rate, target_channels=1,
                                                               input_channels=self.input_channel_num).tobytes()
 
+                # Final enhancement is performed by the same STT worker as
+                # realtime prefix enhancement. Keep the callback's ordinary
+                # post-processing as a raw fallback if filtering fails.
+                denoise_pcm = None
+                if (
+                    self.settings.GetOption("denoise_audio")
+                    and self.audio_enhancer is not None
+                ):
+                    denoise_pcm = bytes(wavefiledata)
+
                 # normalize audio (and make sure it's longer or equal the default block size by pyloudnorm)
                 if normalize_enabled and len(wavefiledata) >= self.block_size_samples:
                     wavefiledata = audio_tools.convert_audio_datatype_to_float(np.frombuffer(wavefiledata, np.int16))
@@ -595,7 +969,7 @@ class AudioProcessor:
                         )
                         #wavefiledata = wavefiledata.tobytes()
 
-                if type(wavefiledata) is np.array:
+                if isinstance(wavefiledata, np.ndarray):
                     wavefiledata = wavefiledata.tobytes()
 
                 # debug save of audio clip
@@ -613,13 +987,13 @@ class AudioProcessor:
 
                 if ((not vad_clip_test) or (vad_clip_test and full_audio_confidence >= confidence_threshold)) and len(
                         wavefiledata) > 0:
-                    # denoise audio
-                    if self.settings.GetOption("denoise_audio") != "" and self.audio_enhancer is not None:
-                        denoise_strength = self.settings.GetOption("denoise_strength")
-                        wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata, strength=denoise_strength).tobytes()
-
-                    # call sts plugin methods
-                    if self.plugins is not None:
+                    # When denoising is queued, plugins and saved WAVs must run
+                    # after that worker result so they receive cleaned audio.
+                    defer_final_audio_consumers = denoise_pcm is not None
+                    if (
+                        not defer_final_audio_consumers
+                        and self.plugins is not None
+                    ):
                         call_plugin_sts(self.plugins, wavefiledata, self.default_sample_rate)
 
                     wave_file_bytes = audio_tools.audio_bytes_to_wav(wavefiledata, channels=CHANNELS,
@@ -630,16 +1004,25 @@ class AudioProcessor:
 
                     if isinstance(wave_file_bytes, list):
                         for audio_segment in wave_file_bytes:
-                            self.audio_queue.put(
-                                {'time': time.time_ns(), 'data': audio_segment, 'final': True, 'settings': self.settings, 'plugins': self.plugins})
+                            self._queue_audio(audio_segment, True)
                     else:
-                        self.audio_queue.put(
-                            {'time': time.time_ns(), 'data': wave_file_bytes, 'final': True, 'settings': self.settings, 'plugins': self.plugins})
+                        self._queue_audio(
+                            wave_file_bytes,
+                            True,
+                            denoise_pcm=denoise_pcm,
+                            run_final_audio_consumers=(
+                                defer_final_audio_consumers
+                            ),
+                        )
                     # vad_iterator.reset_states()  # reset model states after each audio
 
                     # write wav file if configured to do so
                     transcription_save_audio_dir = self.settings.GetOption("transcription_save_audio_dir")
-                    if transcription_save_audio_dir is not None and transcription_save_audio_dir != "":
+                    if (
+                        not defer_final_audio_consumers
+                        and transcription_save_audio_dir is not None
+                        and transcription_save_audio_dir != ""
+                    ):
                         start_time_str = Utilities.ns_to_datetime(time.time_ns(), formatting='%Y-%m-%d %H_%M_%S-%f')
                         audio_file_name = f"audio_transcript_{start_time_str}.wav"
 
@@ -674,14 +1057,67 @@ class AudioProcessor:
                 return None, pyaudio.paContinue
 
             # set start recording variable to true if the volume and voice confidence is above the threshold
-            if self.should_start_recording(peak_amplitude, energy, new_confidence, confidence_threshold,
-                                           keyboard_key=self.push_to_talk_key):
+            trigger_peak_amplitude = peak_amplitude
+            trigger_confidence = new_confidence
+            denoised_trigger_confirmed = False
+            if denoise_before_trigger:
+                # Automatic starts wait for the worker. Push-to-talk remains
+                # immediate because should_start_recording checks the key.
+                trigger_peak_amplitude = 0
+                trigger_confidence = 0.0
+                if trigger_filter_result is not None:
+                    if (
+                        trigger_filter_result["raw_confidence"]
+                        >= confidence_threshold
+                    ):
+                        trigger_peak_amplitude = trigger_filter_result["peak"]
+                        trigger_confidence = trigger_filter_result[
+                            "raw_confidence"
+                        ]
+                        denoised_trigger_confirmed = True
+                    else:
+                        self._discard_trigger_candidate_for_result(
+                            trigger_filter_result
+                        )
+
+            trigger_candidate_injected = False
+            should_start_now = self.should_start_recording(
+                trigger_peak_amplitude,
+                energy,
+                trigger_confidence,
+                confidence_threshold,
+                keyboard_key=self.push_to_talk_key,
+            )
+            if (
+                not should_start_now
+                and trigger_filter_result is not None
+            ):
+                self._discard_trigger_candidate_for_result(
+                    trigger_filter_result
+                )
+
+            if should_start_now:
+                starting_recording = not self.start_rec_on_volume_threshold
                 if self.before_recording_starts_callback_func is not None and callable(self.before_recording_starts_callback_func):
                     self.before_recording_starts_callback_func(self)
                 if self.verbose:
-                    print("start recording - new_confidence: " + str(new_confidence) + " peak_amplitude: " + str(
-                        peak_amplitude))
-                if not self.start_rec_on_volume_threshold:
+                    print("start recording - new_confidence: " + str(trigger_confidence) + " peak_amplitude: " + str(
+                        trigger_peak_amplitude))
+                if starting_recording:
+                    if denoised_trigger_confirmed:
+                        candidate_frames = (
+                            self._consume_trigger_candidate_frames()
+                        )
+                        if candidate_frames:
+                            self.frames.extend(candidate_frames)
+                            self.previous_audio_chunk = None
+                            self.start_time = time.time()
+                            trigger_candidate_injected = True
+                    elif denoise_before_trigger:
+                        # Push-to-talk bypassed confirmation. Invalidate any
+                        # worker result that belongs to the automatic trigger.
+                        self._reset_trigger_filter_state(enabled=True)
+
                     # start processing_start event
                     if self.typing_indicator_function is not None:
                         typing_indicator_thread = threading.Thread(target=self.typing_indicator_function,
@@ -702,10 +1138,10 @@ class AudioProcessor:
                     print("add chunk - new_confidence: " + str(new_confidence) + " peak_amplitude: " + str(
                         peak_amplitude))
                 # append previous audio chunk to improve recognition on too late audio recording starts
-                if self.previous_audio_chunk is not None:
-                    self.frames.append(self.previous_audio_chunk)
-
-                self.frames.append(audio_chunk)
+                if not trigger_candidate_injected:
+                    if self.previous_audio_chunk is not None:
+                        self.frames.append(self.previous_audio_chunk)
+                    self.frames.append(audio_chunk)
                 self.start_time = time.time()
 
                 current_spoken_time = time.time()
@@ -745,6 +1181,18 @@ class AudioProcessor:
                                                                       self.default_sample_rate, target_channels=1,
                                                                       input_channels=self.input_channel_num).tobytes()
 
+                        # Keep denoising off the PortAudio callback. The STT
+                        # worker enhances this raw growing prefix before model
+                        # inference. Diarization still runs here, but receives
+                        # the raw fallback rather than blocking capture on the
+                        # noise filter.
+                        denoise_pcm = None
+                        if (
+                            self.settings.GetOption("denoise_audio")
+                            and self.audio_enhancer is not None
+                        ):
+                            denoise_pcm = bytes(wavefiledata)
+
                         # normalize audio (and make sure it's longer or equal the default block size by pyloudnorm)
                         if normalize_enabled and len(wavefiledata) >= self.block_size_samples:
                             wavefiledata = audio_tools.convert_audio_datatype_to_float(
@@ -773,15 +1221,10 @@ class AudioProcessor:
                                 )
                                 #wavefiledata = wavefiledata.tobytes()
 
-                        if type(wavefiledata) is np.array:
+                        if isinstance(wavefiledata, np.ndarray):
                             wavefiledata = wavefiledata.tobytes()
 
                         if wavefiledata is not None and len(wavefiledata) > 0:
-                            # denoise audio
-                            if self.settings.GetOption("denoise_audio") != "" and self.audio_enhancer is not None:
-                                denoise_strength = self.settings.GetOption("denoise_strength")
-                                wavefiledata = self.audio_enhancer.enhance_audio(wavefiledata, strength=denoise_strength).tobytes()
-
                             wave_file_bytes = audio_tools.audio_bytes_to_wav(wavefiledata, channels=CHANNELS,
                                                                              sample_rate=SAMPLE_RATE)
 
@@ -841,8 +1284,11 @@ class AudioProcessor:
                                     self._new_speaker = True
                                 #elif not isinstance(wave_file_bytes, list):
                             else:
-                                self.audio_queue.put(
-                                    {'time': time.time_ns(), 'data': wave_file_bytes, 'final': False, 'settings': self.settings, 'plugins': self.plugins})
+                                self._queue_audio(
+                                    wave_file_bytes,
+                                    False,
+                                    denoise_pcm=denoise_pcm,
+                                )
 
                         else:
                             self.frames = []
