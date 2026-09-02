@@ -13,6 +13,7 @@ import audio_tools
 import settings
 from ..Singleton import SingletonMeta
 from .zonos2.native import SamplingOptions
+from .tts_config import get_tts_device
 from .zonos2.emotion import emotion_hidden_delta
 from .zonos2.runtime import (
     DAC_SAMPLE_RATE,
@@ -286,7 +287,7 @@ class Zonos2TTS(metaclass=SingletonMeta):
 
     def load(self):
         self._ensure_special_settings()
-        self.set_compute_device(settings.GetOption("tts_ai_device"))
+        self.set_compute_device(get_tts_device())
         model_name = self._get_model_name()
         attention = str(self.special_settings.get("attention", "auto"))
         if self.bundle is not None:

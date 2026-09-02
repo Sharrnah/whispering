@@ -20,6 +20,7 @@ from Models.TextTranslation import texttranslate
 from Models import OCR
 from windowcapture import WindowCapture
 import settings
+from Models.ai_device import get_device
 import VRC_OSCLib
 from Models.TTS import tts
 
@@ -338,7 +339,7 @@ def chat_request(msgObj, websocket):
         task = msgObj["value"]["task"]
     stt_type = settings.GetOption("stt_type")
     compute_dtype = settings.GetOption("whisper_precision")
-    ai_device = settings.GetOption("ai_device")
+    ai_device = get_device("ai_device", "ai_device_index")
     allow_empty = False
     if "allow_empty" in msgObj["value"]:
         allow_empty = msgObj["value"]["allow_empty"]

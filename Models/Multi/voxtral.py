@@ -230,7 +230,7 @@ class Voxtral(metaclass=SingletonMeta):
                 )
 
             if quantization_config is None:
-                self.model = self.model.cuda()
+                self.model = self.model.to(self.compute_device)
         else:
             if self.model_type == "realtime":
                 self.model = VoxtralRealtimeForConditionalGeneration.from_pretrained(

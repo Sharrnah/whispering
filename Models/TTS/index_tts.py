@@ -15,6 +15,7 @@ import audio_tools
 import settings
 from Models.Singleton import SingletonMeta
 from Models.TTS.text_segmentation import chunk_text, has_voice_tags, parse_voice_tagged_text
+from Models.TTS.tts_config import get_tts_device, get_tts_precision
 
 
 SAMPLE_RATE = 22050
@@ -179,7 +180,7 @@ class IndexTTS(metaclass=SingletonMeta):
         self.language_code_converter = Utilities.LanguageCodeConverter()
         os.makedirs(MODEL_CACHE_PATH, exist_ok=True)
         os.makedirs(VOICES_PATH, exist_ok=True)
-        self.set_compute_device(settings.GetOption("tts_ai_device"))
+        self.set_compute_device(get_tts_device())
 
     def list_models(self):
         return MODEL_LIST
@@ -383,7 +384,7 @@ class IndexTTS(metaclass=SingletonMeta):
         return torch.zeros((1, sample_count), dtype=torch.float32)
 
     def _effective_precision(self):
-        precision = str(self.special_settings.get("precision", "bfloat16")).lower()
+        precision = get_tts_precision(self.special_settings.get("precision", "bfloat16"))
         if precision not in {"bfloat16", "float32"}:
             precision = "bfloat16"
         if self.compute_device.type != "cuda":
@@ -406,7 +407,7 @@ class IndexTTS(metaclass=SingletonMeta):
     def load(self):
         with self.generation_lock:
             self._ensure_special_settings()
-            self.set_compute_device(settings.GetOption("tts_ai_device"))
+            self.set_compute_device(get_tts_device())
             precision = self._effective_precision()
             model_name = self._get_model_name()
             configuration = (model_name, self.compute_device_str, precision)

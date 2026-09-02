@@ -1,5 +1,6 @@
 import settings
 from Models.cuda_inference import cuda_inference_guard, guard_cuda_model_methods
+from Models.TTS.tts_config import get_tts_device
 from Models.TTS.orpheus_tts import OrpheusTTS
 from Models.TTS.silero import Silero
 from Models.TTS.f5_tts import F5TTS
@@ -20,7 +21,7 @@ def _activate_tts(adapter_class):
     global tts
 
     selected_type = settings.GetOption("tts_type")
-    device = lambda: settings.GetOption("tts_ai_device")
+    device = get_tts_device
     with cuda_inference_guard(device, lambda: f"TTS/{selected_type}.load"):
         adapter = adapter_class()
 

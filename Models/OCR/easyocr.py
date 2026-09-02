@@ -1,5 +1,6 @@
 import numpy
 import requests
+import torch
 
 import websocket
 from Models.Singleton import SingletonMeta
@@ -107,6 +108,21 @@ LANGUAGE_CODES = {
 class EasyOcr(metaclass=SingletonMeta):
     reader: easyocr.Reader = None  # type: ignore
 
+    def __init__(self, device="cpu"):
+        self.set_compute_device(device)
+
+    def set_compute_device(self, device):
+        requested = str(device or "cpu").strip().lower()
+        if requested in {"", "none", "auto", "cuda"}:
+            requested = "cuda" if torch.cuda.is_available() else "cpu"
+        if requested.startswith("cuda") and not torch.cuda.is_available():
+            requested = "cpu"
+        if requested != "cpu" and not requested.startswith("cuda"):
+            raise ValueError(f"EasyOCR supports CUDA and CPU, but not {device!r}.")
+        if getattr(self, "compute_device", None) != requested:
+            self.reader = None
+        self.compute_device = requested
+
     def init_reader(self, languages):
         global CURRENT_LANGUAGES
 
@@ -115,7 +131,9 @@ class EasyOcr(metaclass=SingletonMeta):
             CURRENT_LANGUAGES = languages
             try:
                 # disable verbose logging (which also disables the progress bar) to prevent charset error: see https://github.com/JaidedAI/EasyOCR/issues/1017
-                self.reader = easyocr.Reader(CURRENT_LANGUAGES, model_storage_directory=str(model_path.resolve()), detect_network="craft", verbose=False)
+                self.reader = easyocr.Reader(CURRENT_LANGUAGES, gpu=self.compute_device,
+                                             model_storage_directory=str(model_path.resolve()),
+                                             detect_network="craft", verbose=False)
             except Exception as e:
                 print(str(e).encode('utf-8', 'ignore').decode('utf-8', 'ignore'))
                 websocket.set_loading_state("ocr_loading", False)

@@ -465,22 +465,26 @@ model = None
 sentencepiece = None
 
 torch_device = "cuda" if torch.cuda.is_available() else "cpu"
+torch_device_index = 0
 
 
 def get_installed_language_names():
     return tuple([{"code": code, "name": language} for language, code in LANGUAGES.items()])
 
 
-def set_device(device: str):
+def set_device(device: str, device_index: int = 0):
     global torch_device
+    global torch_device_index
     if device == "cuda" or device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
     torch_device = device
+    torch_device_index = int(device_index)
 
 
 def load_model(size="small", compute_type="float32"):
     global model
     global sentencepiece
+    global torch_device_index
 
     model_path = Path(ct_model_path / size)
 
@@ -501,7 +505,12 @@ def load_model(size="small", compute_type="float32"):
 
     # init NLLB 200 model
     model_path_string = str(model_path.resolve())
-    model = ctranslate2.Translator(model_path_string, device=torch_device, compute_type=compute_type)
+    model = ctranslate2.Translator(
+        model_path_string,
+        device=torch_device,
+        device_index=torch_device_index,
+        compute_type=compute_type,
+    )
 
     print(f"NLLB-200_CTranslate2 model loaded.")
 

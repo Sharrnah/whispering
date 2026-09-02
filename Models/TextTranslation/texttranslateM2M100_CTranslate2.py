@@ -136,6 +136,7 @@ MODEL_LINKS = {
 
 # [Modify] Set the device and beam size
 torch_device = "cuda" if torch.cuda.is_available() else "cpu"  # "cpu" or "cuda" for GPU, auto = automatic
+torch_device_index = 0
 beam_size = 5
 
 # [Modify] Set paths to the models
@@ -158,6 +159,7 @@ def load_model(size="small", compute_type="float32"):
     global model_path
     global sentencepiece
     global translator
+    global torch_device_index
 
     match size:
         case "small":
@@ -181,16 +183,23 @@ def load_model(size="small", compute_type="float32"):
 
     sentencepiece.load(str(sp_model_path.resolve()))
 
-    translator = ctranslate2.Translator(str(model_path.resolve()), device=torch_device, compute_type="float32")
+    translator = ctranslate2.Translator(
+        str(model_path.resolve()),
+        device=torch_device,
+        device_index=torch_device_index,
+        compute_type="float32",
+    )
 
     print(f"M2M100_CTranslate2 model loaded.")
 
 
-def set_device(device: str):
+def set_device(device: str, device_index: int = 0):
     global torch_device
+    global torch_device_index
     if device == "cuda" or device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
     torch_device = device
+    torch_device_index = int(device_index)
 
 
 def translate_language(text, from_code, to_code):

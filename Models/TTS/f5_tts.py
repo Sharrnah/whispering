@@ -20,6 +20,7 @@ import downloader
 
 import settings
 from Models.Singleton import SingletonMeta
+from Models.TTS.tts_config import get_tts_device
 
 from Models.TTS.F5TTS.model.backbones.unett import UNetT
 from Models.TTS.F5TTS.model.backbones.dit import DiT
@@ -523,7 +524,7 @@ class F5TTS(metaclass=SingletonMeta):
 
         self.model_id = model
 
-        self.set_compute_device(settings.GetOption('tts_ai_device'))
+        self.set_compute_device(get_tts_device())
 
         # load models
         if model.startswith("F5-TTS"):

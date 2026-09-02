@@ -16,6 +16,8 @@ import threading
 import time
 from typing import Callable, Iterable
 
+from Models.ai_device import cuda_device_context
+
 
 _CUDA_INFERENCE_CONDITION = threading.Condition()
 _CUDA_INFERENCE_THREAD_STATE = threading.local()
@@ -204,7 +206,11 @@ def cuda_inference_guard(device, label: str = "CUDA inference", runtime_key=None
     resolved_runtime_key = _normalize_runtime_key(runtime_key)
     _wait_for_gate(resolved_label, resolved_runtime_key)
     try:
-        yield
+        # A few third-party runtimes still allocate on the unqualified
+        # ``cuda`` device internally.  Keep those allocations on the same GPU
+        # as the explicitly selected model device.
+        with cuda_device_context(resolved_device):
+            yield
     finally:
         handoff_required = _leave_gate()
         if handoff_required:

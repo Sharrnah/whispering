@@ -11,6 +11,7 @@ import audio_tools
 import downloader
 import settings
 from Models.Singleton import SingletonMeta
+from Models.TTS.tts_config import get_tts_device
 
 cache_path = Path(Path.cwd() / ".cache" / "kokoro-tts-cache")
 os.makedirs(cache_path, exist_ok=True)
@@ -699,7 +700,7 @@ class KokoroTTS(metaclass=SingletonMeta):
         self._model_lock = threading.RLock()
         self.download_state = {"is_downloading": False}
 
-        self.set_compute_device(settings.GetOption("tts_ai_device"))
+        self.set_compute_device(get_tts_device())
         if not self.download_model("eSpeak-NG"):
             raise RuntimeError("Failed to install the Kokoro eSpeak-NG runtime.")
         espeak_path = str(Path(cache_path / "eSpeak NG").resolve())
@@ -817,7 +818,7 @@ class KokoroTTS(metaclass=SingletonMeta):
             model_config = KOKORO_MODEL_CONFIGS[model_name]
             model_directory = Path(cache_path / TTS_MODEL_LINKS[model_name]["path"])
             lang = self._effective_language(model_name, lang)
-            self.set_compute_device(settings.GetOption("tts_ai_device"))
+            self.set_compute_device(get_tts_device())
 
             needs_reload = (
                 self.model is None

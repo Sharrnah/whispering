@@ -16,6 +16,7 @@ from transformers import StoppingCriteria, StoppingCriteriaList
 import audio_tools
 import settings
 from Models.Singleton import SingletonMeta
+from Models.TTS.tts_config import get_tts_device, get_tts_precision
 from Models.transformers_attention import (
     FLASH_ATTENTION_2,
     SDPA,
@@ -519,7 +520,7 @@ class Qwen3TTS(metaclass=SingletonMeta):
         self.streaming_rtf_history = {}
         os.makedirs(MODEL_CACHE_PATH, exist_ok=True)
         os.makedirs(VOICES_PATH, exist_ok=True)
-        self.set_compute_device(settings.GetOption("tts_ai_device"))
+        self.set_compute_device(get_tts_device())
 
     def list_models(self):
         return MODEL_LIST
@@ -690,7 +691,7 @@ class Qwen3TTS(metaclass=SingletonMeta):
         return Path(selected["audio_filename"])
 
     def _effective_precision(self):
-        precision = str(self.special_settings.get("precision", "auto")).lower()
+        precision = get_tts_precision(self.special_settings.get("precision", "auto"))
         if precision not in {"auto", "float32", "float16", "bfloat16"}:
             precision = "auto"
         if self.compute_device.type != "cuda":
@@ -730,11 +731,11 @@ class Qwen3TTS(metaclass=SingletonMeta):
     def load(self):
         with self.generation_lock:
             self._ensure_special_settings()
-            self.set_compute_device(settings.GetOption("tts_ai_device"))
+            self.set_compute_device(get_tts_device())
             model_name = self._get_model_name()
-            requested_precision = str(
+            requested_precision = get_tts_precision(
                 self.special_settings.get("precision", "auto")
-            ).lower()
+            )
             if requested_precision not in {
                 "auto",
                 "float32",

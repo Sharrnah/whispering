@@ -1053,10 +1053,10 @@ class FasterWhisper(metaclass=SingletonMeta):
     transcription_count = 0
     reload_after_transcriptions = 0
 
-    def __init__(self, model: str, device: str = "cpu", compute_type: str = "float32", cpu_threads: int = 0,
-                 num_workers: int = 1):
+    def __init__(self, model: str, device: str = "cpu", compute_type: str = "float32",
+                 cpu_threads: int = 0, num_workers: int = 1, device_index: int = 0):
         if self.model is None:
-            self.load_model(model, device, compute_type, cpu_threads, num_workers)
+            self.load_model(model, device, compute_type, cpu_threads, num_workers, device_index)
 
     def set_reload_after_transcriptions(self, reload_after_transcriptions: int):
         self.reload_after_transcriptions = reload_after_transcriptions
@@ -1081,13 +1081,15 @@ class FasterWhisper(metaclass=SingletonMeta):
             self.loaded_settings["compute_type"],
             self.loaded_settings["cpu_threads"],
             self.loaded_settings["num_workers"],
+            self.loaded_settings["device_index"],
         )
 
-    def load_model(self, model: str, device: str = "cpu", compute_type: str = "float32", cpu_threads: int = 0,
-                   num_workers: int = 1):
+    def load_model(self, model: str, device: str = "cpu", compute_type: str = "float32",
+                   cpu_threads: int = 0, num_workers: int = 1, device_index: int = 0):
         self.loaded_settings = {
             "model": model,
             "device": device,
+            "device_index": device_index,
             "compute_type": compute_type,
             "cpu_threads": cpu_threads,
             "num_workers": num_workers
@@ -1114,7 +1116,12 @@ class FasterWhisper(metaclass=SingletonMeta):
 
         self.loaded_model_size = model
 
-        print(f"faster-whisper {model_folder_name} is Loading to {device} using {compute_type} precision...")
+        print(
+            f"faster-whisper {model_folder_name} is Loading to {device}:{device_index} "
+            f"using {compute_type} precision..."
+            if device == "cuda"
+            else f"faster-whisper {model_folder_name} is Loading to {device} using {compute_type} precision..."
+        )
 
         # temporary fix for large-v3 loading (https://github.com/guillaumekln/faster-whisper/issues/547)
         # @TODO: this is a temporary fix for large-v3
@@ -1125,8 +1132,9 @@ class FasterWhisper(metaclass=SingletonMeta):
 
         #self.model = WhisperModel(str(Path(model_path).resolve()), device=device, compute_type=compute_type,
         #                          cpu_threads=cpu_threads, num_workers=num_workers, feature_size=n_mels, use_tf_tokenizer=use_tf_tokenizer)
-        self.model = WhisperModel(str(Path(model_path).resolve()), device=device, compute_type=compute_type,
-                                  cpu_threads=cpu_threads, num_workers=num_workers)
+        self.model = WhisperModel(str(Path(model_path).resolve()), device=device, device_index=device_index,
+                                  compute_type=compute_type, cpu_threads=cpu_threads,
+                                  num_workers=num_workers)
 
     def transcribe(self, audio_sample, task, language, condition_on_previous_text,
                    initial_prompt, logprob_threshold, no_speech_threshold, temperature, beam_size,

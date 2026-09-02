@@ -280,9 +280,12 @@ class MiLMMTTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "empty translation"):
             milmmt.translate_language("Hallo Welt.", "de", "en")
 
-    def test_text_translation_router_selects_milmmt(self):
+    @mock.patch("torch.cuda.device_count", return_value=1)
+    @mock.patch("torch.cuda.is_available", return_value=True)
+    def test_text_translation_router_selects_milmmt(self, *_cuda_mocks):
         selected_settings = {
             "txt_translator_device": "cuda",
+            "txt_translator_device_index": 0,
             "txt_translator_size": "MiLMMT-46-1B-v1.0",
             "txt_translator_precision": "bfloat16",
         }
@@ -312,7 +315,7 @@ class MiLMMTTests(unittest.TestCase):
                         ) as translate:
                             result = translation_router.TranslateLanguage("Hello!", "en", "de")
 
-            set_device.assert_called_once_with("cuda")
+            set_device.assert_called_once_with("cuda:0")
             load_model.assert_called_once_with(
                 "MiLMMT-46-1B-v1.0",
                 compute_type="bfloat16",

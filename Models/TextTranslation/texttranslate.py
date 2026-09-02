@@ -3,6 +3,12 @@ import traceback
 
 import settings
 import pykakasi
+from Models.ai_device import (
+    get_ctranslate2_device,
+    get_device,
+    resolve_device,
+    split_ctranslate2_device,
+)
 from Models.cuda_inference import cuda_inference_guarded
 # import texttranslateM2M100
 from Models.TextTranslation import texttranslateM2M100_CTranslate2
@@ -58,7 +64,7 @@ def _translator_configuration(translator):
         translator,
         settings.GetOption("txt_translator_size"),
         settings.GetOption("txt_translator_precision"),
-        settings.GetOption("txt_translator_device"),
+        get_device("txt_translator_device", "txt_translator_device_index"),
     )
 
 
@@ -92,22 +98,26 @@ def _install_languages(translator):
 
     _active_translator_configuration = None
     _release_inactive_transformers_models(translator)
+    selected_device = get_device("txt_translator_device", "txt_translator_device_index")
+    ctranslate_device, ctranslate_device_index = get_ctranslate2_device(
+        "txt_translator_device", "txt_translator_device_index"
+    )
 
     match translator:
         case "M2M100":
-            texttranslateM2M100_CTranslate2.set_device(settings.GetOption("txt_translator_device"))
+            texttranslateM2M100_CTranslate2.set_device(ctranslate_device, ctranslate_device_index)
             texttranslateM2M100_CTranslate2.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "NLLB200":
-            texttranslateNLLB200.set_device(settings.GetOption("txt_translator_device"))
+            texttranslateNLLB200.set_device(selected_device)
             texttranslateNLLB200.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "NLLB200_CT2":
-            texttranslateNLLB200_CTranslate2.set_device(settings.GetOption("txt_translator_device"))
+            texttranslateNLLB200_CTranslate2.set_device(ctranslate_device, ctranslate_device_index)
             texttranslateNLLB200_CTranslate2.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "hunyuan_mt":
-            texttranslate_hunyuan.set_device(settings.GetOption("txt_translator_device"))
+            texttranslate_hunyuan.set_device(selected_device)
             texttranslate_hunyuan.load_model(settings.GetOption("txt_translator_size"), compute_type=settings.GetOption("txt_translator_precision"))
         case "milmmt":
-            texttranslate_milmmt.set_device(settings.GetOption("txt_translator_device"))
+            texttranslate_milmmt.set_device(selected_device)
             texttranslate_milmmt.load_model(
                 settings.GetOption("txt_translator_size"),
                 compute_type=settings.GetOption("txt_translator_precision"),
@@ -116,18 +126,18 @@ def _install_languages(translator):
             txt_translator_instance = SeamlessM4T(
                 model=settings.GetOption("txt_translator_size"),
                 compute_type=settings.GetOption("txt_translator_precision"),
-                device=settings.GetOption("txt_translator_device")
+                device=selected_device
             )
         case "phi4":
             txt_translator_instance = Phi4(
                 compute_type=settings.GetOption("txt_translator_precision"),
-                device=settings.GetOption("txt_translator_device")
+                device=selected_device
             )
             txt_translator_instance.load_model()
         case "voxtral":
             txt_translator_instance = Voxtral(
                 compute_type=settings.GetOption("txt_translator_precision"),
-                device=settings.GetOption("txt_translator_device")
+                device=selected_device
             )
             txt_translator_instance.load_model()
 
@@ -135,7 +145,7 @@ def _install_languages(translator):
 
 
 @cuda_inference_guarded(
-    lambda: settings.GetOption("txt_translator_device"),
+    lambda: get_device("txt_translator_device", "txt_translator_device_index"),
     lambda: f"Text translation/{get_current_translator()}.load",
     runtime_key=lambda: ("text_translation", get_current_translator()),
 )
@@ -174,7 +184,7 @@ def GetInstalledLanguageNames():
 
 
 @cuda_inference_guarded(
-    lambda: settings.GetOption("txt_translator_device"),
+    lambda: get_device("txt_translator_device", "txt_translator_device_index"),
     lambda: f"Text translation/{get_current_translator()}.translate",
     runtime_key=lambda: ("text_translation", get_current_translator()),
 )
@@ -246,17 +256,23 @@ def TranslateLanguage(text, from_code, to_code, to_romaji=False, as_iso1=False):
 def SetDevice(option):
     global txt_translator_instance
 
+    selected_device = resolve_device(
+        option,
+        settings.GetOption("txt_translator_device_index"),
+    )
+    ctranslate_device, ctranslate_device_index = split_ctranslate2_device(selected_device)
+
     match get_current_translator():
         case "NLLB200":
-            texttranslateNLLB200.set_device(option)
+            texttranslateNLLB200.set_device(selected_device)
         case "NLLB200_CT2":
-            texttranslateNLLB200_CTranslate2.set_device(option)
+            texttranslateNLLB200_CTranslate2.set_device(ctranslate_device, ctranslate_device_index)
         case "M2M100":
-            texttranslateM2M100_CTranslate2.set_device(option)
+            texttranslateM2M100_CTranslate2.set_device(ctranslate_device, ctranslate_device_index)
         case "hunyuan_mt":
-            texttranslate_hunyuan.set_device(option)
+            texttranslate_hunyuan.set_device(selected_device)
         case "milmmt":
-            texttranslate_milmmt.set_device(option)
+            texttranslate_milmmt.set_device(selected_device)
         case _:
             if txt_translator_instance is not None and hasattr(txt_translator_instance, 'set_device'):
-                txt_translator_instance.set_device(option)
+                txt_translator_instance.set_device(selected_device)

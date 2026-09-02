@@ -12,6 +12,7 @@ import Plugins
 import audio_tools
 import downloader
 import settings
+from Models.TTS.tts_config import get_tts_device
 
 CODE_START_TOKEN_ID = 128257
 CODE_END_TOKEN_ID = 128258
@@ -91,7 +92,7 @@ class MayaOne(metaclass=SingletonMeta):
 
     def __init__(self):
         os.makedirs(self.cache_path, exist_ok=True)
-        self.set_compute_device(settings.GetOption("tts_ai_device"))
+        self.set_compute_device(get_tts_device())
 
         if not self.snac_model:
             self.download_model("snac_24khz")
@@ -186,12 +187,13 @@ class MayaOne(metaclass=SingletonMeta):
             #device = torch.device(self.compute_device_str)
             device = self.compute_device_str
         self.compute_device = device
+        self.snac_device = self.compute_device_str if self.compute_device_str.startswith("cuda") else "cpu"
 
     def tts(self, text, remove_silence=True, silence_after_segments=0.2, normalize=True):
         print("TTS requested Maya1 TTS")
         self._ensure_special_settings()
 
-        self.set_compute_device(settings.GetOption('tts_ai_device'))
+        self.set_compute_device(get_tts_device())
 
         tts_volume = settings.GetOption("tts_volume")
 
@@ -203,8 +205,7 @@ class MayaOne(metaclass=SingletonMeta):
         # Generate emotional speech
         inputs = self.tokenizer(prompt, return_tensors="pt")
 
-        if torch.cuda.is_available():
-            inputs = {k: v.to("cuda") for k, v in inputs.items()}
+        inputs = {k: v.to(self.compute_device) for k, v in inputs.items()}
 
 
         with torch.inference_mode():
@@ -261,7 +262,7 @@ class MayaOne(metaclass=SingletonMeta):
         print(f"   L3: {len(levels[2])} codes")
 
         # Convert to tensors
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = self.snac_device
         codes_tensor = [
             torch.tensor(level, dtype=torch.long, device=device).unsqueeze(0)
             for level in levels

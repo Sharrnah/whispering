@@ -13,6 +13,7 @@ import audio_tools
 import downloader
 import settings
 from Models.Singleton import SingletonMeta
+from Models.TTS.tts_config import get_tts_device
 
 cache_path = Path(Path.cwd() / ".cache" / "zonos-tts-cache")
 os.makedirs(cache_path, exist_ok=True)
@@ -768,7 +769,7 @@ class ZonosTTS(metaclass=SingletonMeta):
     def load(self):
         model = self._get_model_name()
 
-        self.set_compute_device(settings.GetOption('tts_ai_device'))
+        self.set_compute_device(get_tts_device())
 
         if "custom" not in model:
             model_directory = Path(cache_path / TTS_MODEL_LINKS[model]["path"])
@@ -1010,7 +1011,7 @@ class ZonosTTS(metaclass=SingletonMeta):
             # in queue worker we expect serialized execution already
             pass
         try:
-            self.set_compute_device(settings.GetOption('tts_ai_device'))
+            self.set_compute_device(get_tts_device())
 
             tts_volume = settings.GetOption("tts_volume")
             tts_normalize = settings.GetOption("tts_normalize")
@@ -1139,7 +1140,7 @@ class ZonosTTS(metaclass=SingletonMeta):
         # Always serialize streaming to prevent overlapping chunk playback
         self.streaming_lock.acquire()
         try:
-            self.set_compute_device(settings.GetOption('tts_ai_device'))
+            self.set_compute_device(get_tts_device())
             chunk_size = settings.GetOption("tts_streamed_chunk_size")
             self.init_audio_stream_playback()
             tts_volume = settings.GetOption("tts_volume")

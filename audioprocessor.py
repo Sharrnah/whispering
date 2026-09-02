@@ -12,6 +12,7 @@ import audio_tools
 from settings import SETTINGS as main_settings
 import VRC_OSCLib
 from Models import sentence_split
+from Models.ai_device import get_device, split_ctranslate2_device
 from Models.cuda_inference import guard_cuda_model_loader
 from Models.TextTranslation import texttranslate
 import websocket
@@ -608,9 +609,11 @@ def load_whisper(model, ai_device):
             sys.exit(1)
     elif stt_type == "faster_whisper":
         compute_dtype = main_settings.GetOption("whisper_precision")
+        ctranslate_device, device_index = split_ctranslate2_device(ai_device)
 
-        return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype,
-                                            cpu_threads=cpu_threads, num_workers=num_workers)
+        return faster_whisper.FasterWhisper(model, device=ctranslate_device, device_index=device_index,
+                                            compute_type=compute_dtype, cpu_threads=cpu_threads,
+                                            num_workers=num_workers)
         # return whisperx.WhisperX(model, device=ai_device, compute_type=compute_dtype,
         #                                    cpu_threads=cpu_threads, num_workers=num_workers)
     elif stt_type == "seamless_m4t":
@@ -711,9 +714,11 @@ def load_realtime_whisper(model, ai_device):
         return whisper.load_model(model, download_root=".cache/whisper", device=ai_device)
     elif main_settings.GetOption("stt_type") == "faster_whisper":
         compute_dtype = main_settings.GetOption("realtime_whisper_precision")
+        ctranslate_device, device_index = split_ctranslate2_device(ai_device)
 
-        return faster_whisper.FasterWhisper(model, device=ai_device, compute_type=compute_dtype,
-                                            cpu_threads=cpu_threads, num_workers=num_workers)
+        return faster_whisper.FasterWhisper(model, device=ctranslate_device, device_index=device_index,
+                                            compute_type=compute_dtype, cpu_threads=cpu_threads,
+                                            num_workers=num_workers)
     elif main_settings.GetOption("stt_type") == "seamless_m4t":
         compute_dtype = main_settings.GetOption("realtime_whisper_precision")
         return seamless_m4t.SeamlessM4T(model=model, compute_type=compute_dtype, device=ai_device)
@@ -1186,7 +1191,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
         elif settings.GetOption("stt_type") == "transformer_whisper":
             # Whisper Huggingface Transformer
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
-            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            audio_model.set_compute_device(get_device("ai_device", "ai_device_index", settings))
             result = audio_model.transcribe(audio_data_numpy, model=settings.GetOption("model"), task=whisper_task,
                                             language=whisper_language, return_timestamps=False,
                                             beam_size=whisper_beam_size)
@@ -1194,7 +1199,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
         elif settings.GetOption("stt_type") == "medusa_whisper":
             # Whisper Huggingface Transformer
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
-            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            audio_model.set_compute_device(get_device("ai_device", "ai_device_index", settings))
             whisper_num_workers = int(settings.GetOption("whisper_num_workers"))
             result = audio_model.transcribe(audio_data_numpy, model=settings.GetOption("model"), task=whisper_task,
                                             language=whisper_language, return_timestamps=False,
@@ -1225,7 +1230,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
         elif settings.GetOption("stt_type") == "wav2vec_bert":
             # Wav2VecBert
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
-            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            audio_model.set_compute_device(get_device("ai_device", "ai_device_index", settings))
             result = audio_model.transcribe(audio_data_numpy, task=whisper_task,
                                             language=whisper_language)
 
@@ -1233,7 +1238,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
             # Nemo Canary
             model_size = settings.GetOption("model")
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
-            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            audio_model.set_compute_device(get_device("ai_device", "ai_device_index", settings))
             result = audio_model.transcribe(audio_data_numpy, task=whisper_task,
                                             source_lang=whisper_language,
                                             target_lang=stt_target_language,
@@ -1245,7 +1250,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
         elif settings.GetOption("stt_type") == "phi4":
             # Phi4
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
-            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            audio_model.set_compute_device(get_device("ai_device", "ai_device_index", settings))
             result = audio_model.transcribe(audio_data_numpy,
                                             task=whisper_task,
                                             language=whisper_language,
@@ -1254,7 +1259,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
         elif settings.GetOption("stt_type") == "voxtral":
             # Voxtral
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
-            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            audio_model.set_compute_device(get_device("ai_device", "ai_device_index", settings))
             result = audio_model.transcribe(audio_data_numpy,
                                             task=whisper_task,
                                             language=whisper_language,
@@ -1263,7 +1268,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
         elif settings.GetOption("stt_type") == "phi4-onnx":
             # Phi4
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
-            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            audio_model.set_compute_device(get_device("ai_device", "ai_device_index", settings))
             result = audio_model.transcribe(audio_data_numpy,
                                             task=whisper_task,
                                             language=whisper_language,
@@ -1272,7 +1277,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
         elif settings.GetOption("stt_type") == "vibevoice_asr":
             # VibeVoice ASR
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
-            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            audio_model.set_compute_device(get_device("ai_device", "ai_device_index", settings))
             result = audio_model.transcribe(audio_data_numpy,
                                             task=whisper_task,
                                             language=whisper_language,
@@ -1283,7 +1288,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
             # VibeVoice ASR
             model_size = settings.GetOption("model")
             audio_model.set_compute_type(settings.GetOption("whisper_precision"))
-            audio_model.set_compute_device(settings.GetOption("ai_device"))
+            audio_model.set_compute_device(get_device("ai_device", "ai_device_index", settings))
             result = audio_model.transcribe(audio_data_numpy,
                                             task=whisper_task,
                                             language=whisper_language,
@@ -1302,7 +1307,7 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                 selected_precision = settings.GetOption("realtime_whisper_precision")
                 selected_beam_size = whisper_beam_size_realtime
             selected_model.set_compute_type(selected_precision)
-            selected_model.set_compute_device(settings.GetOption("ai_device"))
+            selected_model.set_compute_device(get_device("ai_device", "ai_device_index", settings))
             result = selected_model.transcribe(
                 audio_data_numpy,
                 model=selected_model_name,
@@ -1373,7 +1378,7 @@ def whisper_worker():
 
     whisper_model = main_settings.GetOption("model")
 
-    whisper_ai_device = main_settings.GetOption("ai_device")
+    whisper_ai_device = get_device("ai_device", "ai_device_index")
     websocket.set_loading_state("speech2text_loading", True)
     audio_model = load_whisper(whisper_model, whisper_ai_device)
     # load realtime whisper model

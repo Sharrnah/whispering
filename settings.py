@@ -15,6 +15,42 @@ DEFAULT_SETTINGS_PATH = Path(Path.cwd() / "Profiles" / 'settings.yaml')
 
 DEBOUNCE_TIME = 1.5  # 1.5 second, adjust as necessary
 
+_TTS_DEFAULT_PRECISIONS = {
+    "silero": "float32",
+    "f5_e2": "float32",
+    "zonos": "bfloat16",
+    "zonos2": "bfloat16",
+    "kokoro": "float32",
+    "orpheus": "8bit",
+    "chatterbox": "float32",
+    "index_tts": "bfloat16",
+    "qwen3_tts": "auto",
+    "audio8_tts": "auto",
+    "maya1": "bfloat16",
+}
+
+_TTS_SPECIAL_SETTING_NAMES = {
+    "chatterbox": "tts_chatterbox",
+    "index_tts": "tts_index_tts",
+    "qwen3_tts": "tts_qwen3_tts",
+    "audio8_tts": "tts_audio8_tts",
+}
+
+
+def _legacy_tts_precision(profile):
+    """Derive the new top-level value without changing old profile behavior."""
+    tts_type = str(profile.get("tts_type") or "silero")
+    default = _TTS_DEFAULT_PRECISIONS.get(tts_type, "float32")
+    special_name = _TTS_SPECIAL_SETTING_NAMES.get(tts_type)
+    special_settings = profile.get("special_settings")
+    if special_name and isinstance(special_settings, dict):
+        model_settings = special_settings.get(special_name)
+        if isinstance(model_settings, dict):
+            precision = model_settings.get("precision")
+            if isinstance(precision, str) and precision.strip():
+                return precision.strip().lower()
+    return default
+
 NON_PERSISTENT_SETTINGS = [
     "stt_enabled", "tts_answer",
     "whisper_languages", "lang_swap", "verbose",
@@ -35,6 +71,7 @@ class SettingsManager:
             # text translate settings
             "txt_translate": False,  # if enabled, pipes whisper A.I. results through text translator
             "txt_translator_device": "cpu",  # auto, cuda, cpu
+            "txt_translator_device_index": 0,  # CUDA adapter index used by the text translator
             "src_lang": "auto",  # source language for text translator (Whisper A.I. in translation mode always translates to "en")
             "trg_lang": "fra_Latn",  # target language for text translator
             "txt_romaji": False,  # if enabled, text translator will convert text to romaji.
@@ -51,6 +88,7 @@ class SettingsManager:
             # ocr settings
             "ocr_type": "easyocr",  # load ocr engine. Can be "easyocr" or "got_ocr_20"
             "ocr_ai_device": "cpu",  # cuda, cpu
+            "ocr_ai_device_index": 0,  # CUDA adapter index used by OCR
             "ocr_precision": "float32",
             "ocr_lang": "en",  # language for OCR image to text recognition.
             "ocr_window_name": "VRChat",  # window name for OCR image to text recognition.
@@ -77,6 +115,7 @@ class SettingsManager:
             # whisper settings
             "stt_enabled": True,  # enable STT (if disabled, stops sending audio to whisper)
             "ai_device": None,  # can be None (auto), "cuda" or "cpu".
+            "ai_device_index": 0,  # CUDA adapter index used by STT
             "whisper_task": "transcribe",  # Whisper A.I. Can do "transcribe" or "translate"
             "current_language": None,  # can be None (auto) or any Whisper supported language.
             "target_language": "eng",  # can be any M4T supported language.
@@ -190,6 +229,8 @@ class SettingsManager:
             # TTS settings
             "tts_type": "silero",  # enable TTS
             "tts_ai_device": "cpu",  # can be "auto", "cuda" or "cpu".
+            "tts_ai_device_index": 0,  # CUDA adapter index used by TTS
+            "tts_precision": "auto",  # model-specific precision; older profiles migrate from special_settings
             "tts_answer": False,  # send whisper results to TTS engine
             "tts_model": ["en", "v3_en"],  # TTS language and model to use
             "tts_voice": "en_1",  # TTS voice (one of silero tts voices, or "last" to use last used voice)
@@ -279,6 +320,8 @@ class SettingsManager:
                     sanitized_data = Utilities.handle_bytes(loaded_data)
                     if sanitized_data:
                         self.translate_settings.update(sanitized_data)
+                        if "tts_precision" not in sanitized_data:
+                            self.translate_settings["tts_precision"] = _legacy_tts_precision(sanitized_data)
                         self._persisted_settings = copy.deepcopy(sanitized_data)
 
     def debounced_save_yaml(self, path):
@@ -452,6 +495,7 @@ class SettingsManager:
             #"tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "parler", ""],
             "tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "chatterbox", "index_tts", "qwen3_tts", "audio8_tts", "maya1", ""],
             "tts_ai_device": ["cuda", "cpu"],
+            "tts_precision": ["auto", "float32", "float16", "bfloat16", "8bit"],
             "txt_translator_device": ["cuda", "cpu"],
             "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "hunyuan_mt", "milmmt", "seamless_m4t", "phi4"],
             "txt_translator_size": ["small", "medium", "large", "MiLMMT-46-1B-v1.0", "MiLMMT-46-4B-v1.0", "MiLMMT-46-12B-v1.0", "custom"],

@@ -15,6 +15,7 @@ import re
 import num2words
 
 from Models.Singleton import SingletonMeta
+from Models.TTS.tts_config import get_tts_device
 
 tts = None
 failed = False
@@ -223,10 +224,9 @@ class Silero(metaclass=SingletonMeta):
     def __init__(self):
         self._verified_model_files = set()
         self._package_importer = None
-        self.device = "cuda" if settings.GetOption("tts_ai_device") == "cuda" or settings.GetOption(
-            "tts_ai_device") == "auto" else "cpu"
+        self.device = get_tts_device()
         # if cuda is not available, use cpu
-        if self.device == "cuda" and not torch.cuda.is_available():
+        if self.device.startswith("cuda") and not torch.cuda.is_available():
             print("CUDA not available, using CPU for TTS Model")
             self.device = "cpu"
 

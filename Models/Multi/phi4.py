@@ -345,7 +345,7 @@ class Phi4(metaclass=SingletonMeta):
             #self.model.to(self.compute_device)
 
             if quantization_config is None:
-                self.model = self.model.cuda()
+                self.model = self.model.to(self.compute_device)
         else:
             #with _TensorCPUWhenMeta(self.compute_device):
             self.model = AutoModelForCausalLM.from_pretrained(

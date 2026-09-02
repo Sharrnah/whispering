@@ -13,6 +13,7 @@ import audio_tools
 import downloader
 import settings
 from Models.Singleton import SingletonMeta
+from Models.TTS.tts_config import get_tts_device
 
 cache_path = Path(Path.cwd() / ".cache" / "orpheus-tts")
 os.makedirs(cache_path, exist_ok=True)
@@ -132,7 +133,7 @@ class OrpheusTTS(metaclass=SingletonMeta):
     download_state = {"is_downloading": False}
 
     def __init__(self):
-        self.set_compute_device(settings.GetOption("tts_ai_device"))
+        self.set_compute_device(get_tts_device())
 
         if not self.snac_model:
             self.download_model("snac_24khz")
@@ -142,8 +143,8 @@ class OrpheusTTS(metaclass=SingletonMeta):
             self.load()
 
         # Prepare CUDA streams for parallel processing if available
-        if self.snac_device == "cuda":
-            self.cuda_stream = torch.cuda.Stream()
+        if self.snac_device.startswith("cuda"):
+            self.cuda_stream = torch.cuda.Stream(device=self.snac_device)
 
         if not self.voice_list:
             self.update_voices()
@@ -197,6 +198,7 @@ class OrpheusTTS(metaclass=SingletonMeta):
             #device = torch.device(self.compute_device_str)
             device = self.compute_device_str
         self.compute_device = device
+        self.snac_device = self.compute_device_str if self.compute_device_str.startswith("cuda") else "cpu"
 
     def list_models(self):
         return model_list
@@ -375,7 +377,7 @@ class OrpheusTTS(metaclass=SingletonMeta):
 
     def tts(self, text, remove_silence=True, silence_after_segments=0.2, normalize=True):
         print("TTS requested Orpheus TTS")
-        self.set_compute_device(settings.GetOption('tts_ai_device'))
+        self.set_compute_device(get_tts_device())
 
         tts_volume = settings.GetOption("tts_volume")
 
@@ -527,7 +529,7 @@ class OrpheusTTS(metaclass=SingletonMeta):
         streamer = _OptimizedAudioStreamer(self)
 
         # ---- optimized generation ----
-        with torch.no_grad(), torch.cuda.stream(self.cuda_stream if self.snac_device == "cuda" else None):
+        with torch.no_grad(), torch.cuda.stream(self.cuda_stream if self.snac_device.startswith("cuda") else None):
             self.model.generate(
                 input_ids=input_ids,
                 attention_mask=attention_mask,

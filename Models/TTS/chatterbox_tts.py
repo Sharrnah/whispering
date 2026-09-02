@@ -28,6 +28,7 @@ from .text_segmentation import (
     parse_voice_tagged_text,
     split_long_segment,
 )
+from .tts_config import get_tts_device, get_tts_precision
 from .. import languageClassification
 from ..Singleton import SingletonMeta
 import re
@@ -344,7 +345,7 @@ class Chatterbox(metaclass=SingletonMeta):
     segment_counter = 0
 
     def __init__(self):
-        self.set_compute_device(settings.GetOption("tts_ai_device"))
+        self.set_compute_device(get_tts_device())
         if not self.voice_list:
             self.update_voices()
         self.language_code_converter = Utilities.LanguageCodeConverter()
@@ -488,7 +489,7 @@ class Chatterbox(metaclass=SingletonMeta):
         return model
 
     def load(self):
-        desired_precision = self.special_settings.get("precision", "float32")
+        desired_precision = get_tts_precision(self.special_settings.get("precision", "float32"))
         desired_dtype = self._precision_string_to_dtype(desired_precision)
         self.load_model(dtype=desired_dtype)
 
@@ -506,17 +507,17 @@ class Chatterbox(metaclass=SingletonMeta):
             dtype = torch.float32
         else:
             # Default based on device: prefer fp16 on CUDA, otherwise fp32
-            dtype = torch.float16 if self.compute_device_str == "cuda" else torch.float32
+            dtype = torch.float16 if self.compute_device_str.startswith("cuda") else torch.float32
 
         # Device-aware fallback: if not CUDA, stick to float32 for safety
-        if self.compute_device_str != "cuda" and dtype != torch.float32:
+        if not self.compute_device_str.startswith("cuda") and dtype != torch.float32:
             print(f"Precision '{precision}' not supported/performance-safe on {self.compute_device_str}; using float32.")
             dtype = torch.float32
         return dtype
 
     def _ensure_model_for_precision(self):
         """Ensure model is loaded in the precision requested by special_settings."""
-        desired_precision = self.special_settings.get("precision", "float32")
+        desired_precision = get_tts_precision(self.special_settings.get("precision", "float32"))
         desired_dtype = self._precision_string_to_dtype(desired_precision)
         # If model not loaded or precision changed, (re)load
         if self.model is None or self._loaded_precision_dtype != desired_dtype:
@@ -525,7 +526,7 @@ class Chatterbox(metaclass=SingletonMeta):
 
     def load_model(self, dtype=None):
         model = self._get_model_name()
-        self.set_compute_device(settings.GetOption('tts_ai_device'))
+        self.set_compute_device(get_tts_device())
         if "custom" not in model:
             model_directory = Path(cache_path / TTS_MODEL_LINKS[model]["path"])
         else:
@@ -537,7 +538,7 @@ class Chatterbox(metaclass=SingletonMeta):
 
         # Determine dtype: from arg or special settings
         if dtype is None:
-            desired_precision = self.special_settings.get("precision", "float32")
+            desired_precision = get_tts_precision(self.special_settings.get("precision", "float32"))
             dtype = self._precision_string_to_dtype(desired_precision)
 
         is_multilingual = True
@@ -571,7 +572,7 @@ class Chatterbox(metaclass=SingletonMeta):
     def load_vc_model(self, model_type="multilingual", dtype=None):
         print(f"Loading VC model on device {self.compute_device_str} with precision {dtype}")
         model = "chatterbox-" + model_type
-        self.set_compute_device(settings.GetOption('tts_ai_device'))
+        self.set_compute_device(get_tts_device())
         if "custom" not in model:
             model_directory = Path(cache_path / TTS_MODEL_LINKS[model]["path"])
         else:
@@ -583,7 +584,7 @@ class Chatterbox(metaclass=SingletonMeta):
 
         # Determine dtype: from arg or special settings
         if dtype is None:
-            desired_precision = self.special_settings.get("precision", "float32")
+            desired_precision = get_tts_precision(self.special_settings.get("precision", "float32"))
             dtype = self._precision_string_to_dtype(desired_precision)
 
         meanflow = False
@@ -838,9 +839,13 @@ class Chatterbox(metaclass=SingletonMeta):
         # Select providers based on device
         try:
             avail = onnxruntime.get_available_providers()
-            if self.compute_device_str == "cuda" and "CUDAExecutionProvider" in avail:
+            if self.compute_device_str.startswith("cuda") and "CUDAExecutionProvider" in avail:
                 print("Using ONNX Runtime with CUDAExecutionProvider")
-                providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+                device_id = int(self.compute_device_str.split(":", 1)[1])
+                providers = [
+                    ("CUDAExecutionProvider", {"device_id": device_id}),
+                    "CPUExecutionProvider",
+                ]
             else:
                 print("Using ONNX Runtime with CPUExecutionProvider")
                 providers = ["CPUExecutionProvider"]
@@ -866,7 +871,7 @@ class Chatterbox(metaclass=SingletonMeta):
             return self._tts_generator_onnx(text, ref_audio=ref_audio, language=language)
 
         try:
-            self.set_compute_device(settings.GetOption('tts_ai_device'))
+            self.set_compute_device(get_tts_device())
             # Ensure model precision matches current setting
             self._ensure_model_for_precision()
 
@@ -1823,7 +1828,7 @@ class Chatterbox(metaclass=SingletonMeta):
             seed = self.generate_random_seed()
 
         torch.manual_seed(seed)
-        if self.compute_device_str == "cuda":
+        if self.compute_device_str.startswith("cuda"):
             torch.cuda.manual_seed(seed)
             torch.cuda.manual_seed_all(seed)
         random.seed(seed)

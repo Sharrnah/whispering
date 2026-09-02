@@ -1,4 +1,5 @@
 import settings
+from Models.ai_device import get_device
 from Models.OCR import easyocr
 from Models.OCR import got_ocr20
 from Models.Multi import phi4
@@ -10,11 +11,11 @@ def init_ocr_model():
     global ocr
     if ocr is None:
         ocr_type = settings.GetOption("ocr_type")
-        ocr_ai_device = settings.GetOption("ocr_ai_device")
+        ocr_ai_device = get_device("ocr_ai_device", "ocr_ai_device_index")
         ocr_precision = settings.GetOption("ocr_precision")
         match ocr_type:
             case "easyocr":
-                ocr = easyocr.EasyOcr()
+                ocr = easyocr.EasyOcr(ocr_ai_device)
             case "got_ocr_20":
                 ocr = got_ocr20.Got_ocr_20(ocr_ai_device)
             case "phi4":

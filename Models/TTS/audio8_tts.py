@@ -19,6 +19,7 @@ import audio_tools
 import settings
 from Models.Singleton import SingletonMeta
 from Models.TTS.text_segmentation import chunk_text
+from Models.TTS.tts_config import get_tts_device, get_tts_precision
 
 
 SAMPLE_RATE = 44100
@@ -416,7 +417,7 @@ class Audio8TTS(metaclass=SingletonMeta):
         self.reference_code_cache = OrderedDict()
         MODEL_CACHE_PATH.mkdir(parents=True, exist_ok=True)
         VOICES_PATH.mkdir(parents=True, exist_ok=True)
-        self.set_compute_device(settings.GetOption("tts_ai_device"))
+        self.set_compute_device(get_tts_device())
 
     def list_models(self):
         return MODEL_LIST
@@ -463,7 +464,7 @@ class Audio8TTS(metaclass=SingletonMeta):
         self.compute_device = torch.device(device)
 
     def _effective_dtype(self):
-        requested = str(self.special_settings.get("precision", "auto")).lower()
+        requested = get_tts_precision(self.special_settings.get("precision", "auto"))
         if requested in {"float32", "fp32"}:
             return torch.float32
         if self.compute_device.type == "cuda" and torch.cuda.is_bf16_supported():
@@ -549,7 +550,7 @@ class Audio8TTS(metaclass=SingletonMeta):
 
     def _load_model_locked(self):
         self._ensure_special_settings()
-        self.set_compute_device(settings.GetOption("tts_ai_device"))
+        self.set_compute_device(get_tts_device())
         model_name = self._get_model_name()
         dtype = self._effective_dtype()
         requested_attention = self.special_settings.get("attention", "auto")
