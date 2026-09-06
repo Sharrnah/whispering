@@ -209,6 +209,7 @@ def normalize_route(route, index, base_settings):
             or base_settings.GetOption("whisper_task")
             or "transcribe"
         ),
+        "target_language": _route_default(route, base_settings, "target_language", "eng"),
         "energy": _bounded_int(
             route.get("energy"), _base_default(base_settings, "energy", 300),
             0, 32767, "energy"
@@ -289,8 +290,26 @@ def normalize_route(route, index, base_settings):
         "osc_chat_prefix": str(
             _route_default(route, base_settings, "osc_chat_prefix", "") or ""
         ),
+        "osc_type_transfer": str(
+            route.get("osc_type_transfer")
+            or _base_default(base_settings, "osc_type_transfer", "translation_result")
+        ),
+        "osc_type_transfer_split": str(
+            _route_default(route, base_settings, "osc_type_transfer_split", " \U0001f310 ")
+        ),
         "plugins": _plugin_names(route.get("plugins"), "plugins"),
     }
+    if normalized["osc_type_transfer"] == "translation":
+        normalized["osc_type_transfer"] = "translation_result"
+    if normalized["osc_type_transfer"] not in {"source", "translation_result", "both", "both_inverted"}:
+        raise ValueError("Unsupported OSC transfer type.")
+    stt_type = base_settings.GetOption("stt_type")
+    model = str(base_settings.GetOption("model") or "").lower()
+    if (stt_type in {"qwen3_asr", "audio_cpp", "wav2vec_bert", "mms", "vibevoice_asr", "higgs_audio"}
+            or (stt_type == "nemo_canary" and model.startswith("parakeet"))
+            or (stt_type in {"faster_whisper", "transformer_whisper", "original_whisper"}
+                and model.endswith("-turbo"))):
+        normalized["whisper_task"] = "transcribe"
     return normalized
 
 
@@ -341,6 +360,7 @@ class RouteSettings:
         "stt_enabled",
         "current_language",
         "whisper_task",
+        "target_language",
         "energy",
         "vad_confidence_threshold",
         "phrase_time_limit",
@@ -361,6 +381,8 @@ class RouteSettings:
         "osc_typing_indicator",
         "osc_chat_notification",
         "osc_chat_prefix",
+        "osc_type_transfer",
+        "osc_type_transfer_split",
     )
 
     def __init__(self, base_settings, route):

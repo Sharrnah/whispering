@@ -37,6 +37,7 @@ import Models.STT.nemo_canary as nemo_canary
 import Models.STT.vibevoice_asr as vibevoice_asr
 import Models.STT.higgs_audio as higgs_audio
 import Models.STT.qwen3_asr as qwen3_asr
+import Models.STT.audio_cpp as audio_cpp_stt
 import Models.Multi.seamless_m4t as seamless_m4t
 import Models.Multi.mms as mms
 import Models.Multi.phi4 as phi4
@@ -158,6 +159,9 @@ def higgs_audio_asr_get_languages():
 
 def qwen3_asr_get_languages():
     return qwen3_asr.get_languages()
+
+def audio_cpp_get_languages():
+    return audio_cpp_stt.get_languages()
 
 
 def normalize_whisper_language(language):
@@ -695,6 +699,18 @@ def load_whisper(model, ai_device):
             return qwen3_asr.Qwen3ASR(compute_type=compute_dtype, device=ai_device)
         except Exception as e:
             print("Failed to load Qwen3-ASR model. Application exits. " + str(e))
+    elif stt_type == "audio_cpp":
+        compute_dtype = main_settings.GetOption("whisper_precision")
+        try:
+            return audio_cpp_stt.AudioCppASR(
+                compute_type=compute_dtype,
+                device=main_settings.GetOption("ai_device"),
+                device_index=main_settings.GetOption("ai_device_index"),
+                cpu_threads=cpu_threads,
+                role="stt",
+            )
+        except Exception as e:
+            print("Failed to initialize audio.cpp ASR. Application exits. " + str(e))
     #elif stt_type == "phi4-onnx":
     #    compute_dtype = main_settings.GetOption("whisper_precision")
     #    #try:
@@ -761,6 +777,15 @@ def load_realtime_whisper(model, ai_device):
     elif main_settings.GetOption("stt_type") == "qwen3_asr":
         compute_dtype = main_settings.GetOption("realtime_whisper_precision")
         return qwen3_asr.Qwen3ASR(compute_type=compute_dtype, device=ai_device)
+    elif main_settings.GetOption("stt_type") == "audio_cpp":
+        compute_dtype = main_settings.GetOption("realtime_whisper_precision")
+        return audio_cpp_stt.AudioCppASR(
+            compute_type=compute_dtype,
+            device=main_settings.GetOption("ai_device"),
+            device_index=main_settings.GetOption("ai_device_index"),
+            cpu_threads=cpu_threads,
+            role="realtime-stt",
+        )
 
     #elif main_settings.GetOption("stt_type") == "phi4-onnx":
     #    compute_dtype = main_settings.GetOption("realtime_whisper_precision")
@@ -1308,6 +1333,33 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
                 selected_beam_size = whisper_beam_size_realtime
             selected_model.set_compute_type(selected_precision)
             selected_model.set_compute_device(get_device("ai_device", "ai_device_index", settings))
+            result = selected_model.transcribe(
+                audio_data_numpy,
+                model=selected_model_name,
+                task="transcribe",
+                language=whisper_language,
+                return_timestamps=whisper_word_timestamps,
+                beam_size=selected_beam_size,
+                prompt=whisper_initial_prompt,
+                length_penalty=whisper_faster_length_penalty,
+                repetition_penalty=repetition_penalty,
+                no_repeat_ngram_size=no_repeat_ngram_size,
+            )
+        elif settings.GetOption("stt_type") == "audio_cpp":
+            selected_model = audio_model
+            selected_model_name = settings.GetOption("model")
+            selected_precision = settings.GetOption("whisper_precision")
+            selected_beam_size = whisper_beam_size
+            if settings.GetOption("realtime") and audio_model_realtime is not None and not final_audio:
+                selected_model = audio_model_realtime
+                selected_model_name = settings.GetOption("realtime_whisper_model")
+                selected_precision = settings.GetOption("realtime_whisper_precision")
+                selected_beam_size = whisper_beam_size_realtime
+            selected_model.set_compute_type(selected_precision)
+            selected_model.set_compute_device(
+                settings.GetOption("ai_device"),
+                settings.GetOption("ai_device_index"),
+            )
             result = selected_model.transcribe(
                 audio_data_numpy,
                 model=selected_model_name,

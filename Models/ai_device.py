@@ -72,6 +72,60 @@ def resolve_device(device, device_index=0, *, cuda_available=None, cuda_device_c
     return f"cuda:{cuda_index}"
 
 
+def _mps_available(mps_available=None) -> bool:
+    if mps_available is not None:
+        return bool(mps_available)
+    try:
+        import torch
+
+        return bool(torch.backends.mps.is_available())
+    except (AttributeError, ImportError, RuntimeError):
+        return False
+
+
+def resolve_torch_device(
+    device,
+    device_index=0,
+    *,
+    cuda_available=None,
+    cuda_device_count=None,
+    mps_available=None,
+) -> str:
+    """Resolve a profile backend to a device understood by PyTorch.
+
+    Native runtimes such as audio.cpp can use Vulkan, HIP, or Metal without
+    PyTorch supporting those device strings.  Auxiliary Torch models (for
+    example the Tiger Voice Pro Chatterbox model) must therefore use the
+    closest Torch accelerator, or CPU, while the native runtime keeps the
+    original backend and adapter index.
+    """
+    device_name = str(device or "").strip().lower()
+    selected_index = normalize_device_index(device_index)
+
+    if device_name == "metal":
+        if _mps_available(mps_available):
+            return "mps"
+        return "cpu"
+
+    if device_name in {"vulkan", "hip", "rocm"}:
+        available, count = _cuda_capabilities(cuda_available, cuda_device_count)
+        if not available or count <= 0:
+            return "cpu"
+        # PyTorch exposes ROCm through its CUDA-compatible API.  Vulkan device
+        # numbering may also include Intel/AMD adapters that do not appear in
+        # torch.cuda, so fall back to the first Torch GPU when the native index
+        # has no corresponding Torch device.
+        torch_index = selected_index if selected_index < count else 0
+        return f"cuda:{torch_index}"
+
+    return resolve_device(
+        device_name,
+        selected_index,
+        cuda_available=cuda_available,
+        cuda_device_count=cuda_device_count,
+    )
+
+
 def get_device(device_setting: str, index_setting: str | None = None, settings_source=None) -> str:
     """Resolve a device and its companion index from a settings provider."""
     if index_setting is None:
@@ -82,6 +136,21 @@ def get_device(device_setting: str, index_setting: str | None = None, settings_s
         if get_option is None:
             get_option = settings_source.get_option
     return resolve_device(
+        get_option(device_setting),
+        get_option(index_setting),
+    )
+
+
+def get_torch_device(device_setting: str, index_setting: str | None = None, settings_source=None) -> str:
+    """Resolve a configured route device for a PyTorch consumer."""
+    if index_setting is None:
+        index_setting = DEVICE_INDEX_SETTINGS[device_setting]
+    get_option = settings.GetOption
+    if settings_source is not None:
+        get_option = getattr(settings_source, "GetOption", None)
+        if get_option is None:
+            get_option = settings_source.get_option
+    return resolve_torch_device(
         get_option(device_setting),
         get_option(index_setting),
     )

@@ -26,6 +26,7 @@ _TTS_DEFAULT_PRECISIONS = {
     "index_tts": "bfloat16",
     "qwen3_tts": "auto",
     "audio8_tts": "auto",
+    "audio_cpp": "orig",
     "maya1": "bfloat16",
 }
 
@@ -114,8 +115,8 @@ class SettingsManager:
 
             # whisper settings
             "stt_enabled": True,  # enable STT (if disabled, stops sending audio to whisper)
-            "ai_device": None,  # can be None (auto), "cuda" or "cpu".
-            "ai_device_index": 0,  # CUDA adapter index used by STT
+            "ai_device": None,  # can be None (auto), cpu/cuda, or an adapter-specific native backend.
+            "ai_device_index": 0,  # accelerator adapter index used by STT
             "whisper_task": "transcribe",  # Whisper A.I. Can do "transcribe" or "translate"
             "current_language": None,  # can be None (auto) or any Whisper supported language.
             "target_language": "eng",  # can be any M4T supported language.
@@ -228,8 +229,8 @@ class SettingsManager:
 
             # TTS settings
             "tts_type": "silero",  # enable TTS
-            "tts_ai_device": "cpu",  # can be "auto", "cuda" or "cpu".
-            "tts_ai_device_index": 0,  # CUDA adapter index used by TTS
+            "tts_ai_device": "cpu",  # can be "auto", cpu/cuda, or an adapter-specific native backend.
+            "tts_ai_device_index": 0,  # accelerator adapter index used by TTS
             "tts_precision": "auto",  # model-specific precision; older profiles migrate from special_settings
             "tts_answer": False,  # send whisper results to TTS engine
             "tts_model": ["en", "v3_en"],  # TTS language and model to use
@@ -450,6 +451,16 @@ class SettingsManager:
 
     def get_available_models(self):
         available_models_list = []
+        if self.get_option("stt_type") == "audio_cpp":
+            available_models_list = [
+                "Qwen3-ASR-0.6B-GGUF",
+                "Qwen3-ASR-1.7B-GGUF",
+                "Nemotron-3.5-ASR-Streaming-0.6B-GGUF",
+                "VibeVoice-ASR-GGUF",
+                "Voxtral-Mini-4B-Realtime-2602-GGUF",
+                "Audio8-ASR-0.1B-GGUF",
+                "Kroko-ASR-English-64L-GGUF",
+            ]
         if self.get_option("stt_type") == "qwen3_asr":
             available_models_list = ["Qwen3-ASR-0.6B-hf", "Qwen3-ASR-1.7B-hf", "custom"]
         if '_whisper' in self.get_option("stt_type"):
@@ -488,23 +499,26 @@ class SettingsManager:
 
     def get_available_setting_values(self):
         possible_settings = {
-            "ai_device": ["None", "cuda", "cpu", "direct-ml:0", "direct-ml:1"],
+            # HIP/ROCm remains accepted by the audio.cpp runtime for manually
+            # configured custom builds, but is hidden from selectable values
+            # until an official, verifiable runtime archive is available.
+            "ai_device": ["None", "cuda", "cpu", "vulkan", "metal", "direct-ml:0", "direct-ml:1"],
             "model": self.get_available_models(),
             "whisper_task": ["transcribe", "translate", "transcribe_translate"],
-            "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "medusa_whisper", "qwen3_asr", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", "phi4", "voxtral", "phi4-onnx", "vibevoice_asr", "higgs_audio", ""],
+            "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "medusa_whisper", "qwen3_asr", "audio_cpp", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", "phi4", "voxtral", "phi4-onnx", "vibevoice_asr", "higgs_audio", ""],
             #"tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "parler", ""],
-            "tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "chatterbox", "index_tts", "qwen3_tts", "audio8_tts", "maya1", ""],
-            "tts_ai_device": ["cuda", "cpu"],
-            "tts_precision": ["auto", "float32", "float16", "bfloat16", "8bit"],
+            "tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "chatterbox", "index_tts", "qwen3_tts", "audio8_tts", "audio_cpp", "maya1", ""],
+            "tts_ai_device": ["cuda", "cpu", "vulkan", "metal"],
+            "tts_precision": ["auto", "float32", "float16", "bfloat16", "8bit", "orig", "f16", "bf16", "q8_0", "q4_k"],
             "txt_translator_device": ["cuda", "cpu"],
             "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "hunyuan_mt", "milmmt", "seamless_m4t", "phi4"],
             "txt_translator_size": ["small", "medium", "large", "MiLMMT-46-1B-v1.0", "MiLMMT-46-4B-v1.0", "MiLMMT-46-12B-v1.0", "custom"],
             "txt_translator_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit"],
             "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
             "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
-            "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit"],
+            "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit", "f16", "bf16", "q8_0", "q4_k"],
             "realtime_whisper_model": [""] + self.get_available_models(),
-            "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit"],
+            "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit", "f16", "bf16", "q8_0", "q4_k"],
             "osc_type_transfer": ["source", "translation_result", "both", "both_inverted"],
             "osc_send_type": ["full", "full_or_scroll", "scroll", "chunks"],
             "denoise_audio": ["", "noise_reduce", "deepfilter"],

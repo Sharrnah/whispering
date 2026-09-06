@@ -85,6 +85,8 @@ if __name__ == '__main__':
     import remote_opener
     from Models.STT import faster_whisper
     from Models.STT import qwen3_asr
+    from Models.STT import audio_cpp as audio_cpp_stt
+    from Models.audio_cpp_runtime import ensure_runtime as ensure_audio_cpp_runtime, normalize_backend_device as normalize_audio_cpp_device
     from Models.Multi import seamless_m4t
     from Models.TextTranslation import texttranslate
     from Models import languageClassification
@@ -306,8 +308,8 @@ if __name__ == '__main__':
     @click.option("--websocket_port", default=5000, help="Port where Websocket Server listens on. ('5000' as default)",
                   type=int)
     @click.option("--ai_device", default=None,
-                  help="The Device the AI is loaded on. can be 'cuda' or 'cpu'. default does autodetect",
-                  type=click.Choice(["cuda", "cpu"]))
+                  help="AI device/backend. audio.cpp additionally supports Vulkan, HIP/ROCm, and Metal.",
+                  type=click.Choice(["cuda", "cpu", "vulkan", "hip", "rocm", "metal"]))
     @click.option("--txt_translator", default="NLLB200",
                   help="The Model the AI is loading for text translations. can be 'NLLB200', 'M2M100' or 'None'. default is NLLB200",
                   type=click.Choice(["NLLB200", "M2M100"]))
@@ -536,6 +538,11 @@ if __name__ == '__main__':
             if settings.SETTINGS.GetOption("whisper_task") != "transcribe":
                 print("Qwen3-ASR only supports transcription; switching the speech task to transcribe.")
                 settings.SETTINGS.SetOption("whisper_task", "transcribe")
+        elif settings.SETTINGS.GetOption("stt_type") == "audio_cpp":
+            settings.SETTINGS.SetOption("whisper_languages", audioprocessor.audio_cpp_get_languages())
+            if settings.SETTINGS.GetOption("whisper_task") != "transcribe":
+                print("audio.cpp ASR models only support transcription; switching the speech task to transcribe.")
+                settings.SETTINGS.SetOption("whisper_task", "transcribe")
         else:
             # show no language if unspecified STT type
             settings.SETTINGS.SetOption("whisper_languages", ({"code": "", "name": ""},))
@@ -653,6 +660,21 @@ if __name__ == '__main__':
             realtime_qwen_model = settings.SETTINGS.GetOption("realtime_whisper_model")
             if realtime_qwen_model and qwen3_asr.needs_download(realtime_qwen_model):
                 qwen3_asr.download_model(realtime_qwen_model)
+        if settings.SETTINGS.GetOption("stt_type") == "audio_cpp":
+            audio_cpp_model = settings.SETTINGS.GetOption("model")
+            audio_cpp_precision = settings.SETTINGS.GetOption("whisper_precision")
+            if audio_cpp_stt.is_managed_model(audio_cpp_model) and audio_cpp_stt.needs_download(audio_cpp_model, audio_cpp_precision):
+                audio_cpp_stt.download_model(audio_cpp_model, audio_cpp_precision)
+            realtime_audio_cpp_model = settings.SETTINGS.GetOption("realtime_whisper_model")
+            realtime_audio_cpp_precision = settings.SETTINGS.GetOption("realtime_whisper_precision")
+            if realtime_audio_cpp_model and audio_cpp_stt.is_managed_model(realtime_audio_cpp_model) and audio_cpp_stt.needs_download(
+                    realtime_audio_cpp_model, realtime_audio_cpp_precision):
+                audio_cpp_stt.download_model(realtime_audio_cpp_model, realtime_audio_cpp_precision)
+            audio_cpp_backend, _ = normalize_audio_cpp_device(
+                settings.SETTINGS.GetOption("ai_device"),
+                settings.SETTINGS.GetOption("ai_device_index"),
+            )
+            ensure_audio_cpp_runtime(audio_cpp_backend)
 
         # load audio filter model
         audio_enhancer = None

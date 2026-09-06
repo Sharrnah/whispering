@@ -570,7 +570,6 @@ class Chatterbox(metaclass=SingletonMeta):
                 print("Chatterbox TTS model loaded.")
 
     def load_vc_model(self, model_type="multilingual", dtype=None):
-        print(f"Loading VC model on device {self.compute_device_str} with precision {dtype}")
         model = "chatterbox-" + model_type
         self.set_compute_device(get_tts_device())
         if "custom" not in model:
@@ -586,6 +585,8 @@ class Chatterbox(metaclass=SingletonMeta):
         if dtype is None:
             desired_precision = get_tts_precision(self.special_settings.get("precision", "float32"))
             dtype = self._precision_string_to_dtype(desired_precision)
+
+        print(f"Loading VC model on device {self.compute_device_str} with precision {dtype}")
 
         meanflow = False
         if model_type == "turbo":

@@ -12,6 +12,7 @@ from Models.TTS.maya1_tts import MayaOne
 from Models.TTS.index_tts import IndexTTS
 from Models.TTS.qwen3_tts import Qwen3TTS
 from Models.TTS.audio8_tts import Audio8TTS
+from Models.TTS.audio_cpp import AudioCppTTS
 
 tts = None
 failed = None
@@ -60,6 +61,8 @@ def init():
             return _activate_tts(Qwen3TTS)
         case "audio8_tts":
             return _activate_tts(Audio8TTS)
+        case "audio_cpp":
+            return _activate_tts(AudioCppTTS)
         case _:
             if tts is not None and not failed:
                 return True

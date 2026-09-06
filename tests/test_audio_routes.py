@@ -79,6 +79,43 @@ def _route(**overrides):
 
 
 class AudioRouteSettingsTests(unittest.TestCase):
+    def test_route_osc_transfer_modes_reach_output_without_changing_main(self):
+        base = _Settings(
+            osc_type_transfer="source", osc_type_transfer_split="main",
+            osc_address="/chatbox/input", osc_port=9000,
+            osc_min_time_between_messages=0, osc_chat_prefix="",
+            osc_send_type="full", osc_convert_ascii=False,
+            initial_prompt="", txt_second_translation_enabled=False, txt_second_translation_wrap="",
+        )
+        for mode, expected in (("source", "Hello"), ("translation_result", "Hallo"),
+                               ("both", "Hello | Hallo"), ("both_inverted", "Hallo | Hello")):
+            with self.subTest(mode=mode):
+                route = audio_routes.normalize_route(_route(
+                    osc_enabled=True, websocket_enabled=False,
+                    osc_type_transfer=mode, osc_type_transfer_split=" | ",
+                ), 0, base)
+                snapshot = audio_routes.RouteSettings(base, route).snapshot()
+                with mock.patch.object(audioprocessor.VRC_OSCLib, "Chat") as chat, \
+                        mock.patch.object(audioprocessor.VRC_OSCLib, "set_min_time_between_messages"), \
+                        mock.patch.object(audioprocessor.main_settings, "SetOption"):
+                    audioprocessor.send_message("Hallo", {"text": "Hello", "language": "en", "txt_translation": "Hallo"},
+                                                final_audio=True, settings=snapshot, plugins=None)
+                self.assertEqual(chat.call_args.args[0], expected)
+        self.assertEqual(base.GetOption("osc_type_transfer"), "source")
+        cleared = audio_routes.normalize_route(_route(osc_type_transfer_split=""), 0, base)
+        self.assertEqual(cleared["osc_type_transfer_split"], "")
+        with self.assertRaises(ValueError):
+            audio_routes.normalize_route(_route(osc_type_transfer="invalid"), 0, base)
+
+    def test_transcription_only_routes_discard_stale_translation_task(self):
+        for stt_type, model in (("qwen3_asr", "custom"), ("mms", ""),
+                                ("audio_cpp", ""), ("nemo_canary", "parakeet-tdt-0.6b-v3"),
+                                ("faster_whisper", "large-v3-turbo")):
+            with self.subTest(stt_type=stt_type):
+                route = audio_routes.normalize_route(_route(whisper_task="translate"), 0,
+                                                     _Settings(stt_type=stt_type, model=model))
+                self.assertEqual(route["whisper_task"], "transcribe")
+
     def test_transcript_only_plugins_do_not_schedule_realtime_audio_work(self):
         class _RealtimePlugin:
             def realtime_sts(self, *_args, **_kwargs):
