@@ -471,7 +471,7 @@ class AudioRoute:
                     "is globally disabled and will not receive this source."
                 )
 
-    def start(self):
+    def start(self, *, capture=True):
         if not self.config["enabled"]:
             return self.config
 
@@ -525,6 +525,12 @@ class AudioRoute:
             enable_mic_passthrough=False,
             verbose=bool(self.settings.GetOption("verbose")),
         )
+        if not capture:
+            # Network capture feeds the same recorder without opening a host device.
+            self.processor.recorded_sample_rate = SAMPLE_RATE
+            self.processor.input_channel_num = CHANNELS
+            self.processor.needs_sample_rate_conversion = False
+            return copy.deepcopy(self.config)
         self.controller = audio_tools.AudioInputStreamController(
             sample_format=FORMAT,
             sample_rate=SAMPLE_RATE,

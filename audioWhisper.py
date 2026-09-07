@@ -4,6 +4,13 @@ if __name__ == '__main__':
     import multiprocessing
     multiprocessing.freeze_support()
 
+    # Dispatch before importing audio/model/backend modules. The same frozen
+    # executable can host local integrations without initializing AI runtimes.
+    import sys
+    if "--plugin_host" in sys.argv:
+        import plugin_host
+        raise SystemExit(plugin_host.main())
+
     import os
     import platform
     import sys
@@ -328,9 +335,11 @@ if __name__ == '__main__':
                   help="Use the specified config file instead of the default 'settings.yaml' (relative to the current path) [overwrites without asking!!!]",
                   type=str)
     @click.option("--verbose", default=False, help="Whether to print verbose output", is_flag=True, type=bool)
+    @click.option("--remote_host", is_flag=True, default=False,
+                  help="Run as an AI audio host without opening local capture devices.")
     @click.pass_context
     def main(ctx, detect_energy, detect_energy_time, ui_download, devices, sample_rate, dynamic_energy, open_browser,
-             config, verbose,
+             config, verbose, remote_host,
              **kwargs):
         if str2bool(devices):
             host_audio_api_names = audio_tools.get_host_audio_api_names()
@@ -752,9 +761,32 @@ if __name__ == '__main__':
         # Begin the one shared model load while additional streams/VAD state
         # are being prepared. Later branch-local calls are idempotent.
         audioprocessor.start_whisper_thread()
-        route_manager.start_from_settings()
+        if not remote_host:
+            route_manager.start_from_settings()
         audio_routes.set_audio_route_manager(route_manager)
         main_audio_plugins = route_manager.main_plugins()
+
+        if remote_host:
+            import asyncio
+            import remote_audio
+
+            if websocket.main_server is not None:
+                asyncio.run_coroutine_threadsafe(
+                    remote_audio.configure_host(True), websocket.main_server.loop
+                ).result(timeout=15)
+                print("Remote audio host is listening on port 5001. Pairing key: .cache/remote-audio/pairing-key")
+                while True:
+                    time.sleep(0.5)
+            else:
+                async def serve_remote_audio():
+                    await remote_audio.configure_host(True)
+                    print("Remote audio host is listening on port 5001. Pairing key: .cache/remote-audio/pairing-key")
+                    try:
+                        await asyncio.Future()
+                    finally:
+                        await remote_audio.configure_host(False)
+                asyncio.run(serve_remote_audio())
+            return
 
         # start OSC Server
         #if settings.GetOption("osc_sync_mute") or settings.GetOption("osc_sync_afk"):

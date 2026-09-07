@@ -13,7 +13,14 @@ from robust_downloader import download
 import requests
 
 import settings
-import websocket
+
+class _WebsocketProxy:
+    """The non-UI downloader is also used by the model-free plugin host."""
+    def __getattr__(self, name):
+        import importlib
+        return getattr(importlib.import_module("websocket"), name)
+
+websocket = _WebsocketProxy()
 
 running_downloads = set()  # Global set tracking ongoing downloads.
 running_downloads_lock = threading.Lock()

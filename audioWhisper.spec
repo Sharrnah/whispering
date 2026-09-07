@@ -24,6 +24,7 @@ except Exception:
     pass
 
 hiddenimports = [
+    'plugin_host',
     'torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers', 'transformers.models.nllb', 'torchcodec', 'sentencepiece',
     'df.deepfilternet3', 'bitsandbytes', 'faiss', 'faiss-cpu', 'praat-parselmouth', 'parselmouth', 'pyworld', 'torchcrepe',
     'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio',

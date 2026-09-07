@@ -432,6 +432,10 @@ def _osc_chat_notification_enabled(settings):
 
 
 def send_message(predicted_text, result_obj, final_audio, settings, plugins):
+    remote_result = getattr(settings, "remote_result", None)
+    if remote_result is not None:
+        remote_result(result_obj, final_audio)
+        return
     osc_ip = settings.GetOption("osc_ip")
     osc_address = settings.GetOption("osc_address")
     osc_port = settings.GetOption("osc_port")
@@ -1472,6 +1476,8 @@ def whisper_worker():
 
         try:
             # skip if no audio data is available
+            if getattr(settings, "remote_closed", lambda: False)():
+                continue
             if audio is None or len(audio) == 0:
                 continue
 

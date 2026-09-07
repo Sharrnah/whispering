@@ -466,6 +466,21 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
                stop_play=True, tag=""):
     global audio_threads
 
+    from remote_audio_output import current_destination
+    remote = current_destination()
+    if remote is not None:
+        if isinstance(audio, bytes):
+            with wave.open(io.BytesIO(audio), 'rb') as remote_wav:
+                width = remote_wav.getsampwidth()
+                if width != 2:
+                    raise ValueError("Remote WAV playback requires PCM16")
+                remote(remote_wav.readframes(remote_wav.getnframes()),
+                       remote_wav.getframerate(), remote_wav.getnchannels(), "<i2")
+        else:
+            samples = audio.detach().float().cpu().numpy() if isinstance(audio, torch.Tensor) else np.asarray(audio)
+            remote(samples.tobytes(), source_sample_rate, input_channels, samples.dtype)
+        return
+
     if stop_play:
         stop_audio(tag=tag)
 
@@ -1675,6 +1690,10 @@ class AudioStreamer:
 
     # ----------------------------------------------------------------------
     def init_stream(self, desired_sample_rate):
+        from remote_audio_output import current_destination
+        if current_destination() is not None:
+            self.actual_sample_rate = desired_sample_rate
+            return
         if self.p is not None:
             pyaudio_pool.release(self.p)
             self.p = None
@@ -1699,7 +1718,14 @@ class AudioStreamer:
 
     # ----------------------------------------------------------------------
     def add_audio_chunk(self, chunk: bytes | bytearray):
+        from remote_audio_output import current_destination
+        remote = current_destination()
+        if remote is not None:
+            remote(chunk, self.source_sample_rate, self._source_channels, self.dtype)
+            return
         with self._device_lock:
+            if self.stream is None:
+                self.init_stream(self.source_sample_rate)
             self._add_audio_chunk_locked(chunk)
 
     def _add_audio_chunk_locked(self, chunk: bytes | bytearray):

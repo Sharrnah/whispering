@@ -5,7 +5,6 @@ from importlib import util
 from pathlib import Path
 import copy
 
-from audio_tools import get_audio_device_index_by_name_and_api, get_audio_api_index_by_name
 import settings
 
 SUPPORTED_WIDGET_TYPES = ["button", "slider", "select", "select_textvalue", "textarea", "textfield", "hyperlink", "label", "file_open", "file_save",
@@ -86,6 +85,7 @@ class Base:
         self._settings.SetOption("plugin_settings", plugin_settings)
 
     def _audio_widget_device_getter(self, settings_value):
+        from audio_tools import get_audio_api_index_by_name
         device_api = 0
         is_input = True
         device_api_name = ""
@@ -120,6 +120,7 @@ class Base:
                 settings_value["type"] in SUPPORTED_WIDGET_TYPES and "value" in settings_value:
             # special case for select_audio widget
             if settings_value["type"] == "select_audio" and "_value_text" in settings_value and settings_value["_value_text"] != "":
+                from audio_tools import get_audio_device_index_by_name_and_api
                 device_api, is_input, value = self._audio_widget_device_getter(settings_value)
                 return get_audio_device_index_by_name_and_api(settings_value["_value_text"], device_api, is_input, value)
             # special case for select_completion and select_textvalue widget
@@ -222,7 +223,7 @@ os.makedirs(plugin_path, exist_ok=True)
 # dirpath = os.path.dirname(path)
 dirpath = str(plugin_path.resolve())
 
-for fname in os.listdir(dirpath):
+for fname in (os.listdir(dirpath) if os.environ.get("WT_PLUGIN_HOST") != "1" else []):
     # Load only "real modules"
     if not fname.startswith('.') and \
             not fname.startswith('__') and fname.endswith('.py'):
@@ -325,3 +326,45 @@ def plugin_custom_event_call(event_name, data_obj):
 
 def plugin_custom_event_call_all(event_name, data_obj):
     return list(internal_plugin_custom_event_call(plugins, event_name, data_obj))
+
+
+def plugin_custom_event_has_active_handler(event_name):
+    """Return whether an enabled plugin currently consumes a custom event.
+
+    Streaming producers use this to decide whether samples may be played
+    immediately or must first be collected for a whole-wave postprocessor.
+    Plugins with additional mode/model requirements can expose
+    ``is_<event_name>_active``; older plugins conservatively count as active
+    whenever their plugin itself is enabled.
+    """
+    call_func_name = 'on_' + event_name + '_call'
+    probe_func_name = 'is_' + event_name + '_active'
+    for plugin_inst in plugins:
+        if not hasattr(plugin_inst, call_func_name):
+            continue
+        probe = getattr(plugin_inst, probe_func_name, None)
+        if callable(probe):
+            try:
+                if probe():
+                    return True
+            except Exception as e:
+                print(
+                    f"Error checking plugin {plugin_inst.__class__.__name__} "
+                    f"with {probe_func_name}: {e}"
+                )
+                traceback.print_exc()
+                # Buffering is the safe choice if a handler cannot report its
+                # state: already-played audio cannot be postprocessed later.
+                return True
+            continue
+        try:
+            if not hasattr(plugin_inst, 'is_enabled') or plugin_inst.is_enabled(False):
+                return True
+        except Exception as e:
+            print(
+                f"Error checking plugin {plugin_inst.__class__.__name__} "
+                f"for {call_func_name}: {e}"
+            )
+            traceback.print_exc()
+            return True
+    return False

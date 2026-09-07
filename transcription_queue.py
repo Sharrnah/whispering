@@ -148,6 +148,10 @@ class RouteTranscriptionQueue:
             while self._unfinished_tasks:
                 self._condition.wait()
 
+    def source_size(self, source_id):
+        with self._condition:
+            return len(self._lanes.get(str(source_id), ()))
+
     def qsize(self):
         with self._condition:
             return sum(len(lane) for lane in self._lanes.values())
