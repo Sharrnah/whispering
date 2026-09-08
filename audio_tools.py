@@ -99,12 +99,30 @@ def get_default_audio_device_index_by_api(api, is_input=True):
     api_pyaudio_index, _ = get_audio_api_index_by_name(api)
 
     default_device_index = api_info[host_api_index]['default_input_device' if is_input else 'default_output_device']
+    if default_device_index < 0:
+        return None
     default_device_name = devices[default_device_index]['name']
     return get_audio_device_index_by_name_and_api(default_device_name, api_pyaudio_index, is_input)
 
 
 def get_audio_device_index_by_name_and_api(name, api, is_input=True, default=None):
     audio = pyaudio.PyAudio()
+    if platform.system() == "Linux" and audio.get_host_api_info_by_index(api)["name"] == "PulseAudio":
+        from Utilities.linux_audio import pulse_device_name
+        try:
+            if name == ("Default Source" if is_input else "Default Sink"):
+                index = audio.get_host_api_info_by_index(api)["defaultInputDevice" if is_input else "defaultOutputDevice"]
+                return index if index >= 0 else None
+            native_name = pulse_device_name(name, is_input)
+            for i in range(audio.get_device_count()):
+                device_info = audio.get_device_info_by_index(i)
+                if (device_info["hostApi"] == api and device_info["name"] == native_name
+                        and device_info["maxInputChannels" if is_input else "maxOutputChannels"] > 0):
+                    return i
+            # UI indices belong to miniaudio and are never valid fallbacks here.
+            raise ValueError(f"PulseAudio device {name!r} was not enumerated by PortAudio.")
+        finally:
+            audio.terminate()
     device_count = audio.get_device_count()
     for i in range(device_count):
         device_info = audio.get_device_info_by_index(i)

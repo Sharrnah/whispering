@@ -1,0 +1,11 @@
+# Runtime validation image: no Python, Go compiler, or build environment.
+FROM debian:bookworm-slim
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libgl1 libegl1 libx11-6 libxcursor1 libxrandr2 libxinerama1 \
+    libxi6 libxxf86vm1 libasound2 libpulse0 libglib2.0-0 \
+    pulseaudio pulseaudio-utils xvfb xauth unzip \
+    && rm -rf /var/lib/apt/lists/*
+RUN useradd --create-home --uid 1000 tester
+USER tester
+WORKDIR /home/tester

@@ -1,73 +1,36 @@
-FROM ubuntu:22.04
-SHELL ["/bin/bash", "-i", "-c"]
+# Build and test only inside Docker. Debian 12 sets the glibc floor to 2.36.
+FROM golang:1.26.5-bookworm AS go
+FROM python:3.11.6-bookworm
 
-ARG PYTHON_VERSION=3.11.6
-ARG PYINSTALLER_VERSION=6.7.0
-ENV OPENSSL_VERSION=openssl-3.3.2
-
-ENV PYPI_URL=https://pypi.python.org/
-ENV PYPI_INDEX_URL=https://pypi.python.org/simple
-ENV PYENV_VERSION=${PYTHON_VERSION}
-
+ARG PYINSTALLER_VERSION=6.22.2
+ARG PORTAUDIO_REVISION=a4dbf68c51fd32734f32657db64849aac24739e7
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    GOPATH=/go \
+    PATH=/usr/local/go/bin:$PATH
+COPY --from=go /usr/local/go /usr/local/go
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    portaudio19-dev libasound2-dev libpulse-dev libsndfile1 ffmpeg \
+    libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev \
+    xvfb xauth pulseaudio pulseaudio-utils dbus-x11 xdotool \
+    zip unzip patchelf libgomp1 espeak-ng cmake \
+    && rm -rf /var/lib/apt/lists/*
+# Debian's released PortAudio lacks the native PulseAudio host API. Build it
+# locally so Python and the UI can address PulseAudio/PipeWire source/sink IDs.
+RUN git clone https://github.com/PortAudio/portaudio.git /tmp/portaudio \
+    && git -C /tmp/portaudio checkout ${PORTAUDIO_REVISION} \
+    && cmake -S /tmp/portaudio -B /tmp/portaudio-build \
+       -DPA_BUILD_SHARED_LIBS=ON -DPA_BUILD_EXAMPLES=OFF -DPA_BUILD_TESTS=OFF \
+       -DPA_USE_PULSEAUDIO=ON -DPA_USE_ALSA=ON -DPA_USE_JACK=ON -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build /tmp/portaudio-build --parallel 4 \
+    && cmake --install /tmp/portaudio-build && ldconfig \
+    && rm -rf /tmp/portaudio /tmp/portaudio-build
+# pip 24 retains support for legacy fairseq/OmegaConf wheel metadata.
+RUN python -m pip install pip==24.0 setuptools==75.8.0 wheel \
+    pyinstaller==${PYINSTALLER_VERSION} Cython==3.2.4 flit-core==3.12.0
 COPY entrypoint-linux.sh /entrypoint.sh
-
-ENV SRCDIR=${SRCDIR:-/src}
-ENV DIST_DIR=${DIST_DIR:-./dist/linux}
-
-RUN \
-    set -x \
-    # update system
-    && apt-get update \
-    # install requirements
-    && apt-get install -y --no-install-recommends \
-        build-essential \
-        ca-certificates \
-        curl \
-        wget \
-        git \
-        libbz2-dev \
-        libreadline-dev \
-        libsqlite3-dev \
-        libssl-dev \
-        zlib1g-dev \
-        libffi-dev \
-        #optional libraries
-        libgdbm-dev \
-        libgdbm6 \
-        uuid-dev \
-        #upx
-        upx \
-        zip unzip rename gpg-agent \
-        p7zip-full \
-        portaudio19-dev \
-    # required because openSSL on Ubuntu 12.04 and 14.04 run out of support versions of OpenSSL
-    && mkdir openssl \
-    && cd openssl \
-    # latest version, there won't be anything newer for this
-    && wget https://github.com/openssl/openssl/releases/download/$OPENSSL_VERSION/$OPENSSL_VERSION.tar.gz \
-    && tar -xzvf $OPENSSL_VERSION.tar.gz \
-    && cd $OPENSSL_VERSION \
-    && ./config --prefix=$HOME/openssl --openssldir=$HOME/openssl shared zlib \
-    && make \
-    && make install \
-    # install pyenv
-    && echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc \
-    && echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc \
-    && source ~/.bashrc \
-    && curl -L https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer | bash \
-    && echo 'eval "$(pyenv init -)"' >> ~/.bashrc \
-    && source ~/.bashrc \
-    # install python
-    && PATH="$HOME/openssl:$PATH"  CPPFLAGS="-O2 -I$HOME/openssl/include" CFLAGS="-I$HOME/openssl/include/" LDFLAGS="-L$HOME/openssl/lib -Wl,-rpath,$HOME/openssl/lib" LD_LIBRARY_PATH=$HOME/openssl/lib:$LD_LIBRARY_PATH LD_RUN_PATH="$HOME/openssl/lib" CONFIGURE_OPTS="--with-openssl=$HOME/openssl" PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install $PYTHON_VERSION \
-    && pyenv global $PYTHON_VERSION \
-    && pip install --upgrade pip \
-    # install pyinstaller
-    && pip install wheel \
-    && pip install pyinstaller==$PYINSTALLER_VERSION \
-    && mkdir /src/ \
-    && chmod +x /entrypoint.sh
-
-VOLUME /src/
-WORKDIR /src/
-
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
+WORKDIR /work
 ENTRYPOINT ["/entrypoint.sh"]

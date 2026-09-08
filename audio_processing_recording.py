@@ -208,6 +208,11 @@ class AudioProcessor:
         self.default_sample_rate = default_sample_rate
         self.previous_audio_chunk = None
         self.start_rec_on_volume_threshold = start_rec_on_volume_threshold
+        if platform.system() == "Linux" and push_to_talk_key:
+            print("Global push-to-talk is unavailable on Linux; using voice activation. "
+                  "Clear the profile hotkey to remove this message.")
+            push_to_talk_key = None
+            keyboard_rec_force_stop = False
         self.push_to_talk_key = push_to_talk_key
         self.keyboard_rec_force_stop = keyboard_rec_force_stop
 

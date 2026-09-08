@@ -401,7 +401,7 @@ class WebSocketServer:
         self.thread = threading.Thread(target=self.run, args=(self.loop,))
         self.thread.start()
 
-    async def handler(self, websocket, path):
+    async def handler(self, websocket, path=None):
         print('Websocket: Client connected.')
         if self.on_connect_handler is not None:
             await self.on_connect_handler(self, websocket)
@@ -460,7 +460,7 @@ class WebSocketServer:
         return self.ws_clients
 
     async def server_program(self):
-        server = await websockets.serve(self.handler, self.ip, self.port, max_size=1_000_000_000, timeout=120,
+        server = await websockets.serve(self.handler, self.ip, self.port, max_size=1_000_000_000,
                                         close_timeout=120)
         print('Websocket: Server started.')
         await server.wait_closed()
