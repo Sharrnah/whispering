@@ -33,12 +33,17 @@ snapshot(backend, work / "backend", [
     "Models/STT/boson_multimodal/**/*.py", "Models/STT/boson_multimodal/**/*.json",
     "Models/STT/boson_multimodal/**/*.txt", "Models/TTS/compat_parler_transformers.py",
 ])
-snapshot(ui, work / "ui", ["Resources/fonts.go", "Resources/fonts/**/*", "**/*_test.go"])
+snapshot(ui, work / "ui", [
+    "Resources/fonts.go", "Resources/fonts/**/*", "**/*_test.go", "BuildTools/*",
+    "Updater/Platform.go", "Utilities/BackendPath.go",
+])
 patch = backend / "builder/ui-linux.patch"
-# A clean companion checkout needs the patch; an already updated checkout does not.
-check = subprocess.run(["git", "apply", "--check", str(patch)], cwd=work / "ui", capture_output=True)
-if check.returncode == 0:
-    subprocess.run(["git", "apply", str(patch)], cwd=work / "ui", check=True)
-else:
-    subprocess.run(["git", "apply", "--reverse", "--check", str(patch)], cwd=work / "ui", check=True)
+# Updated companion checkouts own their Linux implementation and may have newer
+# changes than this historical patch. Older checkouts still need the patch.
+if not (work / "ui/BuildTools/build.py").is_file():
+    check = subprocess.run(["git", "apply", "--check", str(patch)], cwd=work / "ui", capture_output=True)
+    if check.returncode == 0:
+        subprocess.run(["git", "apply", str(patch)], cwd=work / "ui", check=True)
+    else:
+        subprocess.run(["git", "apply", "--reverse", "--check", str(patch)], cwd=work / "ui", check=True)
 print(f"Build snapshots: {work}")
