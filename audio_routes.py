@@ -281,6 +281,9 @@ def normalize_route(route, index, base_settings):
         "txt_romaji": _as_bool(route.get("txt_romaji"), False),
         "websocket_enabled": _as_bool(route.get("websocket_enabled"), True),
         "osc_enabled": _as_bool(route.get("osc_enabled"), False),
+        "streaming_display_mode": str(route.get("streaming_display_mode") or ""),
+        "osc_chat_limit": (_bounded_int(route["osc_chat_limit"], 144, 1, 4096, "osc_chat_limit")
+                           if route.get("osc_chat_limit") is not None else None),
         "osc_typing_indicator": _as_bool(
             route.get("osc_typing_indicator"), False
         ),
@@ -299,13 +302,15 @@ def normalize_route(route, index, base_settings):
         ),
         "plugins": _plugin_names(route.get("plugins"), "plugins"),
     }
+    if normalized["streaming_display_mode"] not in {"", "blocks", "rolling"}:
+        raise ValueError("Unsupported live text display mode.")
     if normalized["osc_type_transfer"] == "translation":
         normalized["osc_type_transfer"] = "translation_result"
     if normalized["osc_type_transfer"] not in {"source", "translation_result", "both", "both_inverted"}:
         raise ValueError("Unsupported OSC transfer type.")
     stt_type = base_settings.GetOption("stt_type")
     model = str(base_settings.GetOption("model") or "").lower()
-    if (stt_type in {"qwen3_asr", "audio_cpp", "wav2vec_bert", "mms", "vibevoice_asr", "higgs_audio"}
+    if (stt_type in {"qwen3_asr", "audio_cpp", "wav2vec_bert", "mms", "vibevoice_asr", "vibevoice_asr_streaming", "higgs_audio"}
             or (stt_type == "nemo_canary" and model.startswith("parakeet"))
             or (stt_type in {"faster_whisper", "transformer_whisper", "original_whisper"}
                 and model.endswith("-turbo"))):
@@ -412,6 +417,9 @@ class RouteSettings:
             "osc_auto_processing_enabled": route["osc_enabled"],
             "websocket_final_messages": route["websocket_enabled"],
         })
+        for key in ("streaming_display_mode", "osc_chat_limit"):
+            if route.get(key) not in (None, ""):
+                values[key] = route[key]
         if not route["osc_enabled"]:
             values["osc_ip"] = "0"
         if not route["websocket_enabled"]:

@@ -14,6 +14,7 @@ import os
 import platform
 import shutil
 import socket
+import sys
 import threading
 import time
 from pathlib import Path
@@ -25,6 +26,9 @@ import processmanager
 
 
 AUDIO_CPP_VERSION = "0.7.1"
+# A new directory prevents C++ libraries left by older ZIP installs from
+# shadowing the target system's newer Mesa/Vulkan driver dependencies.
+LINUX_BUNDLE_REVISION = 2
 CACHE_ROOT = Path.cwd() / ".cache" / "audio.cpp"
 RUNTIME_ROOT = CACHE_ROOT / "runtime"
 SERVER_CONFIG_ROOT = CACHE_ROOT / "server"
@@ -214,11 +218,38 @@ def _write_json_atomic(path: Path, payload: Any) -> None:
 _runtime_install_lock = threading.RLock()
 
 
+def _bundled_server_path(backend: str) -> Path | None:
+    if (_normalized_system(), _normalized_machine()) != ("linux", "x86_64") or backend not in {"cpu", "vulkan"}:
+        return None
+    roots = [Path.cwd()]
+    if getattr(sys, "frozen", False):
+        roots.append(Path(sys.executable).resolve().parent.parent)
+    for root in roots:
+        server = root / "toolchain" / "audio.cpp" / f"v{AUDIO_CPP_VERSION}-r{LINUX_BUNDLE_REVISION}-linux-x86_64" / "audiocpp_server"
+        if server.is_file():
+            return server.resolve()
+    return None
+
+
+def _server_environment(server: Path) -> dict[str, str] | None:
+    if _normalized_system() != "linux":
+        return None
+    # External native servers must not inherit PyInstaller's private library
+    # directory. Prefer their own libraries and retain the original user path.
+    variable = "LD_LIBRARY_PATH_ORIG" if getattr(sys, "frozen", False) else "LD_LIBRARY_PATH"
+    original = os.environ.get(variable, "")
+    return {"LD_LIBRARY_PATH": str(server.parent) + (os.pathsep + original if original else "")}
+
+
 def ensure_runtime(backend: str, force_non_ui_dl: bool = False) -> Path:
     """Resolve or install the pinned audio.cpp server for ``backend``."""
     explicit = _explicit_server_path()
     if explicit is not None:
         return explicit
+
+    bundled = _bundled_server_path(backend)
+    if bundled is not None:
+        return bundled
 
     system = _normalized_system()
     machine = _normalized_machine()
@@ -401,6 +432,7 @@ class AudioCppServer:
             self.process = processmanager.run_process(
                 [str(server_path), "--config", str(config_path.resolve()), "--no-ui"],
                 include_stdout=False,
+                env=_server_environment(server_path),
             )
             if self.process is None:
                 raise RuntimeError("Could not start audiocpp_server.")

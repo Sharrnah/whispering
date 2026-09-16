@@ -10,7 +10,10 @@
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Whispering Tiger WebSocket Client</title>
 
-      <script type = "text/javascript">
+      <style>#live-data, #processing_data, #processing { white-space: pre-line; text-align: left; min-height: 2.6em; vertical-align: top; }</style>
+<script src="../streaming-transcripts.js"></script>
+<script>const streamingTranscripts = new StreamingTranscripts({history: true});</script>
+<script type = "text/javascript">
          var websocketServer = "ws://127.0.0.1:5000"
 
          // url argument handling
@@ -58,6 +61,7 @@
                
                   ws.onmessage = function (evt) {
                      var received_msg = JSON.parse(evt.data);
+                  if (!streamingTranscripts.accept(received_msg)) return;
                      
                      if (typeof received_msg.text != 'undefined') {
                         console.log(received_msg);
@@ -69,13 +73,13 @@
                         }
 
                         addMessage("<sup>["+received_msg.language+"]</sup> " + message_text);
-                        document.querySelector('#live-data').textContent = "";
+                        document.querySelector('#live-data').textContent = received_msg.streaming ? streamingTranscripts.liveText() : "";
                      }
 
                      // update live translation text
                      if (typeof received_msg.type != 'undefined' && received_msg.type === "processing_data") {
-                        if (received_msg.data) {
-                           document.querySelector('#live-data').textContent = received_msg.data;
+                        if (received_msg.data || received_msg.streaming) {
+                           document.querySelector('#live-data').textContent = received_msg.streaming ? streamingTranscripts.liveText() : received_msg.data;
                         }
                      }
                   };

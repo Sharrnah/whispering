@@ -201,6 +201,7 @@ class SettingsManager:
             "osc_typing_indicator": True,  # Display typing indicator while processing audio
             "osc_convert_ascii": False,
             "osc_chat_prefix": "",  # Prefix for OSC messages.
+            "streaming_display_mode": "",  # Empty restores the legacy VibeVoice display preference.
             "osc_chat_limit": 144,  # defines the maximum length of a chat message.
             "osc_time_limit": 15.0,  # defines the time between OSC messages in seconds.
             "osc_scroll_time_limit": 1.5,  # defines the scroll time limit for scrolling OSC messages. (only used when osc_send_type is set to "scroll")
@@ -463,6 +464,10 @@ class SettingsManager:
             ]
         if self.get_option("stt_type") == "qwen3_asr":
             available_models_list = ["Qwen3-ASR-0.6B-hf", "Qwen3-ASR-1.7B-hf", "custom"]
+        if self.get_option("stt_type") == "vibevoice_asr":
+            available_models_list = ["VibeVoice-ASR-HF", "VibeVoice-ASR-Streaming-1.5B", "VibeVoice-ASR-Streaming-7B", "custom-streaming"]
+        if self.get_option("stt_type") == "vibevoice_asr_streaming":
+            available_models_list = ["VibeVoice-ASR-Streaming-1.5B", "VibeVoice-ASR-Streaming-7B", "custom"]
         if '_whisper' in self.get_option("stt_type"):
             from whisper import available_models
             available_models_list = available_models()
@@ -505,7 +510,7 @@ class SettingsManager:
             "ai_device": ["None", "cuda", "cpu", "vulkan", "metal", "direct-ml:0", "direct-ml:1"],
             "model": self.get_available_models(),
             "whisper_task": ["transcribe", "translate", "transcribe_translate"],
-            "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "medusa_whisper", "qwen3_asr", "audio_cpp", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", "phi4", "voxtral", "phi4-onnx", "vibevoice_asr", "higgs_audio", ""],
+            "stt_type": ["faster_whisper", "original_whisper", "transformer_whisper", "medusa_whisper", "qwen3_asr", "vibevoice_asr_streaming", "audio_cpp", "seamless_m4t", "mms", "speech_t5", "wav2vec_bert", "nemo_canary", "phi4", "voxtral", "phi4-onnx", "vibevoice_asr", "higgs_audio", ""],
             #"tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "parler", ""],
             "tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "chatterbox", "index_tts", "qwen3_tts", "audio8_tts", "audio_cpp", "maya1", ""],
             "tts_ai_device": ["cuda", "cpu", "vulkan", "metal"],
@@ -520,7 +525,7 @@ class SettingsManager:
             "realtime_whisper_model": [""] + self.get_available_models(),
             "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit", "f16", "bf16", "q8_0", "q4_k"],
             "osc_type_transfer": ["source", "translation_result", "both", "both_inverted"],
-            "osc_send_type": ["full", "full_or_scroll", "scroll", "chunks"],
+            "osc_send_type": ["full", "full_or_scroll", "scroll", "chunks", "rolling"],
             "denoise_audio": ["", "noise_reduce", "deepfilter"],
             "ocr_type": ["", "easyocr", "got_ocr_20", "phi4"],
         }

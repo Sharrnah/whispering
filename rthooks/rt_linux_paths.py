@@ -3,6 +3,10 @@ import os
 import sys
 
 if sys.platform.startswith("linux") and getattr(sys, "frozen", False):
+    # Inductor otherwise starts a Python compiler worker via sys.executable.
+    # In a frozen app that is audioWhisper, whose CLI cannot accept --pickler.
+    # Match Torch's Windows default: compile synchronously when requested.
+    os.environ.setdefault("TORCHINDUCTOR_COMPILE_THREADS", "1")
     bundled_bin = os.path.join(sys._MEIPASS, "bin")
     os.environ["PATH"] = bundled_bin + os.pathsep + os.environ.get("PATH", "")
     # sounddevice calls find_library before dlopen. Linux's implementation

@@ -91,7 +91,8 @@ if __name__ == '__main__':
     import settings
     import remote_opener
     from Models.STT import faster_whisper
-    from Models.STT import qwen3_asr
+    from Models.STT import qwen3_asr, vibevoice_asr_streaming
+    from Models.STT.vibevoice_selection import uses_vibevoice_streaming
     from Models.STT import audio_cpp as audio_cpp_stt
     from Models.audio_cpp_runtime import ensure_runtime as ensure_audio_cpp_runtime, normalize_backend_device as normalize_audio_cpp_device
     from Models.Multi import seamless_m4t
@@ -538,10 +539,14 @@ if __name__ == '__main__':
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.phi4_get_languages())
         elif settings.SETTINGS.GetOption("stt_type") == "voxtral":
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.voxtral_get_languages())
-        elif settings.SETTINGS.GetOption("stt_type") == "vibevoice_asr":
+        elif settings.SETTINGS.GetOption("stt_type") == "vibevoice_asr" and not uses_vibevoice_streaming(settings.SETTINGS):
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.vibevoice_asr_get_languages())
         elif settings.SETTINGS.GetOption("stt_type") == "higgs_audio":
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.higgs_audio_asr_get_languages())
+        elif uses_vibevoice_streaming(settings.SETTINGS):
+            settings.SETTINGS.SetOption("whisper_languages", vibevoice_asr_streaming.get_languages())
+            settings.SETTINGS.SetOption("whisper_task", "transcribe")
+            settings.SETTINGS.SetOption("current_language", "")
         elif settings.SETTINGS.GetOption("stt_type") == "qwen3_asr":
             settings.SETTINGS.SetOption("whisper_languages", audioprocessor.qwen3_asr_get_languages())
             if settings.SETTINGS.GetOption("whisper_task") != "transcribe":
@@ -662,6 +667,8 @@ if __name__ == '__main__':
             stt_model_size = settings.SETTINGS.GetOption("model")
             if seamless_m4t.SeamlessM4T.needs_download(stt_model_size):
                 seamless_m4t.SeamlessM4T.download_model(stt_model_size)
+        if uses_vibevoice_streaming(settings.SETTINGS):
+            vibevoice_asr_streaming.download_model(settings.SETTINGS.GetOption("model"))
         if settings.SETTINGS.GetOption("stt_type") == "qwen3_asr":
             qwen_model = settings.SETTINGS.GetOption("model")
             if qwen3_asr.needs_download(qwen_model):
@@ -796,7 +803,7 @@ if __name__ == '__main__':
             except:
                 print("Error starting OSC Server. Skipping...")
 
-        if vad_enabled and vad_model is not None:
+        if (vad_enabled and vad_model is not None) or uses_vibevoice_streaming(settings.SETTINGS):
             # num_samples = 1536
             vad_frames_per_buffer = int(settings.SETTINGS.SetOption("vad_frames_per_buffer",
                                                  settings.SETTINGS.get_argument_setting_fallback(ctx, "vad_frames_per_buffer",
@@ -807,7 +814,8 @@ if __name__ == '__main__':
                 vad_frames_per_buffer = 512
                 settings.SETTINGS.SetOption("vad_frames_per_buffer", vad_frames_per_buffer)
 
-            vad_model.set_vad_frames_per_buffer(vad_frames_per_buffer)
+            if vad_model is not None:
+                vad_model.set_vad_frames_per_buffer(vad_frames_per_buffer)
 
             # set default devices if not set
             if not audio_input_process and (device_index is None or device_index < 0):

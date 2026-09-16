@@ -40,6 +40,9 @@ hiddenimports = [
 ]
 hiddenimports += collect_submodules('indextts')
 hiddenimports += collect_submodules('qwen3_tts_runtime')
+hiddenimports += collect_submodules('Models.STT.vibevoice_streaming_runtime')
+datas.append((os.path.join(project_root, 'Models', 'STT', 'vibevoice_streaming_runtime', 'LICENSE'),
+              'Models/STT/vibevoice_streaming_runtime'))
 hiddenimports += [
     *collect_submodules('triton.backends'),
     *collect_submodules('triton.runtime'),

@@ -30,6 +30,23 @@ _chat_clients = {}
 _chat_clients_lock = threading.Lock()
 
 
+class ChatReceipt:
+    """Acknowledges a local OSC send, not a receiver-side UDP confirmation."""
+    def __init__(self):
+        self.done = threading.Event()
+        self.sent = False
+        self.sent_at = 0.0
+        self.cancelled = False
+
+    def cancel(self):
+        self.cancelled = True
+
+    def finish(self, sent=False):
+        self.sent = sent
+        self.sent_at = time.monotonic() if sent else 0.0
+        self.done.set()
+
+
 class _ChatSequenceQueue:
     """FIFO queue which may coalesce replaceable realtime sequences.
 
@@ -61,10 +78,14 @@ class _ChatSequenceQueue:
             skipped_final_ids = []
             for pending in self._items:
                 if pending["replaceable"]:
+                    if pending.get("receipt") is not None:
+                        pending["receipt"].finish()
                     removed_ids.append(pending["id"])
                     self._unfinished_tasks -= 1
                 elif sequence["prioritize_latest"]:
                     pending["cancelled"] = True
+                    if pending.get("receipt") is not None:
+                        pending["receipt"].finish()
                     skipped_final_ids.append(pending["id"])
                     self._unfinished_tasks -= 1
                 else:
@@ -120,6 +141,8 @@ class _ChatSequenceQueue:
 
     def is_stale(self, sequence):
         with self._condition:
+            if sequence.get("receipt") is not None and sequence["receipt"].cancelled:
+                return True
             if sequence["replaceable"]:
                 return sequence["generation"] != self._generation
             return sequence["cancelled"]
@@ -298,6 +321,7 @@ def _send_osc_message():
     global last_message_sent_time
     while True:
         sequence = osc_queue.get()
+        sequence_sent = False
         try:
             total_chunks = len(sequence["chunks"])
             for chunk_index, message_data in enumerate(sequence["chunks"], start=1):
@@ -327,6 +351,7 @@ def _send_osc_message():
                         with _timing_lock:
                             last_message_sent_time = time.monotonic()
                         sent = True
+                        sequence_sent = True
                         _chat_debug(
                             f"send id={sequence['id']} chunk={chunk_index}/{total_chunks} "
                             f"final={not sequence['replaceable']}"
@@ -349,6 +374,8 @@ def _send_osc_message():
         except Exception as e:
             print(f"[OSC CHAT] sender error id={sequence.get('id', '?')}: {e}")
         finally:
+            if sequence.get("receipt") is not None:
+                sequence["receipt"].finish(sequence_sent)
             osc_queue.task_done(sequence)
 
 
@@ -364,7 +391,7 @@ def Message(data="example", address="/example", IP='127.0.0.1', PORT=9000):
     client.send(m)
 
 
-def _enqueue_chat_sequence(messages, replaceable=False, prioritize_latest=False):
+def _enqueue_chat_sequence(messages, replaceable=False, prioritize_latest=False, receipt=None):
     message_id = _next_message_id()
     sequence = {
         "id": message_id,
@@ -372,6 +399,7 @@ def _enqueue_chat_sequence(messages, replaceable=False, prioritize_latest=False)
         "prioritize_latest": bool(prioritize_latest and not replaceable),
         "cancelled": False,
         "chunks": messages,
+        "receipt": receipt,
     }
     osc_queue.put(sequence)
     return message_id
@@ -391,7 +419,7 @@ def _chat_message_data(data, send, nofify, address, IP, PORT, convert_ascii, del
 
 
 def Chat(data="example", send=True, nofify=True, address="/chatbox/input", IP='127.0.0.1', PORT=9000,
-         convert_ascii=False, replaceable=False, prioritize_latest=False):
+         convert_ascii=False, replaceable=False, prioritize_latest=False, receipt=None):
     """Queue one chatbox message.
 
     ``replaceable`` is intended for realtime transcription previews.  The
@@ -399,7 +427,7 @@ def Chat(data="example", send=True, nofify=True, address="/chatbox/input", IP='1
     """
     message = _chat_message_data(data, send, nofify, address, IP, PORT, convert_ascii)
     return _enqueue_chat_sequence(
-        [message], replaceable=replaceable, prioritize_latest=prioritize_latest
+        [message], replaceable=replaceable, prioritize_latest=prioritize_latest, receipt=receipt
     )
 
 
