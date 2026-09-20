@@ -19,7 +19,8 @@ class Audio8ManifestTests(unittest.TestCase):
         entry = audio8_tts.TTS_MODEL_LINKS[audio8_tts.DEFAULT_MODEL]
         self.assertEqual(entry["base_model"], audio8_tts.CODEC_MODEL)
         self.assertNotIn("codec.pth", entry["file_checksums"])
-        self.assertEqual(entry["checksum"], "0" * 64)
+        self.assertRegex(entry["checksum"], r"^[0-9a-f]{64}$")
+        self.assertNotEqual(entry["checksum"], "0" * 64)
         self.assertTrue(all("huggingface.co" not in url for url in entry["urls"]))
         codec = audio8_tts.TTS_MODEL_LINKS[audio8_tts.CODEC_MODEL]
         self.assertEqual(
@@ -43,7 +44,9 @@ class Audio8ManifestTests(unittest.TestCase):
             model_needs_download=mock.Mock(return_value=True),
             download_model=download,
         )
-        with mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
+        with mock.patch.dict(
+            audio8_tts.TTS_MODEL_LINKS[audio8_tts.CODEC_MODEL], {"checksum": "0" * 64}
+        ), mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
             with self.assertRaisesRegex(RuntimeError, "not currently available"):
                 adapter.download_model(audio8_tts.CODEC_MODEL)
         download.assert_not_called()

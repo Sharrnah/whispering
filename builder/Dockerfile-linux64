@@ -1,5 +1,13 @@
 # Build and test only inside Docker. Debian 12 sets the glibc floor to 2.36.
 FROM golang:1.26.5-bookworm AS go
+FROM debian:bookworm-slim AS audiocpp
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates git build-essential cmake ninja-build python3 patchelf \
+    glslc libvulkan-dev spirv-headers \
+    && rm -rf /var/lib/apt/lists/*
+COPY linux-audiocpp-build.py /build-audiocpp.py
+RUN python3 /build-audiocpp.py
+
 FROM python:3.11.6-bookworm
 
 ARG PYINSTALLER_VERSION=6.22.2
@@ -30,6 +38,7 @@ RUN git clone https://github.com/PortAudio/portaudio.git /tmp/portaudio \
 # pip 24 retains support for legacy fairseq/OmegaConf wheel metadata.
 RUN python -m pip install pip==24.0 setuptools==75.8.0 wheel \
     pyinstaller==${PYINSTALLER_VERSION} Cython==3.2.4 flit-core==3.12.0
+COPY --from=audiocpp /opt/audio-cpp /opt/audio-cpp
 COPY entrypoint-linux.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 WORKDIR /work

@@ -44,13 +44,6 @@ class Zonos2DownloadTests(unittest.TestCase):
                 "valence.npy",
             },
         }
-        placeholder_entries = {
-            "zonos2-bf16",
-            "zonos2-fp8-mixed",
-            "speaker_encoder",
-            "emotion_directions",
-        }
-
         self.assertEqual(set(zonos2_tts.TTS_MODEL_LINKS), set(expected_files))
         for name, entry in zonos2_tts.TTS_MODEL_LINKS.items():
             self.assertEqual(set(entry["file_checksums"]), expected_files[name])
@@ -62,12 +55,10 @@ class Zonos2DownloadTests(unittest.TestCase):
                     for checksum in entry["file_checksums"].values()
                 )
             )
-            if name in placeholder_entries:
-                self.assertEqual(entry["checksum"], "0" * 64)
-            else:
-                self.assertNotEqual(entry["checksum"], "0" * 64)
+            self.assertRegex(entry["checksum"], r"^[0-9a-f]{64}$")
+            self.assertNotEqual(entry["checksum"], "0" * 64)
 
-    def test_placeholder_archive_hash_prevents_network_request(self):
+    def test_hosted_archive_download_uses_standard_zip_downloader(self):
         adapter = object.__new__(zonos2_tts.Zonos2TTS)
         adapter.download_state = {"is_downloading": False}
         download = mock.Mock()
@@ -76,14 +67,22 @@ class Zonos2DownloadTests(unittest.TestCase):
             download_model=download,
         )
 
-        with mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
-            with self.assertRaisesRegex(
-                RuntimeError,
-                "zonos2-bf16.zip is not currently available",
-            ):
-                adapter.download_model("zonos2-bf16")
-
-        download.assert_not_called()
+        for success in (True, False):
+            with self.subTest(success=success):
+                download.reset_mock()
+                download.return_value = success
+                with mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
+                    self.assertIs(
+                        adapter.download_model("zonos2-bf16", force_non_ui_dl=True), success
+                    )
+                download.assert_called_once()
+                download_settings, state = download.call_args.args
+                self.assertEqual(download_settings["model_name"], "zonos2-bf16")
+                self.assertIs(download_settings["model_link_dict"], zonos2_tts.TTS_MODEL_LINKS)
+                self.assertEqual(download_settings["extract_format"], "zip")
+                self.assertTrue(download_settings["force_non_ui_dl"])
+                self.assertFalse(download_settings["alt_fallback"])
+                self.assertIs(state, adapter.download_state)
 
     def test_verified_local_files_do_not_require_archive_hash(self):
         adapter = object.__new__(zonos2_tts.Zonos2TTS)
@@ -94,7 +93,9 @@ class Zonos2DownloadTests(unittest.TestCase):
             download_model=download,
         )
 
-        with mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
+        with mock.patch.dict(
+            zonos2_tts.TTS_MODEL_LINKS["zonos2-bf16"], {"checksum": "0" * 64}
+        ), mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
             self.assertTrue(adapter.download_model("zonos2-bf16"))
 
         download.assert_not_called()

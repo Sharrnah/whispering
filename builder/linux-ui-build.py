@@ -17,10 +17,4 @@ if ui_builder.is_file():
         command.append("--release")
     subprocess.run(command, check=True)
     sys.exit(0)
-subprocess.run(["xvfb-run", "-a", "go", "test", "./..."], check=True)
-subprocess.run([
-    "go", "build", "-buildvcs=false", "-ldflags",
-    f"-X whispering-tiger-ui/Updater.LinuxBackendFlavor={flavor} "
-    f"-X whispering-tiger-ui/Updater.LinuxPreview={preview}",
-    "-o", "Build/whispering-tiger-linux-amd64", ".",
-], check=True)
+raise RuntimeError("The UI checkout must contain BuildTools/build.py; update the UI repository first")

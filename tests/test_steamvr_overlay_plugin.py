@@ -131,6 +131,16 @@ def test_overlay_renderer_produces_fixed_rgba_texture():
     assert image.getpixel((320, 128))[3] >= round(0.65 * 255)
 
 
+def test_stable_caption_append_keeps_the_first_line_at_the_same_pixels():
+    first = PLUGIN_MODULE.render_overlay_image("First line\n", 800, 320, 24,
+                                               alignment="left", top_aligned=True)
+    appended = PLUGIN_MODULE.render_overlay_image("First line\nSecond line", 800, 320, 24,
+                                                  alignment="left", top_aligned=True)
+    self_region = (0, 0, 800, 36)
+    assert first.crop(self_region).tobytes() == appended.crop(self_region).tobytes()
+    assert first.tobytes() != appended.tobytes()
+
+
 def test_source_translation_and_intermediate_text_are_selected_correctly():
     plugin = PLUGIN_MODULE.SteamVROverlayPlugin()
     plugin._test_settings.update(

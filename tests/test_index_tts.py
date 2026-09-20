@@ -105,7 +105,8 @@ class IndexTTSAdapterTests(unittest.TestCase):
         self.assertEqual(entry["path"], index_tts.GERMAN_MODEL)
         self.assertEqual(entry["base_model"], index_tts.DEFAULT_MODEL)
         self.assertEqual(entry["gpt_checkpoint"], "gpt.pth")
-        self.assertEqual(entry["checksum"], "0" * 64)
+        self.assertRegex(entry["checksum"], r"^[0-9a-f]{64}$")
+        self.assertNotEqual(entry["checksum"], "0" * 64)
         self.assertEqual(
             entry["file_checksums"],
             {
@@ -127,7 +128,9 @@ class IndexTTSAdapterTests(unittest.TestCase):
             download_model=mock.Mock(),
         )
 
-        with mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
+        with mock.patch.dict(
+            index_tts.TTS_MODEL_LINKS[index_tts.GERMAN_MODEL], {"checksum": "0" * 64}
+        ), mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
             self.assertTrue(adapter.download_model(index_tts.GERMAN_MODEL))
 
         self.assertEqual(
@@ -252,7 +255,9 @@ class IndexTTSAdapterTests(unittest.TestCase):
             model_needs_download=mock.Mock(side_effect=[False, True]),
             download_model=download,
         )
-        with mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
+        with mock.patch.dict(
+            index_tts.TTS_MODEL_LINKS[index_tts.GERMAN_MODEL], {"checksum": "0" * 64}
+        ), mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
             with self.assertRaisesRegex(RuntimeError, "not currently available"):
                 adapter.download_model(index_tts.GERMAN_MODEL)
         download.assert_not_called()
