@@ -30,7 +30,10 @@ test -n "$archive" && test -f "$archive"
 echo "Extracting $archive..."
 mkdir -p /home/tester/app
 unzip -oq "$archive" -d /home/tester/app
-cp "whispering-tiger-linux-amd64-${flavor}" /home/tester/app/
+ui=whispering-tiger-linux-amd64
+# Earlier releases included the backend flavor in the UI filename.
+if [ ! -f "$ui" ]; then ui="whispering-tiger-linux-amd64-${flavor}"; fi
+cp "$ui" /home/tester/app/whispering-tiger-linux-amd64
 cd /home/tester/app
 echo 'Checking release files and bundled media tools...'
 test -x audioWhisper/audioWhisper
@@ -58,8 +61,8 @@ set -- toolchain/audio.cpp/v*-linux-x86_64/audiocpp_server
 test "$#" -eq 1 && test -x "$1"
 "$1" --list-devices > audio-cpp-devices.log 2>&1
 grep 'CPU:0' audio-cpp-devices.log
-chmod +x "whispering-tiger-linux-amd64-${flavor}"
-test -x "whispering-tiger-linux-amd64-${flavor}"
+chmod +x whispering-tiger-linux-amd64
+test -x whispering-tiger-linux-amd64
 test ! -e /usr/local/bin/python
 test ! -e /usr/bin/python3
 echo 'Checking frozen startup and PulseAudio recording...'
@@ -73,7 +76,7 @@ grep 'API=PulseAudio' frozen-devices.log
 grep 'detected_energy:' frozen-recording.log
 echo 'Checking UI startup...'
 set +e
-timeout 15s xvfb-run -a "./whispering-tiger-linux-amd64-${flavor}" > ui-startup.log 2>&1
+timeout 15s xvfb-run -a ./whispering-tiger-linux-amd64 > ui-startup.log 2>&1
 ui_status=$?
 set -e
 test "$ui_status" -eq 124

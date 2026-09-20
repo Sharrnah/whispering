@@ -155,7 +155,7 @@ def installation_notes(flavor, version, release):
     return (
         f"Whispering Tiger Linux backend {version} ({flavor})\n"
         "Extract this ZIP beside the Whispering Tiger Linux UI in a writable folder.\n"
-        f"Run ./whispering-tiger-linux-amd64-{flavor} as your normal desktop user.\n"
+        "Run ./whispering-tiger-linux-amd64 as your normal desktop user.\n"
         + ("Release UI builds can check the application's update feed.\n" if release else
            "Preview UI builds have automatic updates disabled.\n")
         + "Requires x86-64 Linux with glibc 2.36+, an OpenGL-capable X11/XWayland desktop,\n"
@@ -249,7 +249,7 @@ def main():
         write_archive(args.backend, native_archive, args.source_root, args.version, args.audio_cpp_root)
         with native_archive.open("rb") as source, archive.open("wb") as destination:
             shutil.copyfileobj(source, destination, length=1024 * 1024)
-    ui_output = args.output / f"whispering-tiger-linux-amd64-{args.flavor}"
+    ui_output = args.output / "whispering-tiger-linux-amd64"
     shutil.copy2(args.ui, ui_output)
     ui_output.chmod(0o755)
     package_inventory = args.backend.parent / "linux-python-packages.txt"

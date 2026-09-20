@@ -10,6 +10,7 @@ param(
     [string]$Version = '',
     [string]$UIRepository = 'G:\Projekte\Repositories\whispering-tiger-ui',
     [ValidateSet('cpu', 'cu128')][string]$Flavor = 'cu128',
+    [string]$ResumeBuild = '',
     [switch]$CheckOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -47,6 +48,8 @@ foreach ($name in @(
     'dist_files\help.bat', 'dist_files\get-device-list.bat', 'LICENSE', 'ignorelist.txt'
 )) { Require-Path (Join-Path $backendRoot $name) }
 Invoke-Checked $python @('-c', "import sys, struct, PyInstaller; assert sys.platform == 'win32' and struct.calcsize('P') == 8, 'A 64-bit Windows Python environment is required'; print('Windows Python / PyInstaller:', sys.version.split()[0], PyInstaller.__version__)")
+Invoke-Checked 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+    (Join-Path $uiRoot 'BuildTools\package-windows.ps1'), '-CheckOnly')
 $dockerOS = & docker info --format '{{.OSType}}'
 if ($LASTEXITCODE -ne 0 -or ($dockerOS -join '').Trim() -ne 'linux') {
     throw 'Start Docker Desktop or Rancher Desktop with a Linux Docker engine, then run this script again.'
@@ -59,6 +62,18 @@ Get-Content -LiteralPath (Join-Path $uiRoot 'FyneApp.toml') |
 if ($CheckOnly) {
     Write-Host 'Build prerequisites found. No build was started.'
     return
+}
+$reusedBackend = ''
+if ($ResumeBuild) {
+    if ($ResumeBuild -notmatch '^([A-Za-z0-9][A-Za-z0-9._-]*)-\d{8}-\d{6}-\d{3}$') {
+        throw 'ResumeBuild must be a build folder name, for example 1.3.20.1-20260920-203414-579.'
+    }
+    $resumeVersion = $Matches[1]
+    if ($Version -and $Version -ne $resumeVersion) { throw 'Version must match the resumed backend build.' }
+    $Version = $resumeVersion
+    $reusedBackend = Join-Path $backendRoot ("build\build-all\$ResumeBuild\dist\audioWhisper")
+    Require-Path (Join-Path $reusedBackend 'audioWhisper.exe')
+    Require-Path (Join-Path $reusedBackend '_internal')
 }
 if (-not $Version) { $Version = Read-Host 'Backend release version (for example 1.3.19.3)' }
 if ($Version -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') {
@@ -80,10 +95,15 @@ Write-Host "Linux flavor: $Flavor. Release update checks are enabled."
 try {
     Set-Location -LiteralPath $backendRoot
     $env:PYTHONUTF8 = '1'
-    Write-Host '[1/4] Building the Windows Python backend...'
-    Invoke-Checked $python @('-m', 'PyInstaller', 'audioWhisper.spec', '-y', '--clean',
-        '--distpath', $frozenRoot, '--workpath', (Join-Path $workRoot 'pyinstaller'))
-    $backend = Join-Path $frozenRoot 'audioWhisper'
+    if ($reusedBackend) {
+        $backend = $reusedBackend
+        Write-Host "[1/4] Reusing the completed Windows backend: $backend"
+    } else {
+        Write-Host '[1/4] Building the Windows Python backend...'
+        Invoke-Checked $python @('-m', 'PyInstaller', 'audioWhisper.spec', '-y', '--clean',
+            '--distpath', $frozenRoot, '--workpath', (Join-Path $workRoot 'pyinstaller'))
+        $backend = Join-Path $frozenRoot 'audioWhisper'
+    }
     Invoke-Checked $python @('builder\linux-startup-check.py', (Join-Path $backend 'audioWhisper.exe'),
         '--log', (Join-Path $windowsRoot 'frozen-startup.log'))
 
@@ -112,6 +132,7 @@ Extract each backend ZIP and place its UI executable beside the audioWhisper dir
 The ZIPs contain the Python runtime. Model weights are downloaded when selected.
 Nothing was uploaded or published. Test on the target desktop before publishing.
 Windows intermediate files: $workRoot
+Windows backend source: $backend
 "@ | Set-Content -LiteralPath (Join-Path $releaseRoot 'BUILD-SUCCESS.txt') -Encoding UTF8
     Write-Host ''
     Write-Host "BUILD COMPLETE: $releaseRoot"

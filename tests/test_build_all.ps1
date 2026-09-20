@@ -21,7 +21,8 @@ function global:docker {
 }
 function global:powershell.exe {
     $script = Get-Argument $args '-File'
-    $stage = if ($script -like '*package-windows.ps1') { 'ui' } else { 'linux' }
+    $stage = if ($args -contains '-CheckOnly') { 'ui-preflight' }
+        elseif ($script -like '*package-windows.ps1') { 'ui' } else { 'linux' }
     $global:wtBuild_calls.Add($stage)
     $global:LASTEXITCODE = if ($global:wtBuild_failure -eq $stage) { 23 } else { 0 }
     if ($global:LASTEXITCODE) { return }
@@ -71,7 +72,7 @@ try {
         }
     }
     $global:wtBuild_ui = $ui
-    foreach ($failure in @('', 'backend', 'startup', 'ui', 'package', 'linux')) {
+    foreach ($failure in @('', 'ui-preflight', 'backend', 'startup', 'ui', 'package', 'linux')) {
         $global:wtBuild_failure = $failure
         $global:wtBuild_calls = New-Object 'System.Collections.Generic.List[string]'
         $before = @(Get-ChildItem -LiteralPath (Join-Path $fixture 'dist/releases') -Filter BUILD-SUCCESS.txt -Recurse -ErrorAction SilentlyContinue).Count
@@ -84,7 +85,7 @@ try {
             Assert-True ($global:wtBuild_calls[-1] -eq $failure) 'Build continued after failure'
         } else {
             Assert-True (-not $caught) "Unexpected failure: $caught"
-            Assert-True (($global:wtBuild_calls -join ',') -eq 'preflight,backend,startup,ui,package,linux') 'Incorrect build order'
+            Assert-True (($global:wtBuild_calls -join ',') -eq 'preflight,ui-preflight,backend,startup,ui,package,linux') 'Incorrect build order'
         }
         $after = @(Get-ChildItem -LiteralPath (Join-Path $fixture 'dist/releases') -Filter BUILD-SUCCESS.txt -Recurse).Count
         Assert-True (($after - $before) -eq [int](-not $failure)) 'Incorrect success marker'
@@ -94,7 +95,22 @@ try {
     }
     $global:wtBuild_calls.Clear()
     & (Join-Path $fixture 'builder/build-all.ps1') -CheckOnly -UIRepository $ui
-    Assert-True (($global:wtBuild_calls -join ',') -eq 'preflight') 'CheckOnly started a build'
+    Assert-True (($global:wtBuild_calls -join ',') -eq 'preflight,ui-preflight') 'CheckOnly started a build'
+    $global:wtBuild_failure = ''
+    $global:wtBuild_calls.Clear()
+    $resumeId = '1.2.3-20260101-120000-001'
+    $oldBackend = Join-Path $fixture "build\build-all\$resumeId\dist\audioWhisper"
+    New-Item -ItemType Directory -Path (Join-Path $oldBackend '_internal') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $oldBackend 'audioWhisper.exe') -Value 'existing backend'
+    & (Join-Path $fixture 'builder/build-all.ps1') -ResumeBuild $resumeId -UIRepository $ui -Flavor cpu
+    Assert-True (($global:wtBuild_calls -join ',') -eq 'preflight,ui-preflight,startup,ui,package,linux') 'Resume rebuilt the Python backend or skipped startup validation'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $oldBackend 'audioWhisper.exe')) -eq 'existing backend') 'Resume modified the original backend'
+    foreach ($badResume in @('../outside', '1.2.3-20260101-120000-999')) {
+        $caught = ''
+        try { & (Join-Path $fixture 'builder/build-all.ps1') -ResumeBuild $badResume -UIRepository $ui }
+        catch { $caught = $_.Exception.Message }
+        Assert-True ([bool]$caught) "Invalid or missing resume build accepted: $badResume"
+    }
     $caught = ''
     try { & (Join-Path $fixture 'builder/build-all.ps1') -Version '../bad' -UIRepository $ui }
     catch { $caught = $_.Exception.Message }
