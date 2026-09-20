@@ -78,6 +78,9 @@
   </table>
 </div>
 
+<style>#live-data, #processing_data, #processing { white-space: pre-line; text-align: left; min-height: 2.6em; vertical-align: top; }</style>
+<script src="../streaming-transcripts.js"></script>
+<script>const streamingTranscripts = new StreamingTranscripts();</script>
 <script>
   let socket;
   let connectionAttempts = 0;
@@ -112,6 +115,7 @@
   const mirror = getParameter("mirror");
 
   function onOpen(event) {
+    streamingTranscripts.reset();
     console.log('WebSocket connection established.');
     if (mirror) {
       document.body.className = 'mirror';
@@ -120,6 +124,7 @@
 
   function onMessage(event) {
     const message = JSON.parse(event.data);
+    if (!streamingTranscripts.accept(message)) return;
 
     if (message.type === 'processing_data') {
       // Check if the temporary processing element exists
@@ -128,19 +133,29 @@
         // Create the processing element if it doesn't exist
         processingElem = document.createElement('tr');
         processingElem.id = 'processing_data';
-        processingElem.innerHTML = `<td colspan="2">${message.data}</td>`;
+        processingElem.replaceChildren();
+        const liveCell = document.createElement('td');
+        liveCell.colSpan = 2;
+        liveCell.textContent = message.streaming ? streamingTranscripts.liveText() : message.data;
+        processingElem.appendChild(liveCell);
 
         const table = document.getElementById('messages_table');
         table.appendChild(processingElem);
       } else {
         // Update existing processing element
-        processingElem.innerHTML = `<td colspan="2">${message.data}</td>`;
+        processingElem.replaceChildren();
+        const liveCell = document.createElement('td');
+        liveCell.colSpan = 2;
+        liveCell.textContent = message.streaming ? streamingTranscripts.liveText() : message.data;
+        processingElem.appendChild(liveCell);
       }
     } else if (message.type === 'transcript') {
       // Remove the processing data element if it exists
       let processingElem = document.getElementById('processing_data');
       if (processingElem) {
-        processingElem.parentNode.removeChild(processingElem);
+        if (message.streaming && streamingTranscripts.liveText()) {
+          processingElem.firstChild.textContent = streamingTranscripts.liveText();
+        } else processingElem.parentNode.removeChild(processingElem);
       }
 
       const sourceLanguage = message.language ? message.language : 'Unknown';

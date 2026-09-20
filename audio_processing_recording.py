@@ -1,6 +1,8 @@
 # -*- encoding: utf-8 -*-
 import inspect
 import time
+import uuid
+from Models.STT.vibevoice_selection import uses_vibevoice_streaming
 import traceback
 from collections import deque
 
@@ -205,9 +207,15 @@ class AudioProcessor:
         # source-specific VAD/phrase state.
         self._audio_input_state_lock = threading.RLock()
         self.frames = []
+        self._streaming_stream_id = None
         self.default_sample_rate = default_sample_rate
         self.previous_audio_chunk = None
         self.start_rec_on_volume_threshold = start_rec_on_volume_threshold
+        if platform.system() == "Linux" and push_to_talk_key:
+            print("Global push-to-talk is unavailable on Linux; using voice activation. "
+                  "Clear the profile hotkey to remove this message.")
+            push_to_talk_key = None
+            keyboard_rec_force_stop = False
         self.push_to_talk_key = push_to_talk_key
         self.keyboard_rec_force_stop = keyboard_rec_force_stop
 
@@ -359,6 +367,8 @@ class AudioProcessor:
 
     def close(self):
         """Stop auxiliary processor resources owned outside the input stream."""
+        with self._audio_input_state_lock:
+            self._flush_streaming_recording()
         self._mic_passthrough_closed.set()
         self._close_trigger_filter_worker()
         if self.default_mic_audio_streamer is not None:
@@ -661,7 +671,12 @@ class AudioProcessor:
         final,
         denoise_pcm=None,
         run_final_audio_consumers=False,
+        streaming_pcm=None,
     ):
+        if uses_vibevoice_streaming(self.settings) and streaming_pcm is None:
+            # The canonical snapshot is queued before silence cutting,
+            # normalization, diarization or other edits can change its timeline.
+            return
         queue_item = {
             'time': time.time_ns(),
             'data': audio_data,
@@ -675,10 +690,37 @@ class AudioProcessor:
             queue_item['denoise_pcm'] = denoise_pcm
         if run_final_audio_consumers:
             queue_item['run_final_audio_consumers'] = True
+        if streaming_pcm is not None:
+            queue_item['streaming_pcm'] = bytes(streaming_pcm)
+            if not getattr(self, "_streaming_stream_id", None):
+                self._streaming_stream_id = f"{self.source_id}:{uuid.uuid4().hex}"
+            queue_item['stream_id'] = self._streaming_stream_id
         self.audio_queue.put(queue_item)
+        if streaming_pcm is not None and final:
+            self._streaming_stream_id = None
+
+    def _queue_streaming_snapshot(self, pcm, final):
+        self._queue_audio(
+            audio_tools.audio_bytes_to_wav(pcm, channels=1, sample_rate=self.default_sample_rate),
+            final, streaming_pcm=pcm,
+        )
+
+    def _flush_streaming_recording(self):
+        if (getattr(self, "settings", None) is not None
+                and uses_vibevoice_streaming(self.settings) and self.frames):
+            pcm = b''.join(self.frames)
+            if self.needs_sample_rate_conversion:
+                pcm = audio_tools.resample_audio(
+                    pcm, self.recorded_sample_rate, self.default_sample_rate,
+                    target_channels=1, input_channels=self.input_channel_num,
+                ).tobytes()
+            self._queue_streaming_snapshot(pcm, True)
+            self.frames = []
+            self.start_time = time.time()
 
     def _reset_for_audio_input_switch_locked(self):
         """Discard source-specific state after the current stream has stopped."""
+        self._flush_streaming_recording()
         now = time.time()
         self.frames = []
         self.previous_audio_chunk = None
@@ -775,6 +817,7 @@ class AudioProcessor:
             ).start()
 
         if not self.settings.GetOption("stt_enabled"):
+            self._flush_streaming_recording()
             return None, pyaudio.paContinue
 
         # disable gradient calculation
@@ -784,6 +827,10 @@ class AudioProcessor:
             energy = self.settings.GetOption("energy")
             if phrase_time_limit == 0:
                 phrase_time_limit = None
+            if uses_vibevoice_streaming(self.settings):
+                # Periodic finals bound recording snapshots and transcript
+                # history even when the speaker never pauses.
+                phrase_time_limit = min(phrase_time_limit or 120, 120)
 
             vad_smart_turn_enabled = bool(self.settings.GetOption("vad_smart_turn_enabled"))
 
@@ -797,7 +844,8 @@ class AudioProcessor:
             normalize_upper_threshold = self.settings.GetOption("normalize_upper_threshold")
             normalize_gain_factor = self.settings.GetOption("normalize_gain_factor")
 
-            use_speaker_diarization = self.settings.GetOption("speaker_diarization")
+            use_speaker_diarization = (self.settings.GetOption("speaker_diarization")
+                                       and not uses_vibevoice_streaming(self.settings))
             if use_speaker_diarization and self.diarization_model is None:
                 self.diarization_model = speaker_diarization.SpeakerDiarization()
             speaker_change_split = self.settings.GetOption("speaker_change_split")
@@ -839,6 +887,11 @@ class AudioProcessor:
                     new_confidence, peak_amplitude = process_audio_chunk(
                         test_audio_chunk, self.default_sample_rate, self.vad_model
                     )
+                    if (uses_vibevoice_streaming(self.settings)
+                            and self.vad_model is None and self.push_to_talk_key is None
+                            and peak_amplitude < energy):
+                        # Energy-only capture still needs silence to end a turn.
+                        new_confidence = -1.0
 
                     if (
                         denoise_before_trigger
@@ -936,10 +989,13 @@ class AudioProcessor:
                 # Final enhancement is performed by the same STT worker as
                 # realtime prefix enhancement. Keep the callback's ordinary
                 # post-processing as a raw fallback if filtering fails.
+                if uses_vibevoice_streaming(self.settings):
+                    self._queue_streaming_snapshot(wavefiledata, True)
                 denoise_pcm = None
                 if (
                     self.settings.GetOption("denoise_audio")
                     and self.audio_enhancer is not None
+                    and not uses_vibevoice_streaming(self.settings)
                 ):
                     denoise_pcm = bytes(wavefiledata)
 
@@ -976,7 +1032,8 @@ class AudioProcessor:
                 # save_to_wav(wavefiledata, "resampled_audio_chunk.wav", self.default_sample_rate)
 
                 # check if the full audio clip is above the confidence threshold
-                vad_clip_test = self.settings.GetOption("vad_on_full_clip")
+                vad_clip_test = (self.settings.GetOption("vad_on_full_clip") and self.vad_model is not None
+                                 and not uses_vibevoice_streaming(self.settings))
                 full_audio_confidence = 0.
                 if vad_clip_test:
                     audio_full_int16 = np.frombuffer(wavefiledata, np.int16)
@@ -1154,7 +1211,17 @@ class AudioProcessor:
                                                                    args=(self.osc_ip, self.osc_port, True))
                         typing_indicator_thread.start()
 
-                if self.settings.GetOption("realtime"):
+                if uses_vibevoice_streaming(self.settings):
+                    if elapsed_intermediate_time >= 0.25 and self.frames:
+                        pcm = b''.join(self.frames)
+                        if self.needs_sample_rate_conversion:
+                            pcm = audio_tools.resample_audio(
+                                pcm, self.recorded_sample_rate, self.default_sample_rate,
+                                target_channels=1, input_channels=self.input_channel_num,
+                            ).tobytes()
+                        self._queue_streaming_snapshot(pcm, False)
+                        self.intermediate_time_start = time.time()
+                elif self.settings.GetOption("realtime"):
                     #clip = []
                     frame_count = len(self.frames)
                     # send realtime intermediate results every x frames and every x seconds (making sure its at least x frame length)

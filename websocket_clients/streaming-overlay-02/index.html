@@ -50,6 +50,9 @@
   </style>
 </head>
 <body>
+<style>#live-data, #processing_data, #processing { white-space: pre-line; text-align: left; min-height: 2.6em; vertical-align: top; }</style>
+<script src="../streaming-transcripts.js"></script>
+<script>const streamingTranscripts = new StreamingTranscripts();</script>
 <script>
   let socket;
   let connectionAttempts = 0;
@@ -107,6 +110,7 @@
   }
 
   function onOpen(event) {
+    streamingTranscripts.reset();
     const successMsg = document.createElement('div');
     successMsg.id = 'connection_success';
     successMsg.className = 'subtitle';
@@ -126,14 +130,15 @@
 
   function onMessage(event) {
     const message = JSON.parse(event.data);
+    if (!streamingTranscripts.accept(message)) return;
 
     if (message.type === 'processing_data') {
       const processingElem = document.getElementById('processing_data');
-      processingElem.innerText = message.data;
+      processingElem.innerText = message.streaming ? streamingTranscripts.liveText() : message.data;
       updateProcessingDataVisibility();
     } else if (message.type === 'transcript') {
       const processingElem = document.getElementById('processing_data');
-      processingElem.innerText = '';
+      processingElem.innerText = message.streaming ? streamingTranscripts.liveText() : '';
       updateProcessingDataVisibility();
 
       const transcriptElem = document.createElement('div');

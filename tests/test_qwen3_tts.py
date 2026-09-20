@@ -71,7 +71,8 @@ class Qwen3TTSAdapterTests(unittest.TestCase):
         self.assertEqual(qwen3_tts.MODEL_LIST_FLAT, expected_models)
         for model_name in expected_models | {qwen3_tts.TOKENIZER_MODEL}:
             entry = qwen3_tts.TTS_MODEL_LINKS[model_name]
-            self.assertEqual(entry["checksum"], "0" * 64)
+            self.assertRegex(entry["checksum"], r"^[0-9a-f]{64}$")
+            self.assertNotEqual(entry["checksum"], "0" * 64)
             self.assertEqual(len(entry["urls"]), 3)
             self.assertTrue(all("huggingface" not in url.lower() for url in entry["urls"]))
             self.assertTrue(entry["source_revision"])
@@ -115,7 +116,7 @@ class Qwen3TTSAdapterTests(unittest.TestCase):
         torch.testing.assert_close(rotary.original_inv_freq, expected)
         self.assertEqual(float(rotary.inv_freq[0]), 1.0)
 
-    def test_placeholder_archive_hash_prevents_network_request(self):
+    def test_hosted_archive_download_uses_standard_zip_downloader(self):
         adapter = object.__new__(qwen3_tts.Qwen3TTS)
         adapter.download_state = {"is_downloading": False}
         download = mock.Mock()
@@ -123,10 +124,23 @@ class Qwen3TTSAdapterTests(unittest.TestCase):
             model_needs_download=mock.Mock(return_value=True),
             download_model=download,
         )
-        with mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
-            with self.assertRaisesRegex(RuntimeError, "not currently available"):
-                adapter.download_model(qwen3_tts.DEFAULT_MODEL)
-        download.assert_not_called()
+        for success in (True, False):
+            with self.subTest(success=success):
+                download.reset_mock()
+                download.return_value = success
+                with mock.patch.dict(sys.modules, {"downloader": fake_downloader}):
+                    self.assertIs(
+                        adapter.download_model(qwen3_tts.DEFAULT_MODEL, force_non_ui_dl=True),
+                        success,
+                    )
+                download.assert_called_once()
+                download_settings, state = download.call_args.args
+                self.assertEqual(download_settings["model_name"], qwen3_tts.DEFAULT_MODEL)
+                self.assertIs(download_settings["model_link_dict"], qwen3_tts.TTS_MODEL_LINKS)
+                self.assertEqual(download_settings["extract_format"], "zip")
+                self.assertTrue(download_settings["force_non_ui_dl"])
+                self.assertFalse(download_settings["alt_fallback"])
+                self.assertIs(state, adapter.download_state)
 
     def test_generation_defaults_match_official_examples(self):
         adapter = object.__new__(qwen3_tts.Qwen3TTS)

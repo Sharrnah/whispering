@@ -69,6 +69,7 @@ class Qwen3ASRTests(unittest.TestCase):
                 self.assertNotIn("file_urls", entry)
                 self.assertNotIn("revision", entry)
                 self.assertEqual(len(entry["checksum"]), 64)
+                self.assertNotEqual(entry["checksum"], "0" * 64)
                 self.assertTrue(all(character in string.hexdigits for character in entry["checksum"]))
                 for checksum in entry["file_checksums"].values():
                     self.assertEqual(len(checksum), 64)
@@ -78,13 +79,15 @@ class Qwen3ASRTests(unittest.TestCase):
                     self.assertNotIn("huggingface.co", url)
                     self.assertTrue(url.endswith(f"/{model_name}.zip"))
 
-    def test_pending_archive_checksum_never_falls_back_to_huggingface(self):
+    def test_failed_archive_download_is_reported_without_fallback(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch.object(qwen3_asr, "MODEL_CACHE_PATH", Path(temp_dir)):
-                with mock.patch.object(qwen3_asr.downloader, "download_model") as download:
-                    with self.assertRaisesRegex(RuntimeError, "not currently available"):
-                        qwen3_asr.download_model("Qwen3-ASR-0.6B-hf")
-                    download.assert_not_called()
+                with mock.patch.object(
+                    qwen3_asr.downloader, "download_model", return_value=False
+                ) as download:
+                    self.assertFalse(qwen3_asr.download_model("Qwen3-ASR-0.6B-hf"))
+                    download.assert_called_once()
+                    self.assertFalse(download.call_args.args[0]["alt_fallback"])
 
     def test_configured_archive_uses_standard_zip_downloader(self):
         entry = qwen3_asr.MODEL_LINKS["Qwen3-ASR-0.6B-hf"]
@@ -102,6 +105,8 @@ class Qwen3ASRTests(unittest.TestCase):
         download.assert_called_once()
         download_settings = download.call_args.args[0]
         self.assertEqual(download_settings["extract_format"], "zip")
+        self.assertEqual(download_settings["model_name"], "Qwen3-ASR-0.6B-hf")
+        self.assertFalse(download_settings["alt_fallback"])
         self.assertTrue(download_settings["force_non_ui_dl"])
         self.assertIs(download_settings["model_link_dict"], qwen3_asr.MODEL_LINKS)
 

@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 
 import settings
+from Models import audio_cpp_catalog as catalog
 from Models.audio_cpp_runtime import AudioCppServer, normalize_backend_device
 
 
@@ -102,6 +103,8 @@ STT_MODELS = {
         },
     },
 }
+
+STT_MODELS.update(catalog.STT_MODELS)
 
 MODEL_VARIANTS = {name: definition["variants"] for name, definition in STT_MODELS.items()}
 MODEL_ALIASES = {
@@ -197,6 +200,13 @@ SESSION_KEYS = {
 }
 
 
+for _definition in catalog.STT_MODELS.values():
+    _key = _definition["settings_key"]
+    STT_SETTINGS_DEFAULTS[_key] = catalog.SETTINGS_DEFAULTS[_key]
+    REQUEST_KEYS[_key] = catalog.REQUEST_KEYS[_key]
+    SESSION_KEYS[_key] = catalog.SESSION_KEYS[_key]
+
+
 def get_languages():
     # Reuse Qwen's canonical names, then add locale selectors used by Nemotron.
     from Models.STT.qwen3_asr import get_languages as qwen_get_languages
@@ -229,8 +239,10 @@ def normalize_precision(precision: str | None, model: str = DEFAULT_MODEL) -> st
     selected = {
         "q8": "q8_0", "int8": "q8_0", "8bit": "q8_0", "int8_float16": "q8_0",
         "int8_bfloat16": "q8_0", "4bit": "q4_k", "q4": "q4_k", "float16": "f16",
-        "fp16": "f16", "float32": "f16", "bfloat16": "bf16", "int16": "f16",
+        "fp16": "f16", "float32": "f32", "bfloat16": "bf16", "int16": "f16",
     }.get(selected, selected)
+    if selected == "f32" and "f32" not in variants:
+        selected = "f16"
     if selected in {"auto", "default"}:
         return STT_MODELS[model]["default_precision"]
     if selected in variants:
@@ -388,6 +400,15 @@ def _language_for_model(model: str, language):
     if family == "qwen3_asr":
         return _qwen_language(language)
     native, code = _basic_language(language)
+    if family in {"moonshine_asr", "niagara_asr", "canary_asr", "cohere_asr"}:
+        from Models.TTS.speech_language import supported_language
+        supported = set(STT_MODELS[model]["languages"])
+        code = supported_language(language, supported)
+        if native and not code:
+            raise ValueError(f"{model} does not support {language}; select one of {sorted(supported)}.")
+        return code or "en", code or "en"
+    if family == "moss_transcribe_diarize":
+        return "", None
     if family == "nemotron_asr":
         if not native:
             return "auto", None
@@ -569,10 +590,10 @@ class AudioCppASR:
                 options[name] = value
 
             family = definition["family"]
-            if family in {"vibevoice_asr", "kroko_asr"}:
+            if family in {"vibevoice_asr", "vibevoice_asr_streaming", "kroko_asr"}:
                 if "num_beams" not in explicit_settings:
                     options["num_beams"] = max(1, int(beam_size or options.get("num_beams", 1)))
-            if family == "vibevoice_asr":
+            if family in {"vibevoice_asr", "vibevoice_asr_streaming"}:
                 if "repetition_penalty" not in explicit_settings:
                     try:
                         penalty = float(repetition_penalty)
@@ -580,6 +601,11 @@ class AudioCppASR:
                         penalty = 1.0
                     if penalty > 0:
                         options["repetition_penalty"] = penalty
+
+            if family == "vibevoice_asr_streaming" and prompt:
+                options["context"] = str(prompt).strip()
+            if family == "moss_transcribe_diarize" and prompt:
+                options["instruct"] = str(prompt).strip()
 
             native_language, requested_code = _language_for_model(selected_model, language)
             wants_timestamps = bool(return_timestamps and definition["timestamps"])

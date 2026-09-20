@@ -37,6 +37,10 @@ import Models.STT.nemo_canary as nemo_canary
 import Models.STT.vibevoice_asr as vibevoice_asr
 import Models.STT.higgs_audio as higgs_audio
 import Models.STT.qwen3_asr as qwen3_asr
+import Models.STT.vibevoice_asr_streaming as vibevoice_asr_streaming
+from Models.STT.vibevoice_selection import is_streaming_selection, uses_vibevoice_streaming
+from streaming_text import rolling_text
+import streaming_display
 import Models.STT.audio_cpp as audio_cpp_stt
 import Models.Multi.seamless_m4t as seamless_m4t
 import Models.Multi.mms as mms
@@ -219,6 +223,8 @@ def remove_repetitions(text, language='english', settings=main_settings):
 
 
 def whisper_result_handling(result, audio_timestamp, final_audio, settings, plugins):
+    if result.get("streaming"):
+        result["display_mode"] = streaming_display.display_options(settings)["mode"]
     verbose = settings.GetOption("verbose")
     osc_ip = settings.GetOption("osc_ip")
     do_txt_translate = settings.GetOption("txt_translate")
@@ -234,11 +240,16 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
     sentence_split_language = "english"
     if "language" in result:
         sentence_split_language = result["language"]
-    predicted_text = remove_repetitions(predicted_text, language=sentence_split_language, settings=settings)
+    if not result.get("streaming"):
+        predicted_text = remove_repetitions(predicted_text, language=sentence_split_language, settings=settings)
     if "text" in result:
         result["text"] = predicted_text
 
     original_text = predicted_text
+
+    if result.get("streaming") and final_audio and (not predicted_text or predicted_text.lower() in ignore_list):
+        send_message("", {**result, "text": ""}, True, settings, plugins)
+        return
 
     source_id = str(result.get("audio_source_id") or "main")
     with last_audio_timestamps_lock:
@@ -266,7 +277,7 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
         # translate using text translator if enabled
         # translate text realtime or after audio is finished
         realtime_translate = (
-                (settings.GetOption("txt_translate_realtime_sync") and settings.GetOption("realtime"))
+                (settings.GetOption("txt_translate_realtime_sync") and (settings.GetOption("realtime") or result.get("streaming")))
                 or settings.GetOption("txt_translate_realtime")
         )
         model_translation = str(result.get("txt_translation") or "").strip()
@@ -326,6 +337,7 @@ def whisper_result_handling(result, audio_timestamp, final_audio, settings, plug
                 "data": predicted_text,
                 "audio_source_id": source_id,
                 "audio_source_name": result.get("audio_source_name", source_id),
+                **{key: result[key] for key in ("streaming", "stream_id", "stream_revision", "text_delta", "final", "display_mode") if key in result},
             }))
             # threading.Thread(
             #    target=websocket.BroadcastMessage,
@@ -432,6 +444,12 @@ def _osc_chat_notification_enabled(settings):
 
 
 def send_message(predicted_text, result_obj, final_audio, settings, plugins):
+    if result_obj.get("streaming"):
+        result_obj["display_mode"] = streaming_display.display_options(settings)["mode"]
+    remote_result = getattr(settings, "remote_result", None)
+    if remote_result is not None:
+        remote_result(result_obj, final_audio)
+        return
     osc_ip = settings.GetOption("osc_ip")
     osc_address = settings.GetOption("osc_address")
     osc_port = settings.GetOption("osc_port")
@@ -450,13 +468,20 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
     VRC_OSCLib.set_min_time_between_messages(settings.GetOption("osc_min_time_between_messages"))
 
     # WORKAROUND: prevent it from outputting the initial prompt.
-    if predicted_text == settings.GetOption("initial_prompt"):
+    if not result_obj.get("streaming") and predicted_text == settings.GetOption("initial_prompt"):
         return
 
     # process plugins
-    if ((final_audio and not settings.GetOption("realtime")) or settings.GetOption("realtime")) and plugins is not None:
+    if result_obj.get("streaming") and plugins is not None:
+        # Serial delivery prevents a slow draft callback overwriting the final.
+        plugin_process(plugins, predicted_text, result_obj, final_audio, settings)
+    elif ((final_audio and not settings.GetOption("realtime")) or settings.GetOption("realtime")) and plugins is not None:
         plugin_thread = threading.Thread(target=plugin_process, args=(plugins, predicted_text, result_obj, final_audio, settings,))
         plugin_thread.start()
+
+    if result_obj.get("streaming"):
+        streaming_display.submit_captions(predicted_text, result_obj, settings, plugins,
+                                          lambda message: websocket.BroadcastMessage(json.dumps(message)))
 
     # Send over OSC
     if osc_ip != "0" and settings.GetOption("osc_auto_processing_enabled") and predicted_text != "":
@@ -488,34 +513,47 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
 
     # Send to Websocket
     if settings.GetOption("websocket_final_messages") and websocket_ip != "0" and websocket_ip != "" and final_audio:
-        websocket.BroadcastMessage(json.dumps(result_obj))
+        if not result_obj.get("streaming") or result_obj.get("text", "").strip():
+            websocket.BroadcastMessage(json.dumps(result_obj))
         # threading.Thread(
         #    target=websocket.BroadcastMessage,
         #    args=(json.dumps(result_obj),)
         # ).start()
+
+    if (result_obj.get("streaming") and final_audio and websocket_ip not in {"0", "", None}
+            and (not settings.GetOption("websocket_final_messages") or not result_obj.get("text", "").strip())):
+        # A disabled/empty history message must still retire its live preview.
+        metadata = {key: result_obj[key] for key in (
+            "streaming", "stream_id", "stream_revision", "final", "audio_source_id", "audio_source_name", "display_mode",
+        ) if key in result_obj}
+        websocket.BroadcastMessage(json.dumps({**metadata, "type": "processing_data", "data": ""}))
 
     # Send to TTS on final audio
     if final_audio:
         streamed_playback = settings.GetOption("tts_streamed_playback")
         if settings.GetOption("tts_answer") and predicted_text != "" and tts.init():
             try:
+                tts_options = {}
+                if settings.GetOption("tts_type") == "audio_cpp":
+                    from Models.TTS.speech_language import spoken_language
+                    tts_options["language"] = spoken_language(result_obj, settings)
                 if settings.GetOption("tts_queue_enabled") and hasattr(tts.tts, 'enqueue_tts'):
                     # Queue mode handles both streaming and non-streaming inside enqueue
-                    tts.tts.enqueue_tts(predicted_text, streaming=streamed_playback)
+                    tts.tts.enqueue_tts(predicted_text, streaming=streamed_playback, **tts_options)
                 else:
                     if streamed_playback and hasattr(tts.tts, "tts_streaming"):
                         #tts.tts.tts_streaming(predicted_text)
                         threading.Thread(
                            target=tts.tts.tts_streaming,
-                           args=(predicted_text,)
+                           args=(predicted_text,), kwargs=tts_options,
                         ).start()
                     else:
-                        def play_tts_audio(tts_text):
-                            tts_wav, sample_rate = tts.tts.tts(tts_text)
+                        def play_tts_audio(tts_text, **options):
+                            tts_wav, sample_rate = tts.tts.tts(tts_text, **options)
                             tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
                         threading.Thread(
                             target=play_tts_audio,
-                            args=(predicted_text,)
+                            args=(predicted_text,), kwargs=tts_options,
                         ).start()
             except Exception as e:
                 print("Error while playing TTS audio: " + str(e))
@@ -543,7 +581,42 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
                 while not audio_tools.is_audio_playing(tag=tag) and time.time() < delay_timeout:
                     time.sleep(0.05)
 
-        if osc_send_type == "full":
+        stream_options = streaming_display.display_options(settings)
+        stable = result_obj.get("streaming") and stream_options["mode"] == "blocks"
+        stable_lane = ("osc", osc_ip, osc_port, osc_address)
+        if not stable:
+            streaming_display.displays.cancel(stable_lane, retire=False)
+        rolling = osc_send_type == "rolling" or (
+            result_obj.get("streaming") and stream_options["mode"] == "rolling"
+        )
+        if stable or rolling:
+            # OSC has no append operation. Send one bounded view of the newest
+            # words, coalescing obsolete views through the existing rate limiter.
+            prefix = build_whisper_translation_osc_prefix(result_obj, settings)
+            if prefix and message.startswith(prefix):
+                message = message[len(prefix):]
+            else:
+                prefix = ""
+            if settings.GetOption("osc_convert_ascii"):
+                message = VRC_OSCLib.unidecode(message)
+                prefix = VRC_OSCLib.unidecode(prefix)
+            if stable:
+                def send_block(visible, metadata):
+                    if metadata["display_done"]:
+                        return None  # VRChat keeps the final block until its normal hide/new message.
+                    receipt = VRC_OSCLib.ChatReceipt()
+                    VRC_OSCLib.Chat(visible, True, metadata["display_last"] and _osc_chat_notification_enabled(settings),
+                                   osc_address, IP=osc_ip, PORT=osc_port, convert_ascii=False,
+                                   replaceable=True, prioritize_latest=False, receipt=receipt)
+                    return receipt
+                streaming_display.displays.submit(stable_lane, result_obj, message, send_block,
+                                                   limit=osc_chat_limit, prefix=prefix)
+            else:
+                message = rolling_text(message, osc_chat_limit, prefix=prefix)
+                VRC_OSCLib.Chat(message, True, osc_notify, osc_address,
+                                IP=osc_ip, PORT=osc_port, convert_ascii=False,
+                                replaceable=True, prioritize_latest=False)
+        elif osc_send_type == "full":
             VRC_OSCLib.Chat(message, True, osc_notify, osc_address,
                             IP=osc_ip, PORT=osc_port,
                             convert_ascii=settings.GetOption("osc_convert_ascii"),
@@ -681,7 +754,7 @@ def load_whisper(model, ai_device):
         model = voxtral.Voxtral(compute_type=compute_dtype, device=ai_device)
         model.load_model(stt_model_size)
         return model
-    elif stt_type == "vibevoice_asr":
+    elif stt_type == "vibevoice_asr" and not is_streaming_selection(stt_type, model):
         compute_dtype = main_settings.GetOption("whisper_precision")
         try:
             return vibevoice_asr.TransformerVibeVoiceASR(compute_type=compute_dtype, device=ai_device)
@@ -693,6 +766,12 @@ def load_whisper(model, ai_device):
             return higgs_audio.HiggsAudio(compute_type=compute_dtype, device=ai_device)
         except Exception as e:
             print("Failed to load Higgs Audio ASR model. Application exits. " + str(e))
+    elif is_streaming_selection(stt_type, model):
+        adapter = vibevoice_asr_streaming.VibeVoiceStreamingASR(
+            compute_type=main_settings.GetOption("whisper_precision"), device=ai_device,
+        )
+        adapter.load_model(model)
+        return adapter
     elif stt_type == "qwen3_asr":
         compute_dtype = main_settings.GetOption("whisper_precision")
         try:
@@ -1422,6 +1501,48 @@ def whisper_ai_thread(audio_data, current_audio_timestamp, audio_model, audio_mo
         traceback.print_exc()
 
 
+def process_vibevoice_snapshot(audio_model, queue_data):
+    """Deliver every completed model window before taking another queue item."""
+    settings = queue_data["settings"]
+    pcm = queue_data.get("streaming_pcm")
+    audio = (np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768.0
+             if pcm is not None else convert_audio(queue_data["data"]))
+    source_id = str(queue_data.get("source_id") or "main")
+    source_name = str(queue_data.get("source_name") or source_id)
+    options = (settings.GetOption("special_settings") or {}).get("stt_vibevoice_streaming", {})
+    for index, result in enumerate(audio_model.process_snapshot(
+        audio, source_id=source_id, stream_id=queue_data.get("stream_id", source_id),
+        final=bool(queue_data["final"]), context=settings.GetOption("initial_prompt") or "",
+        max_new_tokens=options.get("max_new_tokens", 256),
+    )):
+        if getattr(settings, "remote_closed", lambda: False)():
+            audio_model.reset_stream(source_id)
+            return
+        whisper_result_thread(
+            result, queue_data["time"] + index, result["final"], settings,
+            queue_data["plugins"], source_id, source_name,
+        )
+
+
+def cancel_vibevoice_display(queue_data):
+    """Retire a failed draft without adding blank history or triggering TTS."""
+    settings = queue_data["settings"]
+    source_id = str(queue_data.get("source_id") or "main")
+    result = {"text": "", "streaming": True, "stream_id": queue_data.get("stream_id", source_id),
+              "stream_revision": 2147483647, "final": True, "stream_cancelled": True,
+              "audio_source_id": source_id, "audio_source_name": queue_data.get("source_name", source_id)}
+    remote_result = getattr(settings, "remote_result", None)
+    if remote_result is not None:
+        remote_result(result, True)
+        return
+    streaming_display.cancel_displays(result, settings, queue_data["plugins"],
+                                     lambda message: websocket.BroadcastMessage(json.dumps(message)))
+    plugin_process(queue_data["plugins"] or [], "", result, True, settings)
+    if settings.GetOption("websocket_ip") not in {"0", "", None}:
+        result.pop("text")
+        websocket.BroadcastMessage(json.dumps({**result, "type": "processing_data", "data": ""}))
+
+
 def whisper_worker():
     #global final_audio
     #global queue_data
@@ -1435,7 +1556,7 @@ def whisper_worker():
     audio_model = load_whisper(whisper_model, whisper_ai_device)
     # load realtime whisper model
     audio_model_realtime = None
-    if main_settings.GetOption("realtime") and main_settings.GetOption("realtime_whisper_model") != "" and main_settings.GetOption(
+    if not uses_vibevoice_streaming(main_settings) and main_settings.GetOption("realtime") and main_settings.GetOption("realtime_whisper_model") != "" and main_settings.GetOption(
             "realtime_whisper_model") is not None:
         audio_model_realtime = load_realtime_whisper(main_settings.GetOption("realtime_whisper_model"), whisper_ai_device)
     websocket.set_loading_state("speech2text_loading", False)
@@ -1472,12 +1593,26 @@ def whisper_worker():
 
         try:
             # skip if no audio data is available
+            if getattr(settings, "remote_closed", lambda: False)():
+                continue
             if audio is None or len(audio) == 0:
                 continue
 
             # Timestamp ordering is source-local. Comparing timestamps across
             # independent streams used to suppress one speaker's realtime text.
             if audio_timestamp < last_audio_times.get(source_id, 0) and not final_audio:
+                continue
+
+            if uses_vibevoice_streaming(settings):
+                try:
+                    process_vibevoice_snapshot(audio_model, queue_data)
+                except Exception as exc:
+                    audio_model.reset_stream(source_id)
+                    cancel_vibevoice_display(queue_data)
+                    print(f"VibeVoice streaming failed for {source_name}: {exc}")
+                    traceback.print_exc()
+                    websocket.BroadcastMessage(json.dumps({"type": "error", "data": str(exc)}))
+                last_audio_times[source_id] = max(audio_timestamp, last_audio_times.get(source_id, 0))
                 continue
 
             try:

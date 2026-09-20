@@ -14,6 +14,7 @@ import os
 import platform
 import shutil
 import socket
+import sys
 import threading
 import time
 from pathlib import Path
@@ -24,7 +25,10 @@ import requests
 import processmanager
 
 
-AUDIO_CPP_VERSION = "0.7.1"
+AUDIO_CPP_VERSION = "0.8.1"
+# A new directory prevents C++ libraries left by older ZIP installs from
+# shadowing the target system's newer Mesa/Vulkan driver dependencies.
+LINUX_BUNDLE_REVISION = 2
 CACHE_ROOT = Path.cwd() / ".cache" / "audio.cpp"
 RUNTIME_ROOT = CACHE_ROOT / "runtime"
 SERVER_CONFIG_ROOT = CACHE_ROOT / "server"
@@ -52,55 +56,55 @@ def _package(filename: str, checksum: str, extract_format: str) -> dict[str, Any
 RUNTIME_PACKAGES: dict[tuple[str, str, str], tuple[dict[str, Any], ...]] = {
     ("windows", "x86_64", "cpu"): (
         _package(
-            "audio-v0.7.1-bin-windows-x64-cpu.zip",
-            "6042e9d00689575b3d9feb849ace77ae4b05c73ad3a6b344037a01c166333649",
+            "audio-v0.8.1-bin-windows-x64-cpu-portable.zip",
+            "fc6a20cc881b0882569d0eca060235a1904863b96b531f79145ce00acf8f8bfd",
             "zip",
         ),
     ),
     ("windows", "x86_64", "vulkan"): (
         _package(
-            "audio-v0.7.1-bin-windows-x64-vulkan.zip",
-            "59e88deca98014cb3f0ace4f22dc807043d24a2da26755cef14de8531801654a",
+            "audio-v0.8.1-bin-windows-x64-vulkan.zip",
+            "c787971e025ba8ef900f0482a2cc36a049367081fe89f4841aae521a0b49de32",
             "zip",
         ),
     ),
     ("windows", "x86_64", "cuda"): (
         _package(
-            "audio-v0.7.1-bin-windows-x64-cuda12.4.zip",
-            "f37cc8f4705bcc30db909c8c9936d45d0f063a9afd9ccfb6d14e0af1f1de60e6",
+            "audio-v0.8.1-bin-windows-x64-cuda12.4.zip",
+            "28bbe8ac62a06c5d9d42ba3066b051f433dc9a8f456c544e03e87202f0fa8c52",
             "zip",
         ),
         _package(
-            "audio-v0.7.1-cudart-windows-x64-cuda12.4.zip",
-            "6b83a1e7b1e5cc6d77f0ee1d6337761397ab80c8638a27685b526d7ff74242bf",
+            "audio-v0.8.1-cudart-windows-x64-cuda12.4.zip",
+            "025faacfdc3dec215ee07cb9be7d1ef2016402723f3721a30500ceee02cc4701",
             "zip",
         ),
     ),
     ("linux", "x86_64", "cpu"): (
         _package(
-            "audio-v0.7.1-bin-ubuntu-x64-cpu.tar.gz",
-            "257119ac1820765dc20f58a4d9438a4620669edf04678ceec60da8728234e95f",
+            "audio-v0.8.1-bin-ubuntu-x64-cpu-portable.tar.gz",
+            "90e8d538338cc209875a18c940529302805563e54738489da1d684c6e0de12d0",
             "tar.gz",
         ),
     ),
     ("linux", "x86_64", "vulkan"): (
         _package(
-            "audio-v0.7.1-bin-ubuntu-x64-vulkan.tar.gz",
-            "684141880c55a30fcfe5dc95192822cdee5b922aa21f49e3cdcf3d3c66940d3e",
+            "audio-v0.8.1-bin-ubuntu-x64-vulkan.tar.gz",
+            "54070c724b663e3387c750498eba1a152eba9ad711aa247fd9d8addc1a73de02",
             "tar.gz",
         ),
     ),
     ("darwin", "x86_64", "metal"): (
         _package(
-            "audio-v0.7.1-bin-macos-x64-metal.tar.gz",
-            "15b9292543889151450434f6455a57ff09597d80bdfa9b64685bd1d58e49d50e",
+            "audio-v0.8.1-bin-macos-x64-metal.tar.gz",
+            "637fb5b47f92a8d01724e288a4d38da3b3d1a34799f2b7ff3bd0d01aabb2e563",
             "tar.gz",
         ),
     ),
     ("darwin", "arm64", "metal"): (
         _package(
-            "audio-v0.7.1-bin-macos-arm64-metal.tar.gz",
-            "b45b51e6006e4999167c28b3fa55e643ae34c2a19e9816639769759c4404e71c",
+            "audio-v0.8.1-bin-macos-arm64-metal.tar.gz",
+            "a5995233c4e28297600c474eed24b734a3ff8f00393147915112b2b4d07ab593",
             "tar.gz",
         ),
     ),
@@ -214,11 +218,50 @@ def _write_json_atomic(path: Path, payload: Any) -> None:
 _runtime_install_lock = threading.RLock()
 
 
+def _bundled_server_path(backend: str) -> Path | None:
+    if (_normalized_system(), _normalized_machine()) != ("linux", "x86_64") or backend not in {"cpu", "vulkan"}:
+        return None
+    roots = [Path.cwd()]
+    if getattr(sys, "frozen", False):
+        roots.append(Path(sys.executable).resolve().parent.parent)
+    for root in roots:
+        server = root / "toolchain" / "audio.cpp" / f"v{AUDIO_CPP_VERSION}-r{LINUX_BUNDLE_REVISION}-linux-x86_64" / "audiocpp_server"
+        if server.is_file():
+            return server.resolve()
+    return None
+
+
+def espeak_paths() -> tuple[str, str]:
+    # Already shipped by the application, including its matching voice data.
+    import espeakng_loader
+    return str(espeakng_loader.get_library_path()), str(espeakng_loader.get_data_path())
+
+
+def _server_environment(server: Path, family: str = "") -> dict[str, str] | None:
+    environment = {}
+    if family == "kokoro_tts":
+        library, data = espeak_paths()
+        environment["AUDIOCPP_ESPEAK_LIBRARY"] = os.environ.get("AUDIOCPP_ESPEAK_LIBRARY") or library
+        environment["AUDIOCPP_ESPEAK_DATA"] = os.environ.get("AUDIOCPP_ESPEAK_DATA") or data
+    if _normalized_system() != "linux":
+        return environment or None
+    # External native servers must not inherit PyInstaller's private library
+    # directory. Prefer their own libraries and retain the original user path.
+    variable = "LD_LIBRARY_PATH_ORIG" if getattr(sys, "frozen", False) else "LD_LIBRARY_PATH"
+    original = os.environ.get(variable, "")
+    environment["LD_LIBRARY_PATH"] = str(server.parent) + (os.pathsep + original if original else "")
+    return environment
+
+
 def ensure_runtime(backend: str, force_non_ui_dl: bool = False) -> Path:
     """Resolve or install the pinned audio.cpp server for ``backend``."""
     explicit = _explicit_server_path()
     if explicit is not None:
         return explicit
+
+    bundled = _bundled_server_path(backend)
+    if bundled is not None:
+        return bundled
 
     system = _normalized_system()
     machine = _normalized_machine()
@@ -401,6 +444,7 @@ class AudioCppServer:
             self.process = processmanager.run_process(
                 [str(server_path), "--config", str(config_path.resolve()), "--no-ui"],
                 include_stdout=False,
+                env=_server_environment(server_path, family),
             )
             if self.process is None:
                 raise RuntimeError("Could not start audiocpp_server.")

@@ -20,7 +20,7 @@ from librosa.core.audio import resampy
 from pydub import AudioSegment
 from threading import Lock
 import time
-from scipy.io.wavfile import write as write_wav
+from scipy.io.wavfile import read as read_wav, write as write_wav
 from io import BytesIO
 
 import Utilities
@@ -84,6 +84,16 @@ def get_host_audio_api_names():
 
 
 def get_default_audio_device_index_by_api(api, is_input=True):
+    if platform.system() == "Linux":
+        # Device indices must come from the interface that opens the stream.
+        # sounddevice can load a different PortAudio build/device table.
+        api_index, api_name = get_audio_api_index_by_name(api)
+        if not api_name:
+            return None
+        info = main_app_py_audio.get_host_api_info_by_index(api_index)
+        index = info["defaultInputDevice" if is_input else "defaultOutputDevice"]
+        return index if index >= 0 else None
+
     devices = sd.query_devices()
     api_info = sd.query_hostapis()
     host_api_index = None
@@ -99,12 +109,30 @@ def get_default_audio_device_index_by_api(api, is_input=True):
     api_pyaudio_index, _ = get_audio_api_index_by_name(api)
 
     default_device_index = api_info[host_api_index]['default_input_device' if is_input else 'default_output_device']
+    if default_device_index < 0:
+        return None
     default_device_name = devices[default_device_index]['name']
     return get_audio_device_index_by_name_and_api(default_device_name, api_pyaudio_index, is_input)
 
 
 def get_audio_device_index_by_name_and_api(name, api, is_input=True, default=None):
     audio = pyaudio.PyAudio()
+    if platform.system() == "Linux" and audio.get_host_api_info_by_index(api)["name"] == "PulseAudio":
+        from Utilities.linux_audio import pulse_device_name
+        try:
+            if name == ("Default Source" if is_input else "Default Sink"):
+                index = audio.get_host_api_info_by_index(api)["defaultInputDevice" if is_input else "defaultOutputDevice"]
+                return index if index >= 0 else None
+            native_name = pulse_device_name(name, is_input)
+            for i in range(audio.get_device_count()):
+                device_info = audio.get_device_info_by_index(i)
+                if (device_info["hostApi"] == api and device_info["name"] == native_name
+                        and device_info["maxInputChannels" if is_input else "maxOutputChannels"] > 0):
+                    return i
+            # UI indices belong to miniaudio and are never valid fallbacks here.
+            raise ValueError(f"PulseAudio device {name!r} was not enumerated by PortAudio.")
+        finally:
+            audio.terminate()
     device_count = audio.get_device_count()
     for i in range(device_count):
         device_info = audio.get_device_info_by_index(i)
@@ -289,6 +317,7 @@ def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target
     :return: A NumPy array containing the resampled and potentially re-channelled audio data.
     """
     dtype_map = {
+        "uint8": np.uint8,
         "int8": np.int8,
         "int16": np.int16,
         "int32": np.int32,
@@ -344,17 +373,13 @@ def resample_audio(audio_chunk, recorded_sample_rate, target_sample_rate, target
     return np.asarray(resampled_audio_data, dtype=audio_data_dtype)
 
 
-def get_closest_sample_rate_of_device(device_index, target_sample_rate, fallback_sample_rate=44100):
-    p = pyaudio.PyAudio()
+def get_closest_sample_rate_of_device(device_index, target_sample_rate, fallback_sample_rate=44100, py_audio=None):
+    p = py_audio if py_audio is not None else main_app_py_audio
     device_info = p.get_device_info_by_index(
         device_index if device_index is not None else p.get_default_output_device_info()["index"])
-    supported_sample_rates = device_info.get("supportedSampleRates")
-
-    # If supported_sample_rates is empty, use common sample rates as a fallback
-    if not supported_sample_rates:
-        supported_sample_rates = [device_info.get("defaultSampleRate")]
-        if not supported_sample_rates:
-            supported_sample_rates = [fallback_sample_rate]
+    supported_sample_rates = device_info.get("supportedSampleRates") or [
+        device_info.get("defaultSampleRate") or fallback_sample_rate
+    ]
 
     # Find the closest supported sample rate to the original sample rate
     closest_sample_rate = min(supported_sample_rates, key=lambda x: abs(x - target_sample_rate))
@@ -431,40 +456,64 @@ def switch_registered_audio_streamers(device_index):
 
 def play_stream(p=None, device=None, audio_data=None, chunk=1024, audio_format=2, channels=2, sample_rate=44100,
                 tag="", dtype="int16"):
-
-    dev_info = p.get_device_info_by_index(device)
-    max_channels = int(dev_info['maxOutputChannels'])
-    print("playback with channels: {}".format(max_channels))
-
+    stream = None
     try:
-        audio_data = resample_audio(audio_data, sample_rate, sample_rate, target_channels=max_channels,
+        dev_info = (p.get_default_output_device_info() if device is None
+                    else p.get_device_info_by_index(device))
+        device = dev_info["index"]
+        # PulseAudio's Default Sink advertises 32 as a capacity, not a speaker
+        # layout. Keep the requested mono/stereo channels instead of expanding
+        # every TTS sample to that maximum.
+        max_channels = int(dev_info['maxOutputChannels'])
+        # Keep the established Windows speaker-layout conversion (WASAPI can
+        # require its device's channel layout).
+        playback_channels = max_channels if platform.system() == "Windows" else min(channels, max_channels)
+        if playback_channels < 1:
+            raise ValueError(f"Audio device {dev_info['name']!r} has no output channels.")
+        print("playback with channels: {}".format(playback_channels))
+        audio_data = resample_audio(audio_data, sample_rate, sample_rate, target_channels=playback_channels,
                                     input_channels=channels, dtype=dtype)
 
         stream = p.open(format=audio_format,
-                        channels=max_channels,
+                        channels=playback_channels,
                         rate=int(sample_rate),
                         output_device_index=device,
                         output=True)
 
-        for i in range(0, len(audio_data), chunk * max_channels):
+        for i in range(0, len(audio_data), chunk * playback_channels):
             if stop_flags[tag].is_set():
                 break
-            stream.write(audio_data[i:i + chunk * max_channels].tobytes())
-
-        stream.close()
+            stream.write(audio_data[i:i + chunk * playback_channels].tobytes())
     except Exception as e:
         print("Error playing audio: {}".format(e))
         traceback.print_exc()
+    finally:
+        if stream is not None:
+            stream.close()
 
 
-# play wav binary audio to device, converting audio sample_rate and channels if necessary
-# audio can be bytes (in wav), torch.Tensor or numpy array - audio data might need to be in int16, as python does not support float32 by default. use `audio_data = np.int16(wav_numpy * 32767)` to convert. (needs more testing)
-# tensor_sample_with is the sample width of the tensor (if audio is tensor and not bytes) [default is 4 bytes]
-# tensor_channels is the number of channels of the tensor (if audio is tensor and not bytes) [default is 1 channel (mono)]
+# Play WAV bytes or raw Tensor/NumPy samples, converting rate/channels as needed.
+# The legacy tensor_sample_with/tensor_channels arguments remain accepted for
+# plugin compatibility; dtype/input_channels describe the raw samples.
 def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channel_num=2, target_channels=2,
                input_channels=1, dtype="int16", tensor_sample_with=4, tensor_channels=1, secondary_device=None,
                stop_play=True, tag=""):
     global audio_threads
+
+    from remote_audio_output import current_destination
+    remote = current_destination()
+    if remote is not None:
+        if isinstance(audio, bytes):
+            with wave.open(io.BytesIO(audio), 'rb') as remote_wav:
+                width = remote_wav.getsampwidth()
+                if width != 2:
+                    raise ValueError("Remote WAV playback requires PCM16")
+                remote(remote_wav.readframes(remote_wav.getnframes()),
+                       remote_wav.getframerate(), remote_wav.getnchannels(), "<i2")
+        else:
+            samples = audio.detach().float().cpu().numpy() if isinstance(audio, torch.Tensor) else np.asarray(audio)
+            remote(samples.tobytes(), source_sample_rate, input_channels, samples.dtype)
+        return
 
     if stop_play:
         stop_audio(tag=tag)
@@ -474,91 +523,55 @@ def play_audio(audio, device=None, source_sample_rate=44100, audio_device_channe
     stop_flags[tag].clear()
 
     if isinstance(audio, bytes):
-        buff = _generate_binary_buffer(audio)
-    elif isinstance(audio, numpy.ndarray):
-        buff = io.BytesIO()
-        write_wav(buff, source_sample_rate, audio)
-        buff.seek(0)
+        source_sample_rate, frame_data = read_wav(io.BytesIO(audio))
+        input_channels = frame_data.shape[1] if frame_data.ndim > 1 else 1
+        dtype = frame_data.dtype.name
+        if dtype == "float64":
+            dtype = "float32"
+        frame_data = np.asarray(frame_data, dtype=dtype)
     elif isinstance(audio, torch.Tensor):
-        buff = convert_tensor_to_wav_buffer(audio, sample_rate=source_sample_rate, channels=tensor_channels,
-                                            sample_width=tensor_sample_with)
+        # torch.save serializes a ZIP/pickle, not PCM. Pass the actual samples
+        # directly, and keep float32 distinct from PortAudio's signed int32.
+        frame_data = audio.detach().to(device="cpu", dtype=getattr(torch, dtype)).numpy()
+    elif isinstance(audio, numpy.ndarray):
+        frame_data = np.asarray(audio, dtype=dtype)
     else:
         raise ValueError("Unsupported audio format. Please provide bytes, numpy array, or torch tensor.")
 
-    # Set chunk size of 1024 samples per data frame
-    chunk = 1024
-
-    # Open the sound file
-    wf = wave.open(buff, 'rb')
-
-    # Create an interface to PortAudio
-    # p = pyaudio.PyAudio()
+    formats = {"float32": pyaudio.paFloat32, "int32": pyaudio.paInt32,
+               "int16": pyaudio.paInt16, "int8": pyaudio.paInt8, "uint8": pyaudio.paUInt8}
+    if dtype not in formats:
+        raise ValueError(f"Unsupported playback sample type: {dtype}")
+    playback_channels = target_channels if target_channels is not None else input_channels
     p = pyaudio_pool.acquire()
-
-    # Find the closest supported sample rate to the original sample rate
-    closest_sample_rate = get_closest_sample_rate_of_device(device, wf.getframerate())
-
-    # Read all audio data and resample if necessary
-    frame_data = wf.readframes(wf.getnframes())
-
-    sound_file_channels = wf.getnchannels()
-
-    # get audio sample width
-    audio_sample_width = wf.getsampwidth()
-
-    wf.close()
-
-    # resample audio data
-    audio_data = resample_audio(frame_data, source_sample_rate, closest_sample_rate, target_channels=target_channels,
-                                input_channels=input_channels, dtype=dtype)
-
     current_threads = []
-
-    if secondary_device is not None:
-        secondary_audio_thread = threading.Thread(target=play_stream, args=(
-            p, secondary_device, audio_data, chunk,
-            p.get_format_from_width(audio_sample_width),
-            audio_device_channel_num,
-            closest_sample_rate,
-            tag,
-            dtype
-        ))
-        secondary_audio_thread.start()
-        current_threads.append((secondary_audio_thread, tag))
-
-    # Open a .Stream object to write the WAV file to
-    # 'output = True' indicates that the sound will be played rather than recorded
-    main_audio_thread = threading.Thread(target=play_stream, args=(
-        p, device, audio_data, chunk,
-        p.get_format_from_width(audio_sample_width),
-        audio_device_channel_num,
-        closest_sample_rate,
-        tag,
-        dtype
-    ))
-    main_audio_thread.start()
-    current_threads.append((main_audio_thread, tag))
-
-    # Add the current threads to the global list
-    with audio_list_lock:
-        audio_threads.extend(current_threads)
-
-    # Wait only for the threads that this invocation of play_audio has started
-    for thread, _ in current_threads:
-        thread.join()
-
-    # Cleanup: Remove threads that have completed from the global list
-    with audio_list_lock:
+    try:
+        outputs = [device] if secondary_device is None else [secondary_device, device]
+        for output in outputs:
+            closest_sample_rate = get_closest_sample_rate_of_device(output, source_sample_rate, py_audio=p)
+            audio_data = resample_audio(frame_data, source_sample_rate, closest_sample_rate,
+                                        target_channels=playback_channels, input_channels=input_channels, dtype=dtype)
+            thread = threading.Thread(target=play_stream, args=(
+                p, output, audio_data, 1024, formats[dtype], playback_channels,
+                closest_sample_rate, tag, dtype,
+            ))
+            thread.start()
+            current_threads.append((thread, tag))
+            with audio_list_lock:
+                audio_threads.append((thread, tag))
+    finally:
+        # Keep the pooled interface alive until all its streams have finished,
+        # including when preparing a secondary output fails.
         for thread, _ in current_threads:
-            if (thread, tag) in audio_threads:
-                audio_threads.remove((thread, tag))
-
-    # p.terminate()
-    pyaudio_pool.release(p)
-    pyaudio_pool.manage_unused()
-
-    if tag in stop_flags:
-        stop_flags[tag].clear()
+            thread.join()
+        with audio_list_lock:
+            for item in current_threads:
+                if item in audio_threads:
+                    audio_threads.remove(item)
+        pyaudio_pool.release(p)
+        pyaudio_pool.manage_unused()
+        if tag in stop_flags:
+            stop_flags[tag].clear()
 
     current_threads.clear()
 
@@ -632,6 +645,12 @@ def start_recording_audio_stream(device_index=None, sample_format=pyaudio.paInt1
 
     if py_audio is None:
         py_audio = pyaudio.PyAudio()
+
+    if device_index is None:
+        try:
+            device_index = py_audio.get_default_input_device_info()["index"]
+        except OSError as exc:
+            raise ValueError("No default audio input device is available. Select an input device and audio API.") from exc
 
     needs_sample_rate_conversion = False
     num_of_channels = channels
@@ -778,6 +797,11 @@ def resolve_audio_input_configuration(configuration):
             device_name = str(stream_device_index)
         persisted_device_index = stream_device_index
     elif not device_name or device_name.casefold() == "default":
+        if default_device_index is None:
+            raise ValueError(
+                f"No default audio input device is available through {audio_api}. "
+                "Select an available input device or a different audio API (such as PulseAudio on Linux)."
+            )
         device_name = "Default"
         stream_device_index = default_device_index
         persisted_device_index = -1
@@ -1675,16 +1699,21 @@ class AudioStreamer:
 
     # ----------------------------------------------------------------------
     def init_stream(self, desired_sample_rate):
+        from remote_audio_output import current_destination
+        if current_destination() is not None:
+            self.actual_sample_rate = desired_sample_rate
+            return
         if self.p is not None:
             pyaudio_pool.release(self.p)
             self.p = None
         audio_interface = pyaudio_pool.acquire()
         try:
             actual_sample_rate = get_closest_sample_rate_of_device(
-                self.device_index, desired_sample_rate
+                self.device_index, desired_sample_rate, py_audio=audio_interface
             )
             stream = audio_interface.open(
-                format=audio_interface.get_format_from_width(np.dtype(self.dtype).itemsize),
+                format=(pyaudio.paFloat32 if np.dtype(self.dtype) == np.dtype("float32")
+                        else audio_interface.get_format_from_width(np.dtype(self.dtype).itemsize)),
                 channels=self.playback_channels,
                 rate=int(actual_sample_rate),
                 output=True,
@@ -1699,7 +1728,14 @@ class AudioStreamer:
 
     # ----------------------------------------------------------------------
     def add_audio_chunk(self, chunk: bytes | bytearray):
+        from remote_audio_output import current_destination
+        remote = current_destination()
+        if remote is not None:
+            remote(chunk, self.source_sample_rate, self._source_channels, self.dtype)
+            return
         with self._device_lock:
+            if self.stream is None:
+                self.init_stream(self.source_sample_rate)
             self._add_audio_chunk_locked(chunk)
 
     def _add_audio_chunk_locked(self, chunk: bytes | bytearray):

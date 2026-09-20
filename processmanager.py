@@ -39,7 +39,9 @@ def subprocess_args(include_stdout=True, environments=None):
             env.update(environments)
     else:
         si = None
-        env = None
+        env = os.environ.copy() if environments is not None else None
+        if env is not None:
+            env.update(environments)
 
     # ``subprocess.check_output`` doesn't allow specifying ``stdout``::
     #

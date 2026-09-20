@@ -12,7 +12,10 @@
       <link rel="stylesheet" media="all" href="bootstrap.min.css">
       <link rel="stylesheet" media="all" href="main.css">
 
-      <script type = "text/javascript">
+      <style>#live-data, #processing_data, #processing { white-space: pre-line; text-align: left; min-height: 2.6em; vertical-align: top; }</style>
+<script src="../streaming-transcripts.js"></script>
+<script>const streamingTranscripts = new StreamingTranscripts();</script>
+<script type = "text/javascript">
          let websocketServer = "ws://127.0.0.1:5000"
 
          let hideTimeouts = [];
@@ -178,13 +181,14 @@
                
                   ws.onmessage = function (evt) {
                      let received_msg = JSON.parse(evt.data);
+                  if (!streamingTranscripts.accept(received_msg)) return;
                      
                      // receiving a transcription message
                      if (typeof received_msg.type != 'undefined' && received_msg.type === "transcript" && typeof received_msg.text != 'undefined') {
                         console.log(received_msg);
 
                         // clear realtime translation
-                        document.querySelector('#loader #live-data').textContent = "";
+                        document.querySelector('#loader #live-data').textContent = received_msg.streaming ? streamingTranscripts.liveText() : "";
 
                         let message_text = received_msg.text.trim();
                         let txt_translation_html = "";
@@ -242,7 +246,7 @@
                      if (!no_loader && typeof received_msg.type != 'undefined' && received_msg.type === "processing_start") {
                          clearAllTimeouts(loaderTimeouts);
                          // show loader for 5 seconds
-                         if (received_msg.data) {
+                         if (received_msg.data || received_msg.streaming) {
                             showLoader(10);
                          } else {
                             hideLoader();
@@ -250,8 +254,8 @@
                       }
                       // update live translation text
                       if (typeof received_msg.type != 'undefined' && received_msg.type === "processing_data") {
-                          if (received_msg.data) {
-                              document.querySelector('#loader #live-data').textContent = received_msg.data;
+                          if (received_msg.data || received_msg.streaming) {
+                              document.querySelector('#loader #live-data').textContent = received_msg.streaming ? streamingTranscripts.liveText() : received_msg.data;
                               clearAllTimeouts(loaderTimeouts);
                               showLoader(10);
                           }

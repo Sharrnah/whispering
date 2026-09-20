@@ -33,6 +33,9 @@ LOADING_QUEUE = {}
 
 
 def tts_request(msgObj, websocket):
+    import remote_audio
+    if remote_audio.route_tts(msgObj, websocket):
+        return
     text = msgObj["value"]["text"]
     path = ""
     if "path" in msgObj["value"] and msgObj["value"]["path"] != "":
@@ -80,6 +83,9 @@ def tts_request(msgObj, websocket):
 
 
 def tts_request_last(msgObj, websocket):
+    import remote_audio
+    if remote_audio.route_tts(msgObj, websocket, last=True):
+        return
     path = ""
     if "path" in msgObj["value"] and msgObj["value"]["path"] != "":
         path = msgObj["value"]["path"]
@@ -395,7 +401,7 @@ class WebSocketServer:
         self.thread = threading.Thread(target=self.run, args=(self.loop,))
         self.thread.start()
 
-    async def handler(self, websocket, path):
+    async def handler(self, websocket, path=None):
         print('Websocket: Client connected.')
         if self.on_connect_handler is not None:
             await self.on_connect_handler(self, websocket)
@@ -454,7 +460,7 @@ class WebSocketServer:
         return self.ws_clients
 
     async def server_program(self):
-        server = await websockets.serve(self.handler, self.ip, self.port, max_size=1_000_000_000, timeout=120,
+        server = await websockets.serve(self.handler, self.ip, self.port, max_size=1_000_000_000,
                                         close_timeout=120)
         print('Websocket: Server started.')
         await server.wait_closed()
@@ -466,7 +472,31 @@ class WebSocketServer:
 
 
 async def custom_message_handler(server_instance, msg_obj, websocket):
+    import remote_audio
+    if msg_obj["type"] in ("tts_req", "tts_req_last") and remote_audio.route_tts(msg_obj, websocket, last=msg_obj["type"] == "tts_req_last"):
+        return
+    if msg_obj["type"] == "remote_audio_attach":
+        session = remote_audio.host_server.session if remote_audio.host_server else None
+        value = msg_obj.get("value") or {}
+        import hmac
+        if session and isinstance(value.get("token"), str) and hmac.compare_digest(value["token"], session.attach_token) and websocket.remote_address[0] == session.socket.remote_address[0]:
+            session.control = websocket
+        return
     global UI_CONNECTED
+    if msg_obj["type"] == "remote_audio_host":
+        # Host activation and pairing secrets are local administration only.
+        import ipaddress
+        import remote_audio
+        peer = getattr(websocket, "remote_address", None)
+        if not peer or not ipaddress.ip_address(peer[0]).is_loopback:
+            return
+        try:
+            value = msg_obj.get("value") or {}
+            reply = await remote_audio.configure_host(value.get("enabled") is True)
+        except Exception as exc:
+            reply = {"type": "remote_audio_host", "enabled": False, "error": str(exc)}
+        await server_instance.send(websocket, json.dumps(reply))
+        return
     if msg_obj["type"] == "audio_routes_update":
         request_value = msg_obj.get("value") or {}
         request_id = str(request_value.get("request_id") or "") if isinstance(request_value, dict) else ""

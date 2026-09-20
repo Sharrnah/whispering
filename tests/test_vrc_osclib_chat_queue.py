@@ -8,6 +8,52 @@ import VRC_OSCLib as osc
 
 
 class OscChatQueueTests(unittest.TestCase):
+    def test_live_display_burst_supersedes_unsent_finals_without_building_a_backlog(self):
+        from streaming_display import StableDisplayScheduler
+        entered, release = threading.Event(), threading.Event()
+        def send(**message):
+            self.sent.append(message["data"])
+            if message["data"] == "busy":
+                entered.set()
+                release.wait(3)
+        osc._direct_osc_send = send
+        scheduler = StableDisplayScheduler(threaded=False)
+        def emit(text, metadata):
+            receipt = osc.ChatReceipt()
+            osc.Chat(text, replaceable=True, receipt=receipt)
+            return receipt
+        osc.Chat("busy")
+        try:
+            self.assertTrue(entered.wait(2))
+            for number in range(100):
+                result = dict(stream_id=str(number), audio_source_id="game", stream_revision=1, final=True)
+                scheduler.submit("osc", result, "newest %d" % number, emit)
+                scheduler.tick()
+            with osc.osc_queue._condition:
+                self.assertLessEqual(len(osc.osc_queue._items), 1)
+        finally:
+            release.set()
+        osc.osc_queue.join()
+        self.assertEqual(self.sent, ["busy", "newest 99"])
+
+    def test_paced_display_receipt_records_actual_delivery(self):
+        receipt = osc.ChatReceipt()
+        before = time.monotonic()
+        osc.Chat("read this block", receipt=receipt)
+        osc.osc_queue.join()
+        self.assertTrue(receipt.done.is_set())
+        self.assertTrue(receipt.sent)
+        self.assertGreaterEqual(receipt.sent_at, before)
+
+    def test_cancelled_paced_display_is_not_sent_and_receipt_completes(self):
+        receipt = osc.ChatReceipt()
+        receipt.cancel()
+        osc.Chat("cancelled block", receipt=receipt)
+        osc.osc_queue.join()
+        self.assertTrue(receipt.done.is_set())
+        self.assertFalse(receipt.sent)
+        self.assertEqual(self.sent, [])
+
     def setUp(self):
         osc.osc_queue.join()
         self.original_sender = osc._direct_osc_send

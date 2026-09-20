@@ -3,6 +3,7 @@ __pycache__
 *.yaml
 /build/
 /dist/
+/.linux-build/
 *.bin
 *.model
 *.pt

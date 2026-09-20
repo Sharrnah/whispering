@@ -19,7 +19,9 @@ import torch
 import audio_tools
 import settings
 from Models.Singleton import SingletonMeta
-from Models.audio_cpp_runtime import AudioCppServer, normalize_backend_device
+from Models.TTS.speech_language import language_code, supported_language
+from Models import audio_cpp_catalog as catalog
+from Models.audio_cpp_runtime import AudioCppServer, normalize_backend_device, espeak_paths
 from Models.TTS.tts_config import get_tts_precision
 
 
@@ -206,6 +208,8 @@ TTS_MODELS = {
     },
 }
 
+TTS_MODELS.update(catalog.TTS_MODELS)
+
 MODEL_VARIANTS = {name: model["variants"] for name, model in TTS_MODELS.items()}
 MODEL_ALIASES = {
     "Supertonic-3": DEFAULT_MODEL, "Supertonic 3": DEFAULT_MODEL,
@@ -350,6 +354,13 @@ SESSION_KEYS = {
 }
 
 
+for _definition in catalog.TTS_MODELS.values():
+    _key = _definition["settings_key"]
+    TTS_SETTINGS_DEFAULTS[_key] = catalog.SETTINGS_DEFAULTS[_key]
+    REQUEST_KEYS[_key] = catalog.REQUEST_KEYS[_key]
+    SESSION_KEYS[_key] = catalog.SESSION_KEYS[_key]
+
+
 def normalize_model(model: str | None) -> str:
     selected = str(model or DEFAULT_MODEL).split("(", 1)[0].strip()
     if selected in TTS_MODELS:
@@ -368,7 +379,7 @@ def normalize_precision(precision, model: str = DEFAULT_MODEL) -> str:
     model = normalize_model(model)
     variants = TTS_MODELS[model]["variants"]
     selected = str(precision or "auto").strip().lower()
-    selected = {"original": "orig", "native": "orig", "float32": "orig", "fp16": "f16", "float16": "f16", "bfloat16": "bf16", "q8": "q8_0", "int8": "q8_0", "8bit": "q8_0"}.get(selected, selected)
+    selected = {"original": "orig", "native": "orig", "float32": "f32", "fp16": "f16", "float16": "f16", "bfloat16": "bf16", "q8": "q8_0", "int8": "q8_0", "8bit": "q8_0"}.get(selected, selected)
     if selected in {"auto", "default", "4bit", "q4_k"}:
         return TTS_MODELS[model]["default_precision"]
     if selected in variants:
@@ -397,7 +408,9 @@ def needs_download(model=DEFAULT_MODEL, precision=None) -> bool:
     model, precision = _model_precision_args(model, precision)
     entry = TTS_MODELS[model]["variants"][precision]
     import downloader
-    return downloader.model_needs_download(MODEL_CACHE_PATH / model / precision, entry["file_checksums"])
+    manifest = {name: checksum for item in (entry, *entry.get("additional_files", ()))
+                for name, checksum in item["file_checksums"].items()}
+    return downloader.model_needs_download(MODEL_CACHE_PATH / model / precision, manifest)
 
 
 def download_model(model=DEFAULT_MODEL, precision=None, force_non_ui_dl: bool = False) -> bool:
@@ -406,12 +419,13 @@ def download_model(model=DEFAULT_MODEL, precision=None, force_non_ui_dl: bool = 
     if not needs_download(model, precision):
         return True
     import downloader
-    return downloader.download_model({
+    complete = all(downloader.download_model({
         "model_path": MODEL_CACHE_PATH,
-        "model_link_dict": {"model": {**entry, "path": str(Path(model) / precision)}},
+        "model_link_dict": {"model": {**item, "path": str(Path(model) / precision)}},
         "model_name": "model", "title": f"Text to Speech (audio.cpp) - {model} {precision}",
         "alt_fallback": False, "force_non_ui_dl": force_non_ui_dl, "extract_format": "none",
-    }, DOWNLOAD_STATES[model][precision])
+    }, DOWNLOAD_STATES[model][precision]) for item in (entry, *entry.get("additional_files", ())))
+    return complete and not needs_download(model, precision)
 
 
 def _decode_pcm16_wav(payload: bytes) -> tuple[torch.Tensor, int]:
@@ -476,6 +490,10 @@ def _session_options(model: str, configured: dict) -> dict:
         result[f"{family}.{name}"] = value
     if family == "omnivoice" and result.get("omnivoice.mem_saver"):
         result["omnivoice.perf_mode"] = "off"
+    if family == "sanotts":
+        library, data = espeak_paths()
+        result.setdefault("sanotts.espeak_library_path", library)
+        result.setdefault("sanotts.espeak_data_path", data)
     return result
 
 
@@ -552,6 +570,8 @@ class AudioCppTTS(metaclass=SingletonMeta):
             return tuple({"name": voice, "value": voice} for voice in BUILT_IN_VOICES)
         if family == "magpie_tts":
             return tuple({"name": voice, "value": voice} for voice in MAGPIE_VOICES)
+        if TTS_MODELS[model].get("voices"):
+            return tuple({"name": voice, "value": voice} for voice in TTS_MODELS[model]["voices"])
         voices = [{"name": "Auto / no reference", "value": "auto"}]
         voices.extend({"name": voice["name"], "value": voice["name"]} for voice in self._voice_files())
         voices.append({"name": "open_voice_dir", "value": "open_dir:" + str(VOICES_PATH.resolve())})
@@ -659,37 +679,41 @@ class AudioCppTTS(metaclass=SingletonMeta):
         return wave_tensor
 
     @staticmethod
-    def _detect_language(text: str, supported: set[str], fallback: str) -> str:
+    def _detect_language(text, supported, fallback):
         try:
             from Models import languageClassification
             classification = languageClassification.classify(text, to_code="iso1")
             detected = classification[0] if isinstance(classification, tuple) else classification
-            detected = str(detected or "").strip().lower()
-            if detected in supported:
-                return detected
-            if detected == "pt" and "pt-br" in supported:
-                return "pt-BR"
-            if detected == "ar" and "ar-msa" in supported:
-                return "ar-MSA"
+            return supported_language(detected, supported) or fallback
         except Exception as exc:
             print(f"audio.cpp TTS language detection failed ({exc}); using {fallback}.")
-        return fallback
+            return fallback
 
-    def _language(self, text: str, model: str, configured: dict) -> str:
-        selected = str(configured.get("language", "auto") or "auto").strip()
-        if selected.casefold() not in {"", "auto", "none"}:
-            return selected
-        family = TTS_MODELS[model]["family"]
-        if family == "supertonic":
-            return self._detect_language(text, SUPERTONIC_LANGUAGES, "en")
-        if family == "confucius4_tts":
-            return self._detect_language(text, CONFUCIUS_LANGUAGES, "en")
-        if family == "magpie_tts":
-            return self._detect_language(text, MAGPIE_LANGUAGES, "en")
-        if family == "index_tts2":
-            supported = {"zh", "en", "ja", "es", "ar"} if model == "IndexTTS2.5-GGUF" else {"zh", "en"}
-            return self._detect_language(text, supported, "en")
-        return ""
+    def _language(self, text, model, configured, language=None):
+        definition = TTS_MODELS[model]
+        family = definition["family"]
+        supported = {
+            "supertonic": SUPERTONIC_LANGUAGES,
+            "confucius4_tts": CONFUCIUS_LANGUAGES,
+            "magpie_tts": MAGPIE_LANGUAGES,
+            "index_tts2": {"zh", "en", "ja", "es", "ar"} if model == "IndexTTS2.5-GGUF" else {"zh", "en"},
+        }.get(family)
+        if definition.get("languages"):
+            supported = set(definition["languages"])
+        # These families infer language from text and expose no language control.
+        if family in {"voxcpm1", "voxcpm2", "audio8_tts", "breeze_tts", "cosyvoice3"}:
+            return ""
+        if family == "dots_tts" and str(configured.get("language")).lower() == "none":
+            return ""
+        fallback = supported_language("en", supported)
+        if not fallback and supported:
+            fallback = sorted(supported)[0]  # A fixed-language voice cannot speak English.
+        selected = language_code(configured.get("language", "auto"))
+        if selected:
+            return supported_language(selected, supported) or fallback
+        if language_code(language):
+            return supported_language(language, supported) or fallback
+        return self._detect_language(text, supported, fallback or "en")
 
     @staticmethod
     def _selected_preset(choices, fallback):
@@ -733,7 +757,7 @@ class AudioCppTTS(metaclass=SingletonMeta):
                     pass
         return ""
 
-    def _request_payload(self, text: str, ref_audio=None, *, streaming=False):
+    def _request_payload(self, text: str, ref_audio=None, *, streaming=False, language=None):
         model = self._selected_model()
         definition = TTS_MODELS[model]
         key = definition["settings_key"]
@@ -751,7 +775,7 @@ class AudioCppTTS(metaclass=SingletonMeta):
                 continue
             if name == "reference_duration_sec" and float(value or 0) <= 0:
                 continue
-            if name == "seed" and int(value or -1) < 0:
+            if name == "seed" and int(value) < 0:
                 continue
             if name == "text_chunk_size" and int(value or 0) <= 0:
                 continue
@@ -772,7 +796,7 @@ class AudioCppTTS(metaclass=SingletonMeta):
             if any(float(value or 0) != 0 for value in emotion):
                 options["emotion_vector"] = ",".join(str(float(value or 0)) for value in emotion)
 
-        language = self._language(clean_text, model, configured)
+        language = self._language(clean_text, model, configured, language)
         payload = {"model": self.server.model_id, "input": clean_text, "options": options}
         if language:
             payload["language"] = language
@@ -792,6 +816,14 @@ class AudioCppTTS(metaclass=SingletonMeta):
             options["voice_id"] = self._selected_preset(
                 MAGPIE_VOICES, str(configured.get("voice_id", "Aria"))
             )
+        elif definition.get("voices"):
+            voice = self._selected_preset(definition["voices"], definition["default_voice"])
+            if family == "kokoro_tts":
+                prefix = {"en-us": "a", "en-gb": "b", "es": "e", "fr-fr": "f",
+                          "hi": "h", "it": "i", "ja": "j", "pt-br": "p", "zh": "z"}[language]
+                if not voice.startswith(prefix):
+                    voice = next(v for v in definition["voices"] if v.startswith(prefix))
+            payload["voice"] = voice
         elif key == "dots_tts_edit":
             source_path = str(configured.get("source_audio", "") or "").strip()
             if not source_path:
@@ -806,9 +838,10 @@ class AudioCppTTS(metaclass=SingletonMeta):
             instruction = str(configured.get("voice_instruction", "") or "").strip()
             if family == "omnivoice" and instruction:
                 payload["instructions"] = instruction
-            if family == "omnivoice" and voice_path and not reference_text:
+            if (family in {"omnivoice", "audio8_tts", "breeze_tts"} or
+                    (family == "cosyvoice3" and configured.get("template_name") == "zero_shot")) and voice_path and not reference_text:
                 raise ValueError(
-                    "OmniVoice voice cloning requires a transcript for the selected "
+                    f"{model} voice cloning requires a transcript for the selected "
                     "reference. Add a same-name UTF-8 .txt file beside the voice sample "
                     "or enter Reference text in the audio.cpp advanced settings."
                 )
@@ -816,7 +849,7 @@ class AudioCppTTS(metaclass=SingletonMeta):
                 emotion_path = str(configured.get("emotion_audio", "") or "").strip()
         return payload, voice_path, source_path, emotion_path
 
-    def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True):
+    def tts(self, text, ref_audio=None, remove_silence=True, silence_after_segments=0.2, normalize=True, *, language=None):
         del remove_silence, silence_after_segments, normalize
         clean_text = str(text or "").strip()
         if not clean_text:
@@ -824,7 +857,7 @@ class AudioCppTTS(metaclass=SingletonMeta):
         with self.generation_lock:
             self.stop_event.clear()
             self.load(streaming=False)
-            payload, voice_path, source_path, emotion_path = self._request_payload(clean_text, ref_audio)
+            payload, voice_path, source_path, emotion_path = self._request_payload(clean_text, ref_audio, language=language)
             with (
                 _wav_reference(voice_path) as wav_voice,
                 _wav_reference(source_path) as wav_source,
@@ -888,13 +921,13 @@ class AudioCppTTS(metaclass=SingletonMeta):
                 input_channels=1, dtype="float32", tag="tts",
             )
 
-    def tts_streaming(self, text, ref_audio=None):
+    def tts_streaming(self, text, ref_audio=None, *, language=None):
         clean_text = str(text or "").strip()
         if not clean_text:
             return torch.zeros((1, 0), dtype=torch.float32), self.sample_rate
         model = self._selected_model()
         if not TTS_MODELS[model]["streaming"]:
-            audio, sample_rate = self.tts(clean_text, ref_audio)
+            audio, sample_rate = self.tts(clean_text, ref_audio, language=language)
             if audio.numel() and not self.stop_event.is_set():
                 self.init_audio_stream_playback()
                 if self.audio_streamer is not None:
@@ -908,7 +941,7 @@ class AudioCppTTS(metaclass=SingletonMeta):
             has_postprocessor = Plugins.plugin_custom_event_has_active_handler("plugin_tts_after_audio")
             if not has_postprocessor:
                 self.init_audio_stream_playback()
-            payload, voice_path, source_path, _ = self._request_payload(clean_text, ref_audio, streaming=True)
+            payload, voice_path, source_path, _ = self._request_payload(clean_text, ref_audio, streaming=True, language=language)
             payload.update({"response_format": "pcm", "stream_format": "sse"})
             with _wav_reference(voice_path) as wav_voice, _wav_reference(source_path) as wav_source:
                 if wav_voice:

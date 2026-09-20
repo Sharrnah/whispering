@@ -145,6 +145,7 @@ class MiLMMTTests(unittest.TestCase):
                 )
                 self.assertEqual(entry["path"], model_name)
                 self.assertEqual(len(entry["checksum"]), 64)
+                self.assertNotEqual(entry["checksum"], "0" * 64)
                 self.assertTrue(
                     all(character in string.hexdigits for character in entry["checksum"])
                 )
@@ -153,18 +154,21 @@ class MiLMMTTests(unittest.TestCase):
                     self.assertTrue(
                         all(character in string.hexdigits for character in checksum)
                     )
-                self.assertEqual(len(entry["urls"]), 3)
+                self.assertTrue(entry["urls"])
+                self.assertEqual(len(entry["urls"]), len(set(entry["urls"])))
                 for url in entry["urls"]:
                     self.assertNotIn("huggingface.co", url)
                     self.assertTrue(url.endswith(f"/{model_name}.zip"))
 
-    def test_pending_archive_never_falls_back_to_huggingface(self):
+    def test_failed_archive_download_is_reported_without_fallback(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch.object(milmmt, "MODEL_CACHE_PATH", Path(temp_dir)):
-                with mock.patch.object(milmmt.downloader, "download_model") as download:
-                    with self.assertRaisesRegex(RuntimeError, "not currently available"):
-                        milmmt.download_model("MiLMMT-46-1B-v1.0")
-                    download.assert_not_called()
+                with mock.patch.object(
+                    milmmt.downloader, "download_model", return_value=False
+                ) as download:
+                    self.assertFalse(milmmt.download_model("MiLMMT-46-1B-v1.0"))
+                    download.assert_called_once()
+                    self.assertFalse(download.call_args.args[0]["alt_fallback"])
 
     def test_configured_archive_uses_standard_zip_downloader(self):
         entry = milmmt.MODEL_LINKS["MiLMMT-46-1B-v1.0"]
@@ -184,6 +188,8 @@ class MiLMMTTests(unittest.TestCase):
 
         download_settings = download.call_args.args[0]
         self.assertEqual(download_settings["extract_format"], "zip")
+        self.assertEqual(download_settings["model_name"], "MiLMMT-46-1B-v1.0")
+        self.assertFalse(download_settings["alt_fallback"])
         self.assertTrue(download_settings["force_non_ui_dl"])
         self.assertIs(download_settings["model_link_dict"], milmmt.MODEL_LINKS)
 

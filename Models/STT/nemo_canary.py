@@ -5,7 +5,8 @@ import os
 import signal
 import threading
 # patch (/nemo/utils/exp_manager.py) - https://github.com/NVIDIA/NeMo/issues/12858
-signal.SIGKILL = signal.SIGTERM
+if not hasattr(signal, "SIGKILL"):
+    signal.SIGKILL = signal.SIGTERM
 
 import torch
 

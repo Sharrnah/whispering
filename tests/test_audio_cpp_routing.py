@@ -43,6 +43,40 @@ class _Settings:
 
 
 class AudioCppRoutingTests(unittest.TestCase):
+    def test_tts_receives_language_in_both_threaded_playback_modes(self):
+        import settings
+
+        for streaming in (False, True):
+            with self.subTest(streaming=streaming):
+                configured = settings.SettingsManager()
+                configured.translate_settings.update(
+                    tts_type="audio_cpp", tts_answer=True, tts_queue_enabled=False,
+                    tts_streamed_playback=streaming, osc_ip="0", websocket_ip="0",
+                    current_language="auto", whisper_task="transcribe",
+                )
+                adapter = mock.Mock()
+                adapter.tts.return_value = ("audio", 24000)
+                adapter.tts_streaming.return_value = ("audio", 24000)
+                calls = []
+
+                def thread(*, target, args=(), kwargs=None, **ignored):
+                    # Execute after send_message has returned, as a real thread may.
+                    calls.append(lambda: target(*args, **(kwargs or {})))
+                    return mock.Mock()
+
+                with mock.patch.object(audioprocessor.tts, "init", return_value=True), \
+                        mock.patch.object(audioprocessor.tts, "tts", adapter), \
+                        mock.patch.object(audioprocessor.threading, "Thread", side_effect=thread):
+                    audioprocessor.send_message("Hallo", {"text": "Hallo", "language": "de"},
+                                                True, configured, None)
+                    audioprocessor.send_message("Bonjour", {"text": "Bonjour", "language": "fr"},
+                                                True, configured, None)
+                    for call in reversed(calls):
+                        call()
+                method = adapter.tts_streaming if streaming else adapter.tts
+                self.assertEqual(method.call_args_list,
+                                 [mock.call("Bonjour", language="fr"), mock.call("Hallo", language="de")])
+
     def test_loader_reuses_existing_cpu_thread_setting_and_gpu_index(self):
         values = {
             "whisper_cpu_threads": 5,

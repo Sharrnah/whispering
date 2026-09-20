@@ -1,50 +1,41 @@
-#!/bin/bash -i
-
-# Fail on errors.
-set -e
-
-# Make sure .bashrc is sourced
-. /root/.bashrc
-
-# Allow the workdir to be set using an env var.
-# Useful for CI pipiles which use docker for their build steps
-# and don't allow that much flexibility to mount volumes
-WORKDIR=${SRCDIR:-/src}
-
-#
-# In case the user specified a custom URL for PYPI, then use
-# that one, instead of the default one.
-#
-if [[ "$PYPI_URL" != "https://pypi.python.org/" ]] || \
-   [[ "$PYPI_INDEX_URL" != "https://pypi.python.org/simple" ]]; then
-    # the funky looking regexp just extracts the hostname, excluding port
-    # to be used as a trusted-host.
-    mkdir -p /root/.pip
-    echo "[global]" > /root/.pip/pip.conf
-    echo "index = $PYPI_URL" >> /root/.pip/pip.conf
-    echo "index-url = $PYPI_INDEX_URL" >> /root/.pip/pip.conf
-    echo "trusted-host = $(echo $PYPI_URL | perl -pe 's|^.*?://(.*?)(:.*?)?/.*$|$1|')" >> /root/.pip/pip.conf
-
-    echo "Using custom pip.conf: "
-    cat /root/.pip/pip.conf
+#!/bin/bash
+set -euo pipefail
+if (( $# )); then
+    exec "$@"
 fi
-
-BUILD_DIST_DIR=${DIST_DIR:-./dist/linux}
-
-cd $WORKDIR
-
-echo "$@"
-
-if [[ "$@" == "" ]]; then
-    if [ -f requirements.linux.txt ]; then
-        # use --no-cache-dir to try to reduce memory usage. (see https://github.com/pypa/pip/issues/2984)
-        pip install --no-cache-dir -r requirements.nvidia.txt --no-build-isolation
-        pip install --no-cache-dir -r requirements.linux.prereq.txt --no-build-isolation
-        pip install --no-cache-dir -r requirements.linux.txt --no-build-isolation
-    fi # [ -f requirements.linux.txt ]
-
-    pyinstaller --clean -y --dist ${BUILD_DIST_DIR} --workpath /tmp *.spec
-    chown -R --reference=. ${BUILD_DIST_DIR}
-else
-    sh -c "$@"
-fi # [[ "$@" == "" ]]
+cd "${SRCDIR:-/src}"
+python -m unittest discover -s tests -p 'test_linux_build.py' -v
+flavor=${TORCH_FLAVOR:-cu128}
+case "$flavor" in
+    cpu|cu128) ;;
+    *) echo "Unsupported build flavor: $flavor (use cpu or cu128)" >&2; exit 2 ;;
+esac
+python -m pip install "torch==2.7.1+$flavor" "torchvision==0.22.1+$flavor" "torchaudio==2.7.1+$flavor" \
+    --index-url "https://download.pytorch.org/whl/$flavor"
+python -m pip install numpy==1.26.4 flit-core==3.12.0
+python builder/linux-compat-wheels.py /tmp/linux-wheels
+if [[ "$flavor" == cu128 ]]; then
+    python builder/linux-onnx-wheels.py requirements.txt /tmp/linux-wheels
+    # Both distributions own the same onnxruntime/ files. Keep only GPU.
+    python -m pip uninstall -y onnxruntime
+fi
+python builder/linux-requirements.py requirements.txt /tmp/requirements-linux.txt "$flavor"
+python -m pip install --no-build-isolation -r /tmp/requirements-linux.txt
+python -m pip check
+# Exercise the application's TTS playback path while recording from a virtual
+# PulseAudio sink. No host sound devices or GPU are used by these checks.
+pulseaudio --start --exit-idle-time=-1
+python -m unittest discover -s tests -p 'test_audio_playback.py' -v
+python -m unittest discover -s tests -p 'test_audio_input_switching.py' -v
+timeout 90s python builder/linux-audio-smoke.py
+python -m unittest discover -s tests -p 'test_linux_packaging.py' -v
+python -m unittest discover -s tests -p 'test_audio_cpp_runtime_linux.py' -v
+mkdir -p "${DIST_DIR:-/out}"
+python builder/linux-cuda-check.py --flavor "$flavor" --output "${DIST_DIR:-/out}/linux-runtime-info.json"
+python builder/linux-prepare.py
+mkdir -p "${DIST_DIR:-/out}"
+python -m pip freeze --all > "${DIST_DIR:-/out}/linux-python-packages.txt"
+pyinstaller --clean -y --distpath "${DIST_DIR:-/out}" --workpath /tmp/pyinstaller audioWhisper.spec
+# Keep the container-local PulseAudio server alive for frozen imports, too.
+python builder/linux-startup-check.py "${DIST_DIR:-/out}/audioWhisper/audioWhisper" \
+    --log "${WT_BUILD_LOG_DIR:-${DIST_DIR:-/out}}/linux-startup.log"

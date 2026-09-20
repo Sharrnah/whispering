@@ -5,6 +5,9 @@ from PyInstaller.utils.hooks import collect_all
 from PyInstaller.utils.hooks import copy_metadata
 from PyInstaller.utils.hooks import collect_dynamic_libs
 import os
+import sysconfig
+import importlib.metadata
+import shutil
 import sys ; sys.setrecursionlimit(sys.getrecursionlimit() * 5)
 
 project_root = os.path.abspath(os.path.dirname(SPEC))
@@ -24,6 +27,7 @@ except Exception:
     pass
 
 hiddenimports = [
+    'plugin_host',
     'torch', 'pytorch', 'torchaudio.lib.libtorchaudio', 'scipy.signal', 'transformers', 'transformers.models.nllb', 'torchcodec', 'sentencepiece',
     'df.deepfilternet3', 'bitsandbytes', 'faiss', 'faiss-cpu', 'praat-parselmouth', 'parselmouth', 'pyworld', 'torchcrepe',
     'grpcio', 'grpc', 'annotated_types', 'Cython', 'nemo_toolkit', 'nemo', 'speechbrain', 'pyannote', 'pyannote.audio',
@@ -36,6 +40,9 @@ hiddenimports = [
 ]
 hiddenimports += collect_submodules('indextts')
 hiddenimports += collect_submodules('qwen3_tts_runtime')
+hiddenimports += collect_submodules('Models.STT.vibevoice_streaming_runtime')
+datas.append((os.path.join(project_root, 'Models', 'STT', 'vibevoice_streaming_runtime', 'LICENSE'),
+              'Models/STT/vibevoice_streaming_runtime'))
 hiddenimports += [
     *collect_submodules('triton.backends'),
     *collect_submodules('triton.runtime'),
@@ -83,6 +90,14 @@ datas += copy_metadata('kaldifst')
 datas += copy_metadata('ruaccent')
 datas += copy_metadata('python-crfsuite')
 datas += copy_metadata('razdel')
+
+if sys.platform.startswith('linux'):
+    # Torch's PyInstaller hook collects the CUDA wheel libraries. Preserve
+    # their accompanying redistribution notices and version metadata too.
+    for distribution in importlib.metadata.distributions():
+        name = distribution.metadata['Name']
+        if name and name.lower().startswith('nvidia-'):
+            datas += copy_metadata(name)
 
 # Preserve the upstream model-use terms in standalone distributions. Model
 # weights remain in the separately hosted/downloaded archive.
@@ -171,13 +186,26 @@ for path_option in corpora_path_options:
 #datas.append((r'C:\src\triton_cache_warm', '../triton_cache'))
 
 # add python libs for jit compiler
-datas.append((r'./builder/python-lib/include', 'include'))
-datas.append((r'./builder/python-lib/libs', 'libs'))
+if sys.platform == 'win32':
+    datas.append((r'./builder/python-lib/include', 'include'))
+    datas.append((r'./builder/python-lib/libs', 'libs'))
+else:
+    datas.append((sysconfig.get_path('include'), 'include'))
+    # Explicitly use our PulseAudio-enabled build, including its license.
+    binaries.append(('/usr/local/lib/libportaudio.so.2', '.'))
+    datas.append(('/usr/local/share/doc/PortAudio/portaudio/LICENSE.txt', 'licenses/portaudio'))
+    # Bundle media tools; PyInstaller resolves their shared-library dependencies.
+    for tool in ('ffmpeg', 'ffprobe'):
+        executable = shutil.which(tool)
+        if executable is None:
+            raise RuntimeError(f'{tool} is required in the Linux build container')
+        binaries.append((executable, 'bin'))
 
 block_cipher = None
 
 # ---- Runtime hook to set TRITON_CACHE_DIR (very important for first-run JIT) ----
 runtime_hooks = [
+    'rthooks/rt_linux_paths.py',
 #    'rthooks/rt_mamba_triton_shim.py',
 #    'rthooks/rt_disable_triton_backend.py',
 #    'rthooks/patch_triton_ptxas.py',
