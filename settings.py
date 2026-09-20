@@ -462,6 +462,8 @@ class SettingsManager:
                 "Audio8-ASR-0.1B-GGUF",
                 "Kroko-ASR-English-64L-GGUF",
             ]
+            from Models.audio_cpp_catalog import STT_MODELS
+            available_models_list.extend(STT_MODELS)
         if self.get_option("stt_type") == "qwen3_asr":
             available_models_list = ["Qwen3-ASR-0.6B-hf", "Qwen3-ASR-1.7B-hf", "custom"]
         if self.get_option("stt_type") == "vibevoice_asr":
@@ -514,16 +516,16 @@ class SettingsManager:
             #"tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "parler", ""],
             "tts_type": ["silero", "f5_e2", "zonos", "zonos2", "kokoro", "orpheus", "chatterbox", "index_tts", "qwen3_tts", "audio8_tts", "audio_cpp", "maya1", ""],
             "tts_ai_device": ["cuda", "cpu", "vulkan", "metal"],
-            "tts_precision": ["auto", "float32", "float16", "bfloat16", "8bit", "orig", "f16", "bf16", "q8_0", "q4_k"],
+            "tts_precision": ["auto", "float32", "float16", "bfloat16", "8bit", "orig", "f16", "bf16", "q8_0", "q4_k", "f32", "q4_0"],
             "txt_translator_device": ["cuda", "cpu"],
             "txt_translator": ["", "NLLB200_CT2", "NLLB200", "M2M100", "hunyuan_mt", "milmmt", "seamless_m4t", "phi4"],
             "txt_translator_size": ["small", "medium", "large", "MiLMMT-46-1B-v1.0", "MiLMMT-46-4B-v1.0", "MiLMMT-46-12B-v1.0", "custom"],
             "txt_translator_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit"],
             "tts_prosody_rate": ["", "x-slow", "slow", "medium", "fast", "x-fast"],
             "tts_prosody_pitch": ["", "x-low", "low", "medium", "high", "x-high"],
-            "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit", "f16", "bf16", "q8_0", "q4_k"],
+            "whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit", "f16", "bf16", "q8_0", "q4_k", "f32", "q4_0"],
             "realtime_whisper_model": [""] + self.get_available_models(),
-            "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit", "f16", "bf16", "q8_0", "q4_k"],
+            "realtime_whisper_precision": ["float32", "float16", "int16", "int8_float16", "int8", "bfloat16", "int8_bfloat16", "4bit", "8bit", "f16", "bf16", "q8_0", "q4_k", "f32", "q4_0"],
             "osc_type_transfer": ["source", "translation_result", "both", "both_inverted"],
             "osc_send_type": ["full", "full_or_scroll", "scroll", "chunks", "rolling"],
             "denoise_audio": ["", "noise_reduce", "deepfilter"],

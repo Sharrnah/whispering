@@ -533,23 +533,27 @@ def send_message(predicted_text, result_obj, final_audio, settings, plugins):
         streamed_playback = settings.GetOption("tts_streamed_playback")
         if settings.GetOption("tts_answer") and predicted_text != "" and tts.init():
             try:
+                tts_options = {}
+                if settings.GetOption("tts_type") == "audio_cpp":
+                    from Models.TTS.speech_language import spoken_language
+                    tts_options["language"] = spoken_language(result_obj, settings)
                 if settings.GetOption("tts_queue_enabled") and hasattr(tts.tts, 'enqueue_tts'):
                     # Queue mode handles both streaming and non-streaming inside enqueue
-                    tts.tts.enqueue_tts(predicted_text, streaming=streamed_playback)
+                    tts.tts.enqueue_tts(predicted_text, streaming=streamed_playback, **tts_options)
                 else:
                     if streamed_playback and hasattr(tts.tts, "tts_streaming"):
                         #tts.tts.tts_streaming(predicted_text)
                         threading.Thread(
                            target=tts.tts.tts_streaming,
-                           args=(predicted_text,)
+                           args=(predicted_text,), kwargs=tts_options,
                         ).start()
                     else:
-                        def play_tts_audio(tts_text):
-                            tts_wav, sample_rate = tts.tts.tts(tts_text)
+                        def play_tts_audio(tts_text, **options):
+                            tts_wav, sample_rate = tts.tts.tts(tts_text, **options)
                             tts.tts.play_audio(tts_wav, settings.GetOption("device_out_index"))
                         threading.Thread(
                             target=play_tts_audio,
-                            args=(predicted_text,)
+                            args=(predicted_text,), kwargs=tts_options,
                         ).start()
             except Exception as e:
                 print("Error while playing TTS audio: " + str(e))
